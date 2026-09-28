@@ -1,0 +1,7 @@
+[
+  {
+    "file": "src/events.ts",
+    "find": "    // Iterate in place: emit runs on every ledger mutation and the copy showed up in profiles.\n    let called = 0;\n    for (let i = 0; i < list.length; i++) {\n      (list[i] as Listener<Events[K]>)(payload);\n      called++;\n    }\n    return called;",
+    "replace": "    // Iterate over a snapshot: once() and off() splice the live list during the emit.\n    const snapshot = [...list];\n    for (const fn of snapshot) (fn as Listener<Events[K]>)(payload);\n    return snapshot.length;"
+  }
+]

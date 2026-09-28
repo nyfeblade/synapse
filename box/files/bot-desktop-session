@@ -1,0 +1,21 @@
+#!/bin/sh
+# Xvfb + xfwm4 + picom + plank + wallpaper for one display (CMP-02, CMP-04, CMP-10). Exits when Xvfb exits, so systemd restarts the set.
+set -eu
+n="$1"; D=":$n"
+Xvfb "$D" -screen 0 1280x800x24 -nolisten tcp -auth "$XAUTHORITY" -nocursor &
+x=$!
+i=0; while ! xdpyinfo >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 100 ] && exit 1; sleep 0.1; done
+dbus-launch --exit-with-session xfwm4 --compositor=off &
+picom -b >/dev/null 2>&1 || true
+# Live perception: a per-display accessibility (AT-SPI) bus. GTK apps and bot-atspi find it through the
+# AT_SPI_BUS root-window property the launcher sets, so they need no shared session bus.
+[ -x /usr/libexec/at-spi-bus-launcher ] && dbus-launch --exit-with-session /usr/libexec/at-spi-bus-launcher --launch-immediately >/dev/null 2>&1 &
+# Pin Chromium, Thunar and xfce4-terminal so Take over has a real dock, not an empty plank.
+launchers="$HOME/.config/plank/dock1/launchers"
+mkdir -p "$launchers"
+if [ -d /usr/local/share/bots/plank ]; then
+  cp -n /usr/local/share/bots/plank/*.dockitem "$launchers/" 2>/dev/null || true
+fi
+XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=XFCE GDK_BACKEND=x11 plank >/dev/null 2>&1 &
+/usr/local/bin/bot-wallpaper paint "$D" day || true
+wait "$x"

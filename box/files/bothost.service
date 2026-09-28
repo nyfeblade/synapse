@@ -1,0 +1,20 @@
+[Unit]
+Description=Bots host (gateway, transcripts, supervisor)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=bothost
+Group=bothost
+WorkingDirectory=/opt/bothost/app
+EnvironmentFile=-/etc/bothost.env
+Environment=NODE_ENV=production
+Environment=PROMPTS_DIR=/opt/bothost/app
+ExecStart=/usr/local/bin/node /opt/bothost/app/host.mjs serve
+Restart=always
+RestartSec=2
+KillMode=mixed
+TimeoutStopSec=6
+
+[Install]
+WantedBy=multi-user.target

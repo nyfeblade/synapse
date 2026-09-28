@@ -1,0 +1,134 @@
+#!/bin/sh
+# Root-owned. Bug #66: one OS account per Bot, so the kernel keeps one Bot out of another's home, CLI sessions, Chrome
+# profile, staged files and live process. Only bothost (via sudo) or root itself may run it.
+# Usage: bot-user name <botId> | ensure <botId> | remove <botId>
+#
+# Same rules as host/walls/bot-uid.ts (host/test/box/bot-user-helper.test.ts runs both):
+#  - the account is bot-<first 12 hex of sha256(botId)>, GECOS "synapse-bot <botId>", uid = gid (a private group of
+#    the same name) from the reserved range 60200-61099, supplementary group bots (the shared /workspace), no login
+#    shell. A removed Bot's uid is not reused while the range has room above the high-water mark.
+#  - /home/bots/<name> is created by root (under root-owned /home/bots, so no link can stand in for it), 0700.
+#    ~/code (bug 231) is where the Bot keeps its projects: 0700, the Bot's own, never the shared /workspace.
+#    Everything inside it is created AS the Bot: a link the Bot planted can only ever redirect its own rights.
+#  - the host's staging dirs /workspace/.host-out/{uploads,screens,events,mcp-output,terminals}/<botId> stay bothost's with the
+#    Bot's private group, setgid 2750: the host writes, only this Bot reads. They are opened O_NOFOLLOW and changed
+#    through the fd, and only when bothost owns them.
+# Idempotent: ensure on an existing account re-checks it belongs to this Bot and re-applies the layout.
+set -eu
+N=bot-user
+UID_MIN=60200
+UID_MAX=61099
+HOMES=/home/bots
+SKILLS=/home/box/.claude/skills
+HOSTOUT=/workspace/.host-out
+STATE=/var/lib/bots/bot-uid-next
+LOCK=/run/bot-user.lock
+
+if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != bothost ]; then echo "$N: must be invoked by bothost via sudo" >&2; exit 126; fi
+[ "$(id -u)" = 0 ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+[ $# -eq 2 ] || { echo "usage: $N name|ensure|remove <botId>" >&2; exit 2; }
+verb="$1"; id="$2"
+case "$id" in ''|*[!A-Za-z0-9_-]*) echo "$N: bad Bot id" >&2; exit 2 ;; esac
+[ "${#id}" -le 64 ] || { echo "$N: bad Bot id" >&2; exit 2; }
+name="bot-$(printf '%s' "$id" | sha256sum | cut -c1-12)"
+home="$HOMES/$name"
+gecos="synapse-bot $id"
+
+field() { getent passwd "$name" | cut -d: -f"$1"; }
+
+# An existing account must be exactly this Bot's: right GECOS, uid in range, homed where we say.
+check_owned() {
+  uid="$(field 3)"; gid="$(field 4)"
+  case "$uid$gid" in ''|*[!0-9]*) echo "$N: $name is not Bot $id's account" >&2; exit 3 ;; esac
+  if [ "$(field 5)" != "$gecos" ] || [ "$uid" -lt "$UID_MIN" ] || [ "$uid" -gt "$UID_MAX" ] || [ "$(field 6)" != "$home" ]; then
+    echo "$N: $name is not Bot $id's account" >&2; exit 3
+  fi
+}
+
+alloc() {
+  taken="$({ getent passwd; getent group; } | cut -d: -f3)"
+  next="$(cat "$STATE" 2>/dev/null || true)"
+  case "$next" in ''|*[!0-9]*) next="$UID_MIN" ;; esac
+  pick() {
+    u="$1"
+    while [ "$u" -le "$UID_MAX" ]; do
+      printf '%s\n' "$taken" | grep -qx "$u" || { echo "$u"; return 0; }
+      u=$((u + 1))
+    done
+    return 1
+  }
+  if [ "$next" -ge "$UID_MIN" ] && [ "$next" -le "$UID_MAX" ] && pick "$next"; then return 0; fi
+  pick "$UID_MIN" || { echo "$N: the Bot uid range $UID_MIN-$UID_MAX is full" >&2; exit 4; }
+}
+
+# $1 = kind, $2 = gid to give it; creates the dir if missing. Never follows a link, never touches a dir bothost doesn't own.
+stage_dir() {
+  python3 - "$HOSTOUT" "$1" "$id" "$2" <<'PY'
+import os, pwd, stat, sys
+hostout, kind, name, gid = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+bh = pwd.getpwnam("bothost")
+F = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+def opendir(path, dir_fd=None, create_mode=None):
+    made = False
+    if create_mode is not None:
+        try:
+            os.mkdir(path, create_mode, dir_fd=dir_fd); made = True
+        except FileExistsError:
+            pass
+    fd = os.open(path, F, dir_fd=dir_fd)
+    st = os.fstat(fd)
+    if not stat.S_ISDIR(st.st_mode): sys.exit("bot-user: %s is not a directory" % path)
+    if made: os.fchown(fd, bh.pw_uid, -1)
+    elif st.st_uid != bh.pw_uid: sys.exit("bot-user: %s is not bothost's" % path)
+    return fd, made
+try:
+    top, _ = opendir(hostout)
+except FileNotFoundError:
+    sys.exit(0)  # no host output tree on this machine
+k, made = opendir(kind, top, 0o750)
+if made: os.fchmod(k, 0o2750)
+d, _ = opendir(name, k, 0o750)
+os.fchown(d, -1, gid)
+os.fchmod(d, 0o2750 if gid != bh.pw_gid else 0o700)
+PY
+}
+
+case "$verb" in
+  name) echo "$name" ;;
+  ensure)
+    exec 9>"$LOCK"
+    flock 9
+    if getent passwd "$name" >/dev/null; then
+      check_owned
+    else
+      uid="$(alloc)"
+      groupadd -g "$uid" "$name"
+      useradd -u "$uid" -g "$name" -G bots -d "$home" -M -s /usr/sbin/nologin -c "$gecos" "$name"
+      echo $((uid + 1)) > "$STATE"
+      gid="$uid"
+    fi
+    install -d -o root -g root -m 0711 "$HOMES"
+    [ ! -L "$home" ] || { echo "$N: $home is a symlink" >&2; exit 126; }
+    [ -d "$home" ] || mkdir -m 0700 "$home"
+    chown -h -- "$uid:$gid" "$home"
+    chmod 0700 "$home"
+    setpriv --reuid="$uid" --regid="$gid" --clear-groups --reset-env -- /bin/sh -c \
+      'umask 077; cd -P -- "$1" || exit 1; mkdir -p .claude/projects chrome-profile code; chmod 0700 .claude .claude/projects chrome-profile code
+       [ -e .claude/skills ] || [ -L .claude/skills ] || ln -s -- "$2" .claude/skills' sh "$home" "$SKILLS"
+    for k in uploads screens events mcp-output terminals; do stage_dir "$k" "$gid"; done
+    echo "$name $uid $home" ;;
+  remove)
+    exec 9>"$LOCK"
+    flock 9
+    getent passwd "$name" >/dev/null || exit 0
+    check_owned
+    pkill -KILL -u "$uid" 2>/dev/null || true
+    bhgid="$(getent passwd bothost | cut -d: -f4)"
+    # The staging dirs go back to bothost-only BEFORE the gid is freed: a later account can never inherit them.
+    for k in uploads screens events mcp-output terminals; do stage_dir "$k" "$bhgid"; done
+    userdel "$name"
+    groupdel "$name" 2>/dev/null || true
+    if [ -d "$home" ] && [ ! -L "$home" ]; then rm -rf --one-file-system -- "$home"; fi
+    echo "removed $name" ;;
+  *) echo "$N: unknown verb" >&2; exit 2 ;;
+esac

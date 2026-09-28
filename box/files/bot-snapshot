@@ -1,0 +1,118 @@
+#!/bin/bash
+# Root-owned. CMP-12 snapshots of the persistent trees. Usage:
+#   bot-snapshot create <id> <parts> | restore <id> <parts> | delete <id>     parts ⊆ workspace,home,agent-data
+# Bug #66 follow-up: "home" also covers every Bot's own home, /home/bots/<account> (once the box runs per-Bot
+# accounts), restored AS that account. `create` prints the archive's sha256, then "trees <tree> ..." (the manifest).
+set -euo pipefail
+# Final secfix round 4 (ruling 2): one tree's restore stage, run as that tree's OWNER (setpriv from the root stage
+# below; never as root). stdin is the decompressed archive, read by root and piped in. The owner extracts its tree
+# into a stage only it can write, then rsyncs it into place without owner/group/ACL/xattr changes. A link the box
+# planted in /workspace or /home/box can at worst point box's own write somewhere box could already write.
+if [ "${1:-}" = __restore-tree ]; then
+  m="${2:-}"; me="$(id -un)"
+  case "$m:$me" in
+    # .host-out is bothost's output tree, and /workspace/.bot (shell transcripts, screens) is the host's too: its
+    # files are bothost-owned, so box can't set their times -- rsync -t failed the whole restore (live-box finding).
+    workspace:box) dest=/workspace; base=/home/box; tx=(--exclude=workspace/.host-out --exclude=workspace/.bot)
+      keep=(--exclude=/.host-out --exclude=/.bot) ;;
+    # .host (host secrets), agent-data (bothost's own stage) and reference (bothost-provisioned docs) aren't box's.
+    home/box:box) dest=/home/box; base=/home/box; tx=(--exclude=home/box/.host --exclude=home/box/agent-data --exclude=home/box/reference)
+      keep=(--exclude=/agent-data --exclude=/.host --exclude=/reference --exclude='/.bot-restore-*') ;;
+    home/box/agent-data:bothost) dest=/home/box/agent-data; base=/home/box/.host/snapshots; tx=(); keep=() ;;
+    # Bug #66: a Bot's home, by its own account only (bot-<12 hex>), staged inside that home.
+    home/bots/bot-*:bot-*)
+      [ "$m" = "home/bots/$me" ] && [[ "$me" =~ ^bot-[0-9a-f]{12}$ ]] || { echo "bot-snapshot: bad restore stage" >&2; exit 126; }
+      dest="/home/bots/$me"; base="/home/bots/$me"; tx=(--exclude="home/bots/$me/.bot-restore-*"); keep=(--exclude='/.bot-restore-*') ;;
+    *) echo "bot-snapshot: bad restore stage" >&2; exit 126 ;;
+  esac
+  [ "$(id -u)" != 0 ] || { echo "bot-snapshot: a restore stage never runs as root" >&2; exit 126; }
+  stage="$(mktemp -d "$base/.bot-restore-XXXXXX")"; trap 'rm -rf "$stage"' EXIT
+  tar -C "$stage" --no-same-owner ${tx[@]+"${tx[@]}"} -xpf - "$m" 2>/dev/null || true
+  [ -d "$stage/$m" ] || exit 0
+  # Live-box finding (2026-09-22): an entry in the tree the owner doesn't own (bothost files in /workspace from a host-side
+  # run) is one the owner can't restore -- rsync -t/-p on it fails with EPERM and the whole restore exits 23. Leave each
+  # such entry exactly as it is (excluded, so never rewritten or deleted); wildcard characters in its name are escaped.
+  others="$(mktemp "$base/.bot-restore-others-XXXXXX")"; trap 'rm -rf "$stage" "$others"' EXIT
+  { find -P "$dest" -xdev -mindepth 1 ! -user "$me" -print0 2>/dev/null || true; } | while IFS= read -r -d '' f; do
+    r="${f#"$dest"/}"; r="${r//\\/\\\\}"; r="${r//\*/\\*}"; r="${r//\?/\\?}"; r="${r//\[/\\[}"
+    printf '/%s\0' "$r"
+  done > "$others"
+  # --checksum: tar keeps whole-second mtimes, so the size+mtime quick check can skip a changed file (T29 box finding).
+  rsync -rlptD --no-o --no-g --checksum --delete ${keep[@]+"${keep[@]}"} --from0 --exclude-from="$others" "$stage/$m/" "$dest/"
+  exit 0
+fi
+[ "${SUDO_USER:-}" = "bothost" ] || { echo "bot-snapshot: must be invoked by bothost via sudo" >&2; exit 126; }
+verb="${1:-}"; id="${2:-}"; parts="${3:-}"
+[[ "$id" =~ ^snap-[0-9a-z]{6,40}$ ]] || { echo "bot-snapshot: bad id" >&2; exit 2; }
+DIR=/home/box/.host/snapshots; FILE="$DIR/$id.tar.zst"
+install -d -o bothost -g bothost -m 0700 "$DIR"
+# Ruling (a): /home/box/.host (API key store, gateway token, vault key, connector credentials) is never archived:
+# snapshots leave the box, so host secrets stay out of them entirely.
+# (A case, not an associative array: the helper also runs under the Mac's bash 3.2 in the sandbox tests.)
+member() { case "$1" in workspace) echo workspace ;; home) echo home/box ;; agent-data) echo home/box/agent-data ;; *) return 1 ;; esac; }
+IFS=, read -ra P <<<"$parts"
+names=()
+if [ "$verb" != delete ]; then
+  [ "${#P[@]}" -gt 0 ] || { echo "bot-snapshot: no parts" >&2; exit 2; }
+  for p in "${P[@]}"; do m="$(member "$p")" || { echo "bot-snapshot: bad part $p" >&2; exit 2; }; names+=("$m"); done
+fi
+EXCL=(--exclude=node_modules --exclude=dist --exclude=.venv --exclude=venv --exclude=__pycache__ --exclude=.cache --exclude=.next --exclude=target
+      --exclude='home/box/.host'
+      --exclude='*/Cache' --exclude='*/Code Cache' --exclude='*/GPUCache' --exclude='*/Service Worker/CacheStorage')
+case "$verb" in
+  create)
+    has() { for n in "${names[@]}"; do [ "$n" = "$1" ] && return 0; done; return 1; }
+    if has home/box && ! has home/box/agent-data; then EXCL+=(--exclude='home/box/agent-data'); fi
+    # home/box already contains agent-data; archive it once.
+    if has home/box && has home/box/agent-data; then t=(); for n in "${names[@]}"; do case "$n" in home/box/agent-data) ;; *) t+=("$n");; esac; done; names=("${t[@]}"); fi
+    # Bug #66: the per-Bot homes belong to "home" (a Bot's CLI sessions, Chrome profile and private files live there).
+    if has home/box && [ -d /home/bots ] && [ ! -L /home/bots ]; then names+=(home/bots); fi
+    [ -f /workspace/.botignore ] && EXCL+=(--exclude-from=/workspace/.botignore)
+    need=$(du -sk --apparent-size $(printf '/%s ' "${names[@]}") 2>/dev/null | awk '{s+=$1} END {print int(s*1.3)}')
+    free=$(df --output=avail -k "$DIR" | tail -1)
+    [ "$free" -gt "$need" ] || { echo "bot-snapshot: not enough disk space" >&2; exit 3; }
+    stage="$(mktemp -d "$DIR/stage-XXXX")"; list="$stage.sqlite-list"; tarf="$stage.tar"; : > "$list"
+    trap 'rm -rf "$stage" "$list" "$tarf"' EXIT
+    # SQLite files are copied with .backup (consistent even while open), and the live files are left out of the tar.
+    while IFS= read -r -d '' f; do
+      [ "$(head -c 15 "$f" 2>/dev/null)" = "SQLite format 3" ] || continue
+      rel="${f#/}"; mkdir -p "$stage/$(dirname "$rel")"
+      sqlite3 "$f" ".backup '$stage/$rel'" 2>/dev/null && chown --reference="$f" "$stage/$rel" && chmod --reference="$f" "$stage/$rel" && printf '%s\n' "$rel" >> "$list"
+    done < <(find $(printf '/%s ' "${names[@]}") -xdev -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' -o -name Cookies -o -name 'Login Data' -o -name 'Web Data' -o -name History \) -print0 2>/dev/null)
+    tar -C / --numeric-owner --no-wildcards --exclude-from="$list" --wildcards "${EXCL[@]}" -cf "$tarf" "${names[@]}"
+    (cd "$stage" && find . -mindepth 1 -type f -print0 | tar --null -T - --numeric-owner -rf "$tarf")
+    zstd -q -T0 -3 --rm "$tarf" -o "$FILE.part"
+    mv "$FILE.part" "$FILE"; chown bothost:bothost "$FILE"; chmod 0600 "$FILE"
+    sha256sum "$FILE" | cut -d' ' -f1
+    echo "trees ${names[*]}" ;;
+  restore)
+    { [ -f "$FILE" ] && [ ! -L "$FILE" ] && [ "$(stat -c %U "$FILE")" = bothost ]; } || { echo "bot-snapshot: bad file" >&2; exit 2; }
+    # Final secfix round 4 (ruling 2): root only validates and reads the archive. Each tree is extracted and synced by
+    # its owner: /workspace and /home/box as box, agent-data as bothost. /home/box/.host is never restored.
+    for m in "${names[@]}"; do
+      case "$m" in
+        workspace|home/box) owner=box ;;
+        home/box/agent-data) owner=bothost ;;
+        *) continue ;;
+      esac
+      set +o pipefail
+      zstd -dc "$FILE" | setpriv --reuid="$owner" --regid=bots --init-groups --reset-env -- "$0" __restore-tree "$m"
+      set -o pipefail
+      # Bug #66: with "home", each Bot home on this box is restored by its own account (a home not in the archive is
+      # left as it is: the stage finds nothing to extract).
+      if [ "$m" = home/box ] && [ -d /home/bots ] && [ ! -L /home/bots ]; then
+        for h in /home/bots/bot-*; do
+          a="${h##*/}"
+          [[ "$a" =~ ^bot-[0-9a-f]{12}$ ]] && [ -d "$h" ] && [ ! -L "$h" ] || continue
+          ent="$(getent passwd "$a")" || continue
+          IFS=: read -r _ _ au ag _ ah _ <<<"$ent"
+          [ "$au" -ge 60200 ] && [ "$au" -le 61099 ] && [ "$ah" = "/home/bots/$a" ] || continue
+          set +o pipefail
+          zstd -dc "$FILE" | setpriv --reuid="$au" --regid="$ag" --init-groups --reset-env -- "$0" __restore-tree "home/bots/$a"
+          set -o pipefail
+        done
+      fi
+    done ;;
+  delete) rm -f "$FILE" ;;
+  *) echo "bot-snapshot: unknown verb" >&2; exit 2 ;;
+esac

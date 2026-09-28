@@ -1,0 +1,168 @@
+[
+  {
+    "retriever": "baseline (memory + latest summary + live tail + restore, no search)",
+    "label": "realistic",
+    "schemaTokens": 0,
+    "referenceTokens": 8809786,
+    "turns": 10000,
+    "perKind": {
+      "buried": {
+        "kind": "buried",
+        "n": 40,
+        "weight": 1,
+        "evidenceRecall": 0,
+        "exact": 0,
+        "judged": null,
+        "tokensMean": 5443,
+        "savingMean": 8804343,
+        "netPerTurn": 0
+      },
+      "summarised": {
+        "kind": "summarised",
+        "n": 40,
+        "weight": 1,
+        "evidenceRecall": 0,
+        "exact": 0,
+        "judged": null,
+        "tokensMean": 5443,
+        "savingMean": 8804343,
+        "netPerTurn": 0
+      },
+      "superseded": {
+        "kind": "superseded",
+        "n": 40,
+        "weight": 3,
+        "evidenceRecall": 0.25,
+        "exact": 0.25,
+        "judged": null,
+        "tokensMean": 5443,
+        "savingMean": 8804343,
+        "netPerTurn": 0
+      },
+      "scattered": {
+        "kind": "scattered",
+        "n": 40,
+        "weight": 1,
+        "evidenceRecall": 0.023749999999999997,
+        "exact": 0,
+        "judged": null,
+        "tokensMean": 5443,
+        "savingMean": 8804343,
+        "netPerTurn": 0
+      },
+      "document": {
+        "kind": "document",
+        "n": 40,
+        "weight": 1,
+        "evidenceRecall": 0,
+        "exact": 0,
+        "judged": null,
+        "tokensMean": 5443,
+        "savingMean": 8804343,
+        "netPerTurn": 0
+      },
+      "negative": {
+        "kind": "negative",
+        "n": 40,
+        "weight": 1,
+        "evidenceRecall": null,
+        "exact": 1,
+        "judged": null,
+        "tokensMean": 5443,
+        "savingMean": 8804343,
+        "netPerTurn": 0
+      }
+    },
+    "overall": {
+      "weightedExact": 0.21875,
+      "weightedRecall": 0.11053571428571428,
+      "tokensMean": 5443,
+      "firingRate": 0,
+      "netPerTurn": 0,
+      "netTotal": 0
+    }
+  },
+  {
+    "retriever": "load everything (upper bound)",
+    "label": "realistic",
+    "schemaTokens": 0,
+    "referenceTokens": 8809786,
+    "turns": 10000,
+    "perKind": {
+      "buried": {
+        "kind": "buried",
+        "n": 40,
+        "weight": 1,
+        "evidenceRecall": 1,
+        "exact": 1,
+        "judged": null,
+        "tokensMean": 8809786,
+        "savingMean": 0,
+        "netPerTurn": 0
+      },
+      "summarised": {
+        "kind": "summarised",
+        "n": 40,
+        "weight": 1,
+        "evidenceRecall": 1,
+        "exact": 1,
+        "judged": null,
+        "tokensMean": 8809786,
+        "savingMean": 0,
+        "netPerTurn": 0
+      },
+      "superseded": {
+        "kind": "superseded",
+        "n": 40,
+        "weight": 3,
+        "evidenceRecall": 1,
+        "exact": 1,
+        "judged": null,
+        "tokensMean": 8809786,
+        "savingMean": 0,
+        "netPerTurn": 0
+      },
+      "scattered": {
+        "kind": "scattered",
+        "n": 40,
+        "weight": 1,
+        "evidenceRecall": 1,
+        "exact": 1,
+        "judged": null,
+        "tokensMean": 8809786,
+        "savingMean": 0,
+        "netPerTurn": 0
+      },
+      "document": {
+        "kind": "document",
+        "n": 40,
+        "weight": 1,
+        "evidenceRecall": 1,
+        "exact": 1,
+        "judged": null,
+        "tokensMean": 8809786,
+        "savingMean": 0,
+        "netPerTurn": 0
+      },
+      "negative": {
+        "kind": "negative",
+        "n": 40,
+        "weight": 1,
+        "evidenceRecall": null,
+        "exact": 1,
+        "judged": null,
+        "tokensMean": 8809786,
+        "savingMean": 0,
+        "netPerTurn": 0
+      }
+    },
+    "overall": {
+      "weightedExact": 1,
+      "weightedRecall": 1,
+      "tokensMean": 8809786,
+      "firingRate": 0,
+      "netPerTurn": 0,
+      "netTotal": 0
+    }
+  }
+]

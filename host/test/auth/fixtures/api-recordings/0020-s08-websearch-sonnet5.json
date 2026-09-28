@@ -1,0 +1,780 @@
+{
+ "scenario": "s08-websearch-sonnet5",
+ "seq": 20,
+ "request": {
+  "method": "POST",
+  "path": "/v1/messages?beta=true",
+  "auth": "oauth-access-token (authorization header)",
+  "headers": {
+   "accept": "application/json",
+   "content-type": "application/json",
+   "user-agent": "claude-cli/2.1.283 (external, sdk-cli)",
+   "x-claude-code-session-id": "<redacted>",
+   "x-stainless-arch": "arm64",
+   "x-stainless-lang": "js",
+   "x-stainless-os": "MacOS",
+   "x-stainless-package-version": "0.112.1",
+   "x-stainless-retry-count": "0",
+   "x-stainless-runtime": "node",
+   "x-stainless-runtime-version": "v26.3.0",
+   "x-stainless-timeout": "600",
+   "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,effort-2025-11-24",
+   "anthropic-dangerous-direct-browser-access": "true",
+   "anthropic-version": "2023-06-01",
+   "x-app": "cli",
+   "connection": "keep-alive",
+   "host": "127.0.0.1:8787",
+   "accept-encoding": "gzip, deflate, br, zstd",
+   "content-length": "878"
+  },
+  "dropped_headers": [
+   "authorization"
+  ],
+  "body_bytes_original": 878,
+  "body_kind": "json",
+  "body": {
+   "model": "claude-sonnet-5",
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo"
+      }
+     ]
+    }
+   ],
+   "system": [
+    {
+     "type": "text",
+     "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si"
+    },
+    {
+     "type": "text",
+     "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip"
+    },
+    {
+     "type": "text",
+     "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor"
+    }
+   ],
+   "tools": [
+    {
+     "type": "web_search_20250305",
+     "name": "web_search",
+     "max_uses": 8
+    }
+   ],
+   "tool_choice": {
+    "type": "tool",
+    "name": "web_search"
+   },
+   "metadata": {
+    "user_id": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am"
+   },
+   "max_tokens": 64000,
+   "thinking": {
+    "type": "disabled"
+   },
+   "output_config": {
+    "effort": "high"
+   },
+   "stream": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "headers": {
+   "date": "Sat, 26 Sep 2026 01:47:55 GMT",
+   "content-type": "text/event-stream; charset=utf-8",
+   "transfer-encoding": "chunked",
+   "connection": "keep-alive",
+   "cache-control": "no-cache",
+   "anthropic-ratelimit-unified-5h-status": "<redacted>",
+   "anthropic-ratelimit-unified-representative-claim": "<redacted>",
+   "anthropic-ratelimit-unified-overage-status": "<redacted>",
+   "anthropic-ratelimit-unified-reset": "<redacted>",
+   "anthropic-ratelimit-unified-5h-utilization": "<redacted>",
+   "anthropic-ratelimit-unified-7d-reset": "<redacted>",
+   "anthropic-ratelimit-unified-5h-reset": "<redacted>",
+   "anthropic-ratelimit-unified-7d-status": "<redacted>",
+   "anthropic-ratelimit-unified-7d-surpassed-threshold": "<redacted>",
+   "anthropic-ratelimit-unified-fallback-percentage": "<redacted>",
+   "anthropic-ratelimit-unified-overage-disabled-reason": "<redacted>",
+   "anthropic-ratelimit-unified-7d-utilization": "<redacted>",
+   "anthropic-ratelimit-unified-status": "<redacted>",
+   "server": "cloudflare",
+   "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+   "anthropic-workspace-id": "<redacted>",
+   "traceresponse": "<redacted>",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "cf-cache-status": "<redacted>",
+   "x-robots-tag": "none",
+   "content-security-policy": "default-src 'none'; frame-ancestors 'none'"
+  },
+  "dropped_headers": [
+   "request-id",
+   "anthropic-organization-id",
+   "cf-ray"
+  ],
+  "ttfb_ms": 3593.2,
+  "total_ms": 8807,
+  "chunk_timing": [
+   {
+    "t_ms": 3593.3,
+    "bytes": 564
+   },
+   {
+    "t_ms": 3770.8,
+    "bytes": 96
+   },
+   {
+    "t_ms": 5993.6,
+    "bytes": 1363
+   },
+   {
+    "t_ms": 5994.6,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 5994.7,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 5994.8,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 5998.2,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 5998.3,
+    "bytes": 1347
+   },
+   {
+    "t_ms": 5998.4,
+    "bytes": 1363
+   },
+   {
+    "t_ms": 5998.4,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 5998.8,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 5998.8,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 6000,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 6000,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 6000.1,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 6000.1,
+    "bytes": 1113
+   },
+   {
+    "t_ms": 6076.9,
+    "bytes": 35
+   },
+   {
+    "t_ms": 6120.6,
+    "bytes": 23
+   },
+   {
+    "t_ms": 6254.2,
+    "bytes": 352
+   },
+   {
+    "t_ms": 6258.8,
+    "bytes": 26
+   },
+   {
+    "t_ms": 6304.7,
+    "bytes": 15
+   },
+   {
+    "t_ms": 6347.9,
+    "bytes": 17
+   },
+   {
+    "t_ms": 6398.9,
+    "bytes": 18
+   },
+   {
+    "t_ms": 6440.6,
+    "bytes": 25
+   },
+   {
+    "t_ms": 6484.6,
+    "bytes": 54
+   },
+   {
+    "t_ms": 6582.4,
+    "bytes": 301
+   },
+   {
+    "t_ms": 6625.9,
+    "bytes": 19
+   },
+   {
+    "t_ms": 6669.2,
+    "bytes": 19
+   },
+   {
+    "t_ms": 6712,
+    "bytes": 17
+   },
+   {
+    "t_ms": 6759.1,
+    "bytes": 17
+   },
+   {
+    "t_ms": 6804.4,
+    "bytes": 17
+   },
+   {
+    "t_ms": 6852.1,
+    "bytes": 21
+   },
+   {
+    "t_ms": 6894.9,
+    "bytes": 16
+   },
+   {
+    "t_ms": 6978,
+    "bytes": 17
+   },
+   {
+    "t_ms": 6985.6,
+    "bytes": 19
+   },
+   {
+    "t_ms": 7070.5,
+    "bytes": 20
+   },
+   {
+    "t_ms": 7081.5,
+    "bytes": 19
+   },
+   {
+    "t_ms": 7121.1,
+    "bytes": 22
+   },
+   {
+    "t_ms": 7166.3,
+    "bytes": 72
+   },
+   {
+    "t_ms": 7215.2,
+    "bytes": 24
+   },
+   {
+    "t_ms": 7258.1,
+    "bytes": 24
+   },
+   {
+    "t_ms": 7315.7,
+    "bytes": 15
+   },
+   {
+    "t_ms": 7351.8,
+    "bytes": 32
+   },
+   {
+    "t_ms": 7392.4,
+    "bytes": 23
+   },
+   {
+    "t_ms": 7439,
+    "bytes": 23
+   },
+   {
+    "t_ms": 7621.9,
+    "bytes": 312
+   },
+   {
+    "t_ms": 7673.5,
+    "bytes": 22
+   },
+   {
+    "t_ms": 7713,
+    "bytes": 22
+   },
+   {
+    "t_ms": 7757.1,
+    "bytes": 17
+   },
+   {
+    "t_ms": 7801.8,
+    "bytes": 16
+   },
+   {
+    "t_ms": 7852.6,
+    "bytes": 17
+   },
+   {
+    "t_ms": 7893.1,
+    "bytes": 20
+   },
+   {
+    "t_ms": 7938.9,
+    "bytes": 27
+   },
+   {
+    "t_ms": 7982.7,
+    "bytes": 20
+   },
+   {
+    "t_ms": 8040.6,
+    "bytes": 40
+   },
+   {
+    "t_ms": 8114.7,
+    "bytes": 31
+   },
+   {
+    "t_ms": 8127.6,
+    "bytes": 22
+   },
+   {
+    "t_ms": 8168.3,
+    "bytes": 32
+   },
+   {
+    "t_ms": 8211.9,
+    "bytes": 23
+   },
+   {
+    "t_ms": 8257.7,
+    "bytes": 44
+   },
+   {
+    "t_ms": 8302.8,
+    "bytes": 24
+   },
+   {
+    "t_ms": 8347.1,
+    "bytes": 23
+   },
+   {
+    "t_ms": 8398.5,
+    "bytes": 48
+   },
+   {
+    "t_ms": 8440.5,
+    "bytes": 20
+   },
+   {
+    "t_ms": 8540.4,
+    "bytes": 266
+   },
+   {
+    "t_ms": 8574.8,
+    "bytes": 25
+   },
+   {
+    "t_ms": 8626,
+    "bytes": 17
+   },
+   {
+    "t_ms": 8664.5,
+    "bytes": 19
+   },
+   {
+    "t_ms": 8711.7,
+    "bytes": 17
+   },
+   {
+    "t_ms": 8773.2,
+    "bytes": 18
+   },
+   {
+    "t_ms": 8801.2,
+    "bytes": 15
+   },
+   {
+    "t_ms": 8806.2,
+    "bytes": 267
+   },
+   {
+    "t_ms": 8806.7,
+    "bytes": 10
+   }
+  ],
+  "note": "stream arrived gzip-encoded; chunk timing kept by incremental decode",
+  "kind": "sse",
+  "sse": [
+   {
+    "t_ms": 3593.3,
+    "raw": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5\",\"id\":\"msg_0000000000000000000fake1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2984,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":16,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"diagnostics\":null,\"context_management\":null}}\n\n"
+   },
+   {
+    "t_ms": 3593.3,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"server_tool_use\",\"id\":\"srvtoolu_0000000000000000000fake1\",\"name\":\"web_search\",\"input\":{}}}\n\n"
+   },
+   {
+    "t_ms": 3593.3,
+    "raw": "event: ping\ndata: {\"type\":\"ping\"}\n\n"
+   },
+   {
+    "t_ms": 3593.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 3770.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"query\"}}\n\n"
+   },
+   {
+    "t_ms": 3770.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\": \\\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 3770.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"em ipsu\"}}\n\n"
+   },
+   {
+    "t_ms": 3770.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"m dolor\"}}\n\n"
+   },
+   {
+    "t_ms": 3770.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\" si\\\"}\"}}\n\n"
+   },
+   {
+    "t_ms": 3770.8,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+   },
+   {
+    "t_ms": 6000.1,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"web_search_tool_result\",\"tool_use_id\":\"srvtoolu_0000000000000000000fake1\",\"content\":[{\"type\":\"web_search_result\",\"title\":\"lorem ipsum dolor sit amet lorem ipsum dolor s\",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\",\"encrypted_content\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\",\"page_age\":null},{\"type\":\"web_search_result\",\"title\":\"lorem ipsum dolor sit amet lorem \",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\",\"encrypted_content\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \",\"page_age\":\"lorem ipsum d\"},{\"type\":\"web_search_result\",\"title\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo\",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \",\"encrypted_content\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \",\"page_age\":\"lorem ipsum dolor \"},{\"type\":\"web_search_result\",\"title\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit\",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dol\",\"encrypted_content\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\",\"page_age\":\"lorem ipsu\"},{\"type\":\"web_search_result\",\"title\":\"lorem ipsum dolor sit amet lorem ipsum do\",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor s\",\"encrypted_content\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \",\"page_age\":\"lorem ipsum dolo\"},{\"type\":\"web_search_result\",\"title\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit a\",\"encrypted_content\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\",\"page_age\":null},{\"type\":\"web_search_result\",\"title\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit a\",\"encrypted_content\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \",\"page_age\":\"lorem ipsum dolor \"},{\"type\":\"web_search_result\",\"title\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l\",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \",\"encrypted_content\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\",\"page_age\":null},{\"type\":\"web_search_result\",\"title\":\"lorem ipsum dolor s\",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \",\"encrypted_content\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\",\"page_age\":null}],\"caller\":{\"type\":\"direct\"}}}\n\n"
+   },
+   {
+    "t_ms": 6000.1,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n"
+   },
+   {
+    "t_ms": 6000.1,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 6000.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"text_delta\",\"text\":\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 6076.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet \"}}\n\n"
+   },
+   {
+    "t_ms": 6120.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum \"}}\n\n"
+   },
+   {
+    "t_ms": 6254.2,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":2}\n\n"
+   },
+   {
+    "t_ms": 6254.2,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"citations\":[],\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 6254.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"citations_delta\",\"citation\":{\"type\":\"web_search_result_location\",\"cited_text\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem\\n\\n\",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\",\"title\":\"lorem ipsum dolor sit amet lorem ipsum dolor s\",\"encrypted_index\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\"}}}\n\n"
+   },
+   {
+    "t_ms": 6254.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"text_delta\",\"text\":\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 6258.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit am\"}}\n\n"
+   },
+   {
+    "t_ms": 6304.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet lore\"}}\n\n"
+   },
+   {
+    "t_ms": 6347.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolo\"}}\n\n"
+   },
+   {
+    "t_ms": 6398.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit\"}}\n\n"
+   },
+   {
+    "t_ms": 6440.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor \"}}\n\n"
+   },
+   {
+    "t_ms": 6484.6,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":3}\n\n"
+   },
+   {
+    "t_ms": 6484.6,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":4,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 6484.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":4,\"delta\":{\"type\":\"text_delta\",\"text\":\"l\"}}\n\n"
+   },
+   {
+    "t_ms": 6582.4,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":4}\n\n"
+   },
+   {
+    "t_ms": 6582.4,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":5,\"content_block\":{\"citations\":[],\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 6582.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"citations_delta\",\"citation\":{\"type\":\"web_search_result_location\",\"cited_text\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\",\"title\":\"lorem ipsum dolor sit amet lorem ipsum dolor s\",\"encrypted_index\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\"}}}\n\n"
+   },
+   {
+    "t_ms": 6582.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum \"}}\n\n"
+   },
+   {
+    "t_ms": 6625.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\"}}\n\n"
+   },
+   {
+    "t_ms": 6669.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet\"}}\n\n"
+   },
+   {
+    "t_ms": 6712,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor\"}}\n\n"
+   },
+   {
+    "t_ms": 6759.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet\"}}\n\n"
+   },
+   {
+    "t_ms": 6804.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum do\"}}\n\n"
+   },
+   {
+    "t_ms": 6852.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum \"}}\n\n"
+   },
+   {
+    "t_ms": 6894.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo\"}}\n\n"
+   },
+   {
+    "t_ms": 6978,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolo\"}}\n\n"
+   },
+   {
+    "t_ms": 6985.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit \"}}\n\n"
+   },
+   {
+    "t_ms": 7070.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem\"}}\n\n"
+   },
+   {
+    "t_ms": 7081.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem\"}}\n\n"
+   },
+   {
+    "t_ms": 7121.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\"}}\n\n"
+   },
+   {
+    "t_ms": 7166.3,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":5}\n\n"
+   },
+   {
+    "t_ms": 7166.3,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":6,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 7166.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":6,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\n\\nlorem ipsum\"}}\n\n"
+   },
+   {
+    "t_ms": 7215.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":6,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 7258.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":6,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem i\"}}\n\n"
+   },
+   {
+    "t_ms": 7315.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":6,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo\"}}\n\n"
+   },
+   {
+    "t_ms": 7351.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":6,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor \"}}\n\n"
+   },
+   {
+    "t_ms": 7392.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":6,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor \"}}\n\n"
+   },
+   {
+    "t_ms": 7439,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":6,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor\"}}\n\n"
+   },
+   {
+    "t_ms": 7621.9,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":6}\n\n"
+   },
+   {
+    "t_ms": 7621.9,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":7,\"content_block\":{\"citations\":[],\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 7621.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"citations_delta\",\"citation\":{\"type\":\"web_search_result_location\",\"cited_text\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor s\",\"title\":\"lorem ipsum dolor sit amet lorem ipsum do\",\"encrypted_index\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\"}}}\n\n"
+   },
+   {
+    "t_ms": 7621.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 7673.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet\"}}\n\n"
+   },
+   {
+    "t_ms": 7713,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit\"}}\n\n"
+   },
+   {
+    "t_ms": 7757.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor \"}}\n\n"
+   },
+   {
+    "t_ms": 7801.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor \"}}\n\n"
+   },
+   {
+    "t_ms": 7852.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit ame\"}}\n\n"
+   },
+   {
+    "t_ms": 7893.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dol\"}}\n\n"
+   },
+   {
+    "t_ms": 7938.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet lo\"}}\n\n"
+   },
+   {
+    "t_ms": 7982.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\"}}\n\n"
+   },
+   {
+    "t_ms": 8040.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet l\"}}\n\n"
+   },
+   {
+    "t_ms": 8114.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet\"}}\n\n"
+   },
+   {
+    "t_ms": 8127.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum d\"}}\n\n"
+   },
+   {
+    "t_ms": 8168.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet lo\"}}\n\n"
+   },
+   {
+    "t_ms": 8211.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":7,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum\"}}\n\n"
+   },
+   {
+    "t_ms": 8257.7,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":7}\n\n"
+   },
+   {
+    "t_ms": 8257.7,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":8,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 8257.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":8,\"delta\":{\"type\":\"text_delta\",\"text\":\"l\"}}\n\n"
+   },
+   {
+    "t_ms": 8302.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":8,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem\"}}\n\n"
+   },
+   {
+    "t_ms": 8347.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":8,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum\"}}\n\n"
+   },
+   {
+    "t_ms": 8398.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":8,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 8440.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":8,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ips\"}}\n\n"
+   },
+   {
+    "t_ms": 8540.4,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":8}\n\n"
+   },
+   {
+    "t_ms": 8540.4,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":9,\"content_block\":{\"citations\":[],\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 8540.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":9,\"delta\":{\"type\":\"citations_delta\",\"citation\":{\"type\":\"web_search_result_location\",\"cited_text\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\",\"url\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\",\"title\":\"lorem ipsum dolor sit amet lorem \",\"encrypted_index\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\"}}}\n\n"
+   },
+   {
+    "t_ms": 8540.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":9,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum\"}}\n\n"
+   },
+   {
+    "t_ms": 8574.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":9,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet lor\"}}\n\n"
+   },
+   {
+    "t_ms": 8626,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":9,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor\"}}\n\n"
+   },
+   {
+    "t_ms": 8664.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":9,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor \"}}\n\n"
+   },
+   {
+    "t_ms": 8711.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":9,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 8773.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":9,\"delta\":{\"type\":\"text_delta\",\"text\":\"lore\"}}\n\n"
+   },
+   {
+    "t_ms": 8801.2,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":9}\n\n"
+   },
+   {
+    "t_ms": 8806.2,
+    "raw": "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":13025,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":391,\"output_tokens_details\":{\"thinking_tokens\":0},\"server_tool_use\":{\"web_search_requests\":1,\"web_fetch_requests\":0}},\"context_management\":{\"applied_edits\":[]}}\n\n"
+   },
+   {
+    "t_ms": 8806.2,
+    "raw": "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   }
+  ]
+ },
+ "error": null
+}

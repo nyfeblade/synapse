@@ -1,0 +1,13 @@
+#!/bin/sh
+# ORIG-16 §16.8 boot sweep, narrowed for Phase 3: only box processes inside bothost.service's cgroup are orphans of a previous
+# host (CLI children via sudo+setpriv stay in the parent unit's cgroup, spike S3-09). Screens (bot-display@/bot-chrome@) and
+# background shells (bot-shell-*) run in their own units and survive a host restart (TOOL-11 rewatch).
+[ "${SUDO_USER:-}" = "bothost" ] || [ "$(id -u)" = 0 ] || { echo "bot-reap: must be invoked by bothost via sudo" >&2; exit 126; }
+CG="0::/system.slice/bothost.service"
+# Bug #66: every Bot account (reserved uids 60200-61099) too, not only box.
+pids() { for p in $(pgrep -u box) $(ps -eo pid=,uid= | awk '$2 >= 60200 && $2 <= 61099 { print $1 }'); do [ "$(cat /proc/$p/cgroup 2>/dev/null)" = "$CG" ] && echo "$p"; done; }
+if [ "${1:-}" = "--dry-run" ]; then pids >/dev/null; exit 0; fi
+P="$(pids)"; [ -n "$P" ] && kill -TERM $P 2>/dev/null
+sleep 3
+P="$(pids)"; [ -n "$P" ] && kill -KILL $P 2>/dev/null
+exit 0

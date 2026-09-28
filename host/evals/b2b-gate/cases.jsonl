@@ -1,0 +1,45 @@
+{"id":"D01","expect":"drop","send":{"kind":"result","message":"Thanks!"}}
+{"id":"D02","expect":"drop","send":{"kind":"result","message":"Got it, will do 👍"}}
+{"id":"D03","expect":"drop","send":{"kind":"result","message":"Sounds good — let me know if you need anything else"}}
+{"id":"D04","expect":"drop","thread":[{"from":"B","kind":"result","text":"The deck is at /workspace/deck-v2.key with the new pricing slide.","minsAgo":3}],"send":{"kind":"result","message":"Perfect, thank you so much, this is exactly what I needed."}}
+{"id":"D05","expect":"drop","send":{"kind":"result","message":"Confirmed, received the file."}}
+{"id":"D06","expect":"drop","send":{"kind":"result","message":"Standing by."}}
+{"id":"D07","expect":"drop","note":"restates the result just received","thread":[{"from":"B","kind":"result","text":"The CSV is ready: 212 leads, deduped by domain, at /workspace/leads-q3.csv","minsAgo":2}],"send":{"kind":"result","message":"So the CSV is ready with 212 leads deduped by domain at /workspace/leads-q3.csv."}}
+{"id":"D08","expect":"drop","note":"same request re-sent 10 min later","open":[{"ref":"R1","from":"A","kind":"request","expects":"a CSV at /workspace/leads-q3.csv","minsAgo":10}],"thread":[{"from":"A","kind":"request","text":"Please build a CSV of Q3 leads from the CRM export","minsAgo":10,"ref":"R1"}],"send":{"kind":"request","message":"Please build a CSV of Q3 leads from the CRM export","expects":"a CSV at /workspace/leads-q3.csv"}}
+{"id":"D09","expect":"drop","note":"reply to a result","open":[{"ref":"R1","from":"A","kind":"request","expects":"a CSV of Q3 leads","minsAgo":30,"answered":"The CSV is ready: 212 leads"}],"send":{"kind":"question","message":"Why are there only 212 rows?","expects":"the reason for the row count","in_reply_to_ref":"R1"}}
+{"id":"D10","expect":"drop","send":{"kind":"result","message":"Great work on the deck!"}}
+{"id":"D11","expect":"drop","send":{"kind":"result","message":"On it!"}}
+{"id":"D12","expect":"drop","send":{"kind":"result","message":"Noted, I'll keep that in mind"}}
+{"id":"D13","expect":"drop","send":{"kind":"result","message":"🙏"}}
+{"id":"D14","expect":"drop","note":"thanks with no new info","thread":[{"from":"B","kind":"result","text":"Q3 report is at /workspace/reports/q3.pdf","minsAgo":5}],"send":{"kind":"result","message":"Thanks, I'll use this for the report"}}
+{"id":"D15","expect":"drop","note":"near-duplicate status line","thread":[{"from":"A","kind":"result","text":"Status: still collecting vendor quotes for the offsite venue","minsAgo":20}],"send":{"kind":"result","message":"Status update: still collecting the vendor quotes for offsite venue"}}
+{"id":"M01","expect":"deliver","send":{"kind":"request","message":"Please build a CSV of Q3 leads from the CRM export","expects":"a CSV at /workspace/leads-q3.csv"}}
+{"id":"M02","expect":"deliver","open":[{"ref":"R1","from":"B","kind":"request","expects":"Q3 leads CSV","minsAgo":20}],"send":{"kind":"result","message":"Done: 212 rows at /workspace/leads-q3.csv, 14 duplicates removed","in_reply_to_ref":"R1"}}
+{"id":"M03","expect":"deliver","send":{"kind":"blocker","message":"I can't continue until you add the Stripe API key as a secret named STRIPE_KEY."}}
+{"id":"M04","expect":"deliver","send":{"kind":"question","message":"Should the invoice go to the billing address on file or the shipping address?","expects":"billing or shipping"}}
+{"id":"M05","expect":"deliver","note":"correction","send":{"kind":"result","message":"Correction: the CSV had 12 duplicate rows; fixed at /workspace/leads-v2.csv"}}
+{"id":"M06","expect":"deliver","note":"courtesy plus new info","thread":[{"from":"B","kind":"result","text":"Invoice totals are in /workspace/invoices/sept.csv","minsAgo":10}],"send":{"kind":"result","message":"Thanks — but the totals are off by $400 in row 12"}}
+{"id":"M07","expect":"deliver","send":{"kind":"handoff","message":"I'm handing you the vendor contract review; the draft is at /workspace/contracts/acme.docx","expects":"signed-off redlines sent to the user by Friday"}}
+{"id":"M08","expect":"deliver","open":[{"ref":"R1","from":"B","kind":"question","expects":"billing or shipping address","minsAgo":5}],"thread":[{"from":"B","kind":"question","text":"Should the invoice go to the billing address on file?","minsAgo":5,"ref":"R1"}],"send":{"kind":"result","message":"yes, use the billing address","in_reply_to_ref":"R1"}}
+{"id":"M09","expect":"deliver","open":[{"ref":"R1","from":"B","kind":"question","expects":"a new time for the call","minsAgo":5}],"thread":[{"from":"B","kind":"question","text":"Can the call move to 11:00?","minsAgo":5,"ref":"R1"}],"send":{"kind":"result","message":"no: 14:00","in_reply_to_ref":"R1"}}
+{"id":"M10","expect":"deliver","open":[{"ref":"R1","from":"B","kind":"request","expects":"the September invoices as PDFs","minsAgo":15}],"send":{"kind":"result","status":"declined","message":"Declined: I don't have access to the finance mailbox, so I can't pull the invoices.","in_reply_to_ref":"R1"}}
+{"id":"M11","expect":"deliver","send":{"kind":"request","message":"Can you compare these three hotel quotes and pick the cheapest refundable one?","expects":"the hotel name and total price"}}
+{"id":"M12","expect":"deliver","send":{"kind":"question","message":"Which Slack channel should the weekly summary go to?","expects":"a channel name"}}
+{"id":"M13","expect":"deliver","send":{"kind":"blocker","message":"Blocked: the GitHub token expired. Please re-authenticate gh so I can push the branch."}}
+{"id":"M14","expect":"deliver","send":{"kind":"request","priority":true,"message":"Please pause the outbound campaign now; 40 bounces in the last hour.","expects":"confirmation the campaign is paused"}}
+{"id":"M15","expect":"deliver","send":{"kind":"handoff","message":"The Q4 budget is yours now; latest numbers are in /workspace/budget-q4.xlsx","expects":"final budget sent to the user"}}
+{"id":"M16","expect":"deliver","open":[{"ref":"R1","from":"B","kind":"request","expects":"cabin options near Hudson under $150","minsAgo":30}],"send":{"kind":"result","message":"Found 3 cabins near Hudson; best is $142/night, free cancellation until Oct 20.","in_reply_to_ref":"R1"}}
+{"id":"M17","expect":"deliver","send":{"kind":"question","message":"Do you want the report as PDF or as a Google Doc?","expects":"PDF or Google Doc"}}
+{"id":"M18","expect":"deliver","send":{"kind":"request","message":"Draft a reply to the vendor declining the renewal at $1,200/yr","expects":"draft text at /workspace/drafts/vendor.md"}}
+{"id":"I01","expect":"inbox","send":{"kind":"result","message":"FYI: moved the report to /workspace/reports/q3.pdf"}}
+{"id":"I02","expect":"inbox","send":{"kind":"result","message":"The vendor call is now Thursday at 3 PM."}}
+{"id":"I03","expect":"inbox","send":{"kind":"result","message":"Heads up: the staging site will be down from 6 to 7 PM tonight."}}
+{"id":"I04","expect":"inbox","send":{"kind":"result","message":"Uploaded the signed NDA to /workspace/legal/nda-signed.pdf."}}
+{"id":"I05","expect":"inbox","send":{"kind":"result","message":"The client approved the logo, version B."}}
+{"id":"I06","expect":"inbox","send":{"kind":"result","message":"Budget sheet updated with September actuals: spend is $18,240."}}
+{"id":"I07","expect":"inbox","send":{"kind":"result","message":"New lead from the webinar: Dana Ruiz at Northwind, dana@northwind.example."}}
+{"id":"I08","expect":"inbox","send":{"kind":"result","message":"Calendar: the offsite moved to Oct 24–25."}}
+{"id":"I09","expect":"inbox","send":{"kind":"result","message":"The GitHub CI on main is green again after the flaky test fix."}}
+{"id":"I10","expect":"inbox","send":{"kind":"result","message":"Invoice #4471 was paid today."}}
+{"id":"I11","expect":"inbox","note":"status update mislabeled as a request (G8 → classifier)","send":{"kind":"request","message":"Status: I finished the first draft of the deck, 14 slides, at /workspace/deck-v1.key","expects":"nothing, just keeping you posted"}}
+{"id":"I12","expect":"inbox","note":"FYI mislabeled as a question (G8 → classifier)","send":{"kind":"question","message":"The meeting notes from Tuesday are in /workspace/notes/0915.md","expects":"no reply needed at all"}}

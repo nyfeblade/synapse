@@ -1,0 +1,3 @@
+#!/bin/sh
+# CT-11 fallback (ORIG-13 §13.6 step 2): same uid as the host, host-private data hidden by a tmpfs.
+exec bwrap --dev-bind / / --tmpfs /home/box/.host --proc /proc --die-with-parent -- /usr/local/bin/claude "$@"

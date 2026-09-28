@@ -1,0 +1,45 @@
+{
+  "python": {
+    "version": "3.12.14",
+    "build": "20260924",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260924/cpython-3.12.14%2B20260924-aarch64-apple-darwin-install_only.tar.gz",
+    "sha256": "9763f43db2481a6af36af82ec40302aab7a73632f880129d07a6e81aec846277"
+  },
+  "model": {
+    "repo": "mlx-community/Kokoro-82M-4bit",
+    "revision": "e4468a460f6f70b9125a003e0adb1ab7d4904bbd",
+    "configPatch": { "model_type": "kokoro" },
+    "files": {
+      "config.json": "a7ca69f4c4cfcfc030b994a0b33dbc69d209d05c800a74657e0346d522f4fd46",
+      "kokoro-v1_0.safetensors": "5a5cb3d87478f2e74dfca208ee52209ccfce024095e137097fd276026506e45f",
+      "voices/af_alloy.safetensors": "7997b001760bbcb624594dc0baf1ac9a2c7aacfb45c158dbf63daf8c245182bc",
+      "voices/af_aoede.safetensors": "fce9bf78661a0444ca333f5687183d850bfb73b71c67f2678dd5ddb3ac3a96d2",
+      "voices/af_bella.safetensors": "a18024b9332f5ff217c7f604cbe94449a3ca51c3b8d85500e31cd3cbdc4ef6ce",
+      "voices/af_heart.safetensors": "4e40b08984cd84a86b4d07960939bd85bb6b3747dd747b7de48dca3aaeab37ca",
+      "voices/af_jessica.safetensors": "93930bbe363cf01040de0aa1cf08b29b4b624ed7a70a36f8cd71ea855c097003",
+      "voices/af_kore.safetensors": "71fb664533d3bcbed8cf96eafe9280dfa7c244302ded62501a0b42d18377ed1b",
+      "voices/af_nicole.safetensors": "769ee38efeb131196eaab5ed43592b315bba829881d4aee7411872efa6cf05c6",
+      "voices/af_nova.safetensors": "6bf350f6649bde64c8cc79e17437fdd10dc7edf2b962702942e01a2d7af403bd",
+      "voices/af_river.safetensors": "4068d50ad247f47b8938ed88fba45db8d5c1b44dbae552db523a919d0a953019",
+      "voices/af_sarah.safetensors": "2bc36ea1b08925188da3c81e30858952bec28fbb61512bdd573312e5a62dd3f9",
+      "voices/af_sky.safetensors": "7c8fafbc903f96ec8779adb0757ad36038bad5b66910d122260f90751b3ff007",
+      "voices/am_adam.safetensors": "1dff8c742132e77fcee65886ede701eeed36de8d36a055f07c1bd2598c9228ce",
+      "voices/am_echo.safetensors": "73f4473b2b74214efe97e0b4f09970015fea1ce7513ac6fc5e69631315a99cd4",
+      "voices/am_eric.safetensors": "91bcd1a2c8b10ef25ae222ba99cace6beef3d7fca0c0047f22b5a2bb21c9d034",
+      "voices/am_fenrir.safetensors": "843c5a6abcd2f25f242e1bf3b008c3c8fcc8f6d99f081767275e1c852eb7beee",
+      "voices/am_liam.safetensors": "dd0b4852ec6aacb9d6a90625e8f6053a11ef835322e75b587d929ca8ea5e136d",
+      "voices/am_michael.safetensors": "19a8661430456e2bbf0a68b52fa9b49678bb0fb7418619f868df77921f5aa43c",
+      "voices/am_onyx.safetensors": "0d6ee75af61cf3bdfa66732394008f1786e09a247b4c6aa8b9661fb06fa7ba40",
+      "voices/am_puck.safetensors": "a6be98717a1332b631c689c25b69e6e0e48693453002d160d0690a80cf989d47",
+      "voices/am_santa.safetensors": "207b91319c811192393b0b38fe0815174420f49dd46d8e23e172bf3686398edc",
+      "voices/bf_alice.safetensors": "23cc78a409207641fda6f0e5a8e5f3b3b2ea5d948471b85cd18c8740a4ccfaa7",
+      "voices/bf_emma.safetensors": "ed92055e1ed96f2a0b4a52b76956dcfd76627bd548c33801743a62c0817dec01",
+      "voices/bf_isabella.safetensors": "3a3f580cd78969b9bca33d85ebfa2d43c7bad9066f938108969d57f2856b9f08",
+      "voices/bf_lily.safetensors": "4cfbc152f58d473aa80b666e48178ecfa6ca793197e1ffd92cfa2fb4b18956a9",
+      "voices/bm_daniel.safetensors": "35b044b866eb8aa3f91ec376fdf457fea0ad0d3ebe8484f3dd32e1f5355c582a",
+      "voices/bm_fable.safetensors": "146cd42da875a06d45b9808f5dbdc1b0485283a590187aaeffda64239f0faa54",
+      "voices/bm_george.safetensors": "a3a6682cde622e7aee35597b91947fa018f78be101a97587a100effe227e5a21",
+      "voices/bm_lewis.safetensors": "a3a1a67f5f1debde58bf7e972ff47e0ae575696f87f2d51f5c581cc48dc68f22"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "about": "The exact source archives of the GPL-3.0 parts of the bundled Kokoro voice. scripts/publish-release.mjs fetches each from its canonical URL at release time, checks the SHA-256 here, and attaches it to the GitHub release. espeak-ng is the tag espeakng-loader 0.2.4 builds (its CI clones espeak-ng at 1.52.0; the wheel ships libespeak-ng.1.52.0.dylib). Keep these in step with requirements.lock.",
+  "sources": [
+    {
+      "name": "espeak-ng",
+      "version": "1.52.0",
+      "bundledBy": "espeakng-loader==0.2.4",
+      "commit": "4870adfa25b1a32b4361592f1be8a40337c58d6c",
+      "asset": "espeak-ng-1.52.0.tar.gz",
+      "url": "https://github.com/espeak-ng/espeak-ng/archive/refs/tags/1.52.0.tar.gz",
+      "sha256": "bb4338102ff3b49a81423da8a1a158b420124b055b60fa76cfb4b18677130a23"
+    },
+    {
+      "name": "phonemizer-fork",
+      "version": "3.3.2",
+      "bundledBy": "phonemizer-fork==3.3.2",
+      "asset": "phonemizer_fork-3.3.2.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/42/fa/9294d2f11890ca49d0bdac7a4da60cbe5686629bfd4987cae0ad75e051cc/phonemizer_fork-3.3.2.tar.gz",
+      "sha256": "10e16e827d0443b087062e21b55e805c00989cf1343b2e81e734cae5f6c0cf69"
+    }
+  ]
+}

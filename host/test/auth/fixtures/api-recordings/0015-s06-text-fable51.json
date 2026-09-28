@@ -1,0 +1,214 @@
+{
+ "scenario": "s06-text-fable51",
+ "seq": 15,
+ "request": {
+  "method": "POST",
+  "path": "/v1/messages?beta=true",
+  "auth": "oauth-access-token (authorization header)",
+  "headers": {
+   "accept": "application/json",
+   "content-type": "application/json",
+   "user-agent": "claude-cli/2.1.283 (external, sdk-cli)",
+   "x-claude-code-session-id": "<redacted>",
+   "x-stainless-arch": "arm64",
+   "x-stainless-lang": "js",
+   "x-stainless-os": "MacOS",
+   "x-stainless-package-version": "0.112.1",
+   "x-stainless-retry-count": "0",
+   "x-stainless-runtime": "node",
+   "x-stainless-runtime-version": "v26.3.0",
+   "x-stainless-timeout": "600",
+   "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,effort-2025-11-24,extended-cache-ttl-2025-04-11",
+   "anthropic-dangerous-direct-browser-access": "true",
+   "anthropic-version": "2023-06-01",
+   "x-app": "cli",
+   "connection": "keep-alive",
+   "host": "127.0.0.1:8787",
+   "accept-encoding": "gzip, deflate, br, zstd",
+   "content-length": "5668"
+  },
+  "dropped_headers": [
+   "authorization"
+  ],
+  "body_bytes_original": 5668,
+  "body_kind": "json",
+  "body": {
+   "model": "claude-fable-5-1",
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \nipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\n\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor\n"
+      },
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor sit amet lore"
+      }
+     ]
+    },
+    {
+     "role": "system",
+     "content": [
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem\n ipsum dolor sit amet\n\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\n\nt a\nmet lorem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net \n\nlorem ipsum dol\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor\n sit amet lorem \n\nipsum dolor sit amet \nlorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\n\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem\n\n ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\nit amet lorem ipsum do\n\nlor sit ame\n\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \n\namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\n\nit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor\n\nem ipsum dolor si\n\nt amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\n\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\n\num dolor sit\n\n amet lorem ipsum dolor sit amet lorem ipsum d\n\nolor sit amet lorem i\npsum dolor sit amet l\norem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit a\nmet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l\norem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\nsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem i\npsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\nsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet \nlorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n\n lorem ipsum dolor sit\n\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\n\nit amet lorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lorem ipsum dolo\n\nr sit amet lorem ips\n\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor\nem ipsum dolor sit ame\n\nt lorem ipsum\n dolor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem\n ipsum dolor sit amet lorem i\npsum dolor sit amet\n lorem ipsum \ndolor sit amet lorem ipsum d\n\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lore\n\nm ipsum dolor sit amet lorem ipsum dolor sit amet\n\n lorem ipsum dolor sit amet",
+       "cache_control": {
+        "type": "ephemeral",
+        "ttl": "1h"
+       }
+      }
+     ],
+     "output_config": {
+      "effort": "high"
+     }
+    }
+   ],
+   "system": [
+    {
+     "type": "text",
+     "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si"
+    },
+    {
+     "type": "text",
+     "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip",
+     "cache_control": {
+      "type": "ephemeral",
+      "ttl": "1h"
+     }
+    },
+    {
+     "type": "text",
+     "text": "lorem ips",
+     "cache_control": {
+      "type": "ephemeral",
+      "ttl": "1h"
+     }
+    }
+   ],
+   "tools": [],
+   "metadata": {
+    "user_id": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am"
+   },
+   "max_tokens": 64000,
+   "thinking": {
+    "type": "adaptive",
+    "display": "omitted"
+   },
+   "context_management": {
+    "edits": [
+     {
+      "type": "clear_thinking_20251015",
+      "keep": "all"
+     }
+    ]
+   },
+   "output_config": {
+    "effort": "high"
+   },
+   "stream": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "headers": {
+   "date": "Sat, 26 Sep 2026 01:47:40 GMT",
+   "content-type": "text/event-stream; charset=utf-8",
+   "transfer-encoding": "chunked",
+   "connection": "keep-alive",
+   "cache-control": "no-cache",
+   "anthropic-ratelimit-unified-overage-disabled-reason": "<redacted>",
+   "anthropic-ratelimit-unified-representative-claim": "<redacted>",
+   "anthropic-ratelimit-unified-7d_oi-utilization": "<redacted>",
+   "anthropic-ratelimit-unified-7d_oi-reset": "<redacted>",
+   "anthropic-ratelimit-unified-7d-reset": "<redacted>",
+   "anthropic-ratelimit-unified-7d-surpassed-threshold": "<redacted>",
+   "anthropic-ratelimit-unified-7d-status": "<redacted>",
+   "anthropic-ratelimit-unified-overage-status": "<redacted>",
+   "anthropic-ratelimit-unified-5h-status": "<redacted>",
+   "anthropic-ratelimit-unified-reset": "<redacted>",
+   "anthropic-ratelimit-unified-5h-utilization": "<redacted>",
+   "anthropic-ratelimit-unified-5h-reset": "<redacted>",
+   "anthropic-ratelimit-unified-7d_oi-status": "<redacted>",
+   "anthropic-ratelimit-unified-fallback-percentage": "<redacted>",
+   "anthropic-ratelimit-unified-7d-utilization": "<redacted>",
+   "anthropic-ratelimit-unified-status": "<redacted>",
+   "server": "cloudflare",
+   "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+   "anthropic-workspace-id": "<redacted>",
+   "traceresponse": "<redacted>",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "cf-cache-status": "<redacted>",
+   "x-robots-tag": "none",
+   "content-security-policy": "default-src 'none'; frame-ancestors 'none'"
+  },
+  "dropped_headers": [
+   "request-id",
+   "anthropic-organization-id",
+   "cf-ray"
+  ],
+  "ttfb_ms": 660,
+  "total_ms": 1284.1,
+  "chunk_timing": [
+   {
+    "t_ms": 660.1,
+    "bytes": 488
+   },
+   {
+    "t_ms": 1280.8,
+    "bytes": 22
+   },
+   {
+    "t_ms": 1281.1,
+    "bytes": 25
+   },
+   {
+    "t_ms": 1282.6,
+    "bytes": 124
+   },
+   {
+    "t_ms": 1283.8,
+    "bytes": 10
+   }
+  ],
+  "note": "stream arrived gzip-encoded; chunk timing kept by incremental decode",
+  "kind": "sse",
+  "sse": [
+   {
+    "t_ms": 660.1,
+    "raw": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-fable-5-1\",\"id\":\"msg_0000000000000000000fake1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":1755,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":1755},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"diagnostics\":null,\"context_management\":null}}\n\n"
+   },
+   {
+    "t_ms": 660.1,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 660.1,
+    "raw": "event: ping\ndata: {\"type\":\"ping\"}\n\n"
+   },
+   {
+    "t_ms": 660.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"l\"}}\n\n"
+   },
+   {
+    "t_ms": 1280.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lore\"}}\n\n"
+   },
+   {
+    "t_ms": 1281.1,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+   },
+   {
+    "t_ms": 1282.6,
+    "raw": "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":1755,\"cache_read_input_tokens\":0,\"output_tokens\":4,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}}\n\n"
+   },
+   {
+    "t_ms": 1282.6,
+    "raw": "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   }
+  ]
+ },
+ "error": null
+}

@@ -1,0 +1,28 @@
+/* Voice wave 3: a Bot's incoming call, screen sharing on a call, the wake-word status. Flat and
+   opaque (liquid = motion only): existing tokens, the pop-in spring, no blur or translucency. */
+.incoming-call {
+  position: fixed; top: 16px; right: 16px; z-index: 60; width: min(380px, calc(100vw - 32px));
+  display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; padding: 14px;
+  border-radius: var(--radius-surface); border: 1px solid var(--line-modal); background: var(--surface-raised); box-shadow: var(--shadow-pop);
+  animation: pop-in var(--motion-pop) backwards; transform-origin: 100% 0;
+}
+.incoming-call-avatar { grid-row: span 2; align-self: start; }
+.incoming-call-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.incoming-call-text p { margin: 0; color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
+.incoming-call-text .incoming-call-first { color: var(--ink-muted); font-size: 12px; }
+.incoming-call .link-btn { border: none; background: none; padding: 0; color: var(--ink-muted); text-decoration: underline; font: inherit; }
+.incoming-call-actions { grid-column: 2; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+/* Dark glyph on the green: white on --dot-ok is only 3.25:1. */
+.round-btn.accept-call { width: 40px; height: 40px; background: var(--dot-ok); color: var(--ink-on-control); }
+.round-btn.accept-call:not(:disabled):hover { background-color: var(--dot-ok); opacity: 0.86; }
+
+.wake-status.live { color: var(--dot-ok); }
+
+/* Bug 198: Settings → Voice → Phone access. */
+.phone-address { gap: 10px; }
+.phone-url { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--type-ui); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: all; }
+.phone-qr-row { justify-content: flex-start; }
+/* The QR stays black on white in both themes (its own white rect: scanners want the contrast), in a soft rounded tile. */
+.phone-qr { border-radius: var(--radius-control); }
+.phone-code { font-size: 22px; font-weight: 600; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
+.quiet-hours input[type="time"] { font: inherit; }

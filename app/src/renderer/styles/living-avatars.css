@@ -1,0 +1,23 @@
+/* Living Bots (bug 226). Only avatar rules live here, so nothing else in the app is restyled.
+
+   A sidebar row or pinned tile whose avatar is the drawn face shows its work in miniature (the pose),
+   so the grey "working" dot on the avatar's corner and the row's busy dot step aside. Visually only:
+   the marker stays in the accessibility tree with its "Working" label, and the row's status text
+   still says what the Bot is doing. A picture avatar or a group keeps its dot; so does the green
+   on-a-call dot, the orange needs-attention dot and the blue unread dot.
+   (Loaded last, main.tsx; the selectors also out-weigh the rules they quiet, so order is not load-bearing.) */
+.row:has(> .avatar-wrap > svg.face-avatar) > .marker.working,
+.tile:has(> .avatar-wrap > svg.face-avatar) > .marker.working {
+  opacity: 0;
+  animation: none;
+  box-shadow: none;
+}
+.row.row[data-presence="busy"]:not([data-group]):has(> .avatar-wrap > svg.face-avatar)::after {
+  opacity: 0;
+}
+
+/* Touch: pressing and dragging a face never drags the row's link or selects text. */
+svg.face-avatar {
+  -webkit-user-drag: none;
+  user-select: none;
+}

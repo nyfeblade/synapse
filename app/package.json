@@ -1,0 +1,52 @@
+{
+  "name": "@synapse/app",
+  "productName": "Synapse",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "node build.mjs && vite build",
+    "start": "electron .",
+    "e2e": "playwright test -c e2e/playwright.config.ts",
+    "motion:check": "(test -f ../host/dist/host.mjs || node ../host/build.mjs) && playwright test -c motion/motion.config.ts",
+    "perf:idle": "(test -f ../host/dist/host.mjs || node ../host/build.mjs) && playwright test -c perf/perf.config.ts",
+    "smoke:packaged": "playwright test -c e2e/packaged.config.ts",
+    "package": "PACKAGE_BUILD=1 npm run build && node scripts/package.mjs",
+    "release": "npm run package && node scripts/release.mjs",
+    "release:bump": "node scripts/release-bump.mjs",
+    "publish-release": "node scripts/publish-release.mjs",
+    "dmg": "npm run package && node scripts/dmg.mjs",
+    "dmg:only": "node scripts/dmg.mjs",
+    "kokoro:stage": "node scripts/kokoro-runtime.mjs stage ../.build-cache/stage"
+  },
+  "dependencies": {
+    "@synapse/shared": "*",
+    "@novnc/novnc": "^1.6.0",
+    "libsodium-wrappers": "^0.7.16",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "read-excel-file": "^5.8.8",
+    "remark-gfm": "^4.0.1",
+    "ws": "^8.18.3",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@synapse/host": "*",
+    "@electron/packager": "^19.1.1",
+    "@playwright/test": "^1.63.0",
+    "@testing-library/react": "^16.3.3",
+    "@types/libsodium-wrappers": "^0.7.14",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.4.3",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.0",
+    "vite": "^8.3.0"
+  }
+}

@@ -1,0 +1,37 @@
+[
+  {
+    "file": "src/invoice.ts",
+    "find": "import { multiply, type Cents } from \"./money\";",
+    "replace": "import { multiply, percentOf, type Cents } from \"./money\";"
+  },
+  {
+    "file": "src/invoice.ts",
+    "find": "  lines: Line[];\n  notes?: string;\n}",
+    "replace": "  lines: Line[];\n  notes?: string;\n  /** Invoice-level discount, 0-100 percent, applied to each line before tax. Absent means 0. */\n  discountPercent?: number;\n}"
+  },
+  {
+    "file": "src/invoice.ts",
+    "find": "export interface LineTotal {\n  net: Cents;",
+    "replace": "export interface LineTotal {\n  net: Cents;\n  discount: Cents;"
+  },
+  {
+    "file": "src/invoice.ts",
+    "find": "  subtotal: Cents;\n  tax: Cents;",
+    "replace": "  subtotal: Cents;\n  /** Total discount, a positive number of cents. */\n  discount: Cents;\n  tax: Cents;"
+  },
+  {
+    "file": "src/invoice.ts",
+    "find": "  if (inv.lines.length === 0) errors.push(\"an invoice needs at least one line\");",
+    "replace": "  if (inv.lines.length === 0) errors.push(\"an invoice needs at least one line\");\n  const d = inv.discountPercent;\n  if (d !== undefined && !(Number.isFinite(d) && d >= 0 && d <= 100)) errors.push(`discountPercent must be from 0 to 100, got ${d}`);"
+  },
+  {
+    "file": "src/invoice.ts",
+    "find": "    const net = lineNet(l);\n    return { net, tax: taxFor(inv.region, l.category, net) };",
+    "replace": "    const net = lineNet(l);\n    const discount = percentOf(net, inv.discountPercent ?? 0);\n    return { net, discount, tax: taxFor(inv.region, l.category, net - discount) };"
+  },
+  {
+    "file": "src/invoice.ts",
+    "find": "  return { subtotal, tax, total: subtotal + tax, taxByName, lines };",
+    "replace": "  const discount = lines.reduce((a, l) => a + l.discount, 0);\n  return { subtotal, discount, tax, total: subtotal - discount + tax, taxByName, lines };"
+  }
+]

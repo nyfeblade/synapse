@@ -1,0 +1,40 @@
+{"id":"R01","text":"hi","label":"simple","must":["\\w"],"maxChars":300}
+{"id":"R02","text":"thanks!","label":"simple","maxChars":200}
+{"id":"R03","text":"good morning","label":"simple","maxChars":300}
+{"id":"R04","text":"what's the capital of Australia?","label":"simple","must":["Canberra"],"maxChars":400}
+{"id":"R05","text":"who wrote Pride and Prejudice?","label":"simple","must":["Austen"],"maxChars":400}
+{"id":"R06","text":"how many days are in a leap year?","label":"simple","must":["366"],"maxChars":300}
+{"id":"R07","text":"what's 17 times 23?","label":"simple","must":["391"],"maxChars":300}
+{"id":"R08","text":"lol that's great","label":"simple","maxChars":300}
+{"id":"R09","text":"how are you today?","label":"simple","maxChars":400}
+{"id":"R10","text":"ok","label":"simple","maxChars":200}
+{"id":"R11","text":"nice, love it","label":"simple","maxChars":300}
+{"id":"R12","text":"what's a good name for a golden retriever?","label":"simple","maxChars":600}
+{"id":"R13","text":"is it pronounced gif or jif?","label":"simple","maxChars":600}
+{"id":"R14","text":"what does ETA stand for?","label":"simple","must":["[Ee]stimated"],"maxChars":400}
+{"id":"R15","text":"what time zone is Tokyo in?","label":"simple","must":["JST|UTC\\+9|GMT\\+9|Japan"],"maxChars":400}
+{"id":"R16","text":"what did I tell you my dog's name was?","label":"simple","memory":["The user's dog is called Biscuit."],"must":["Biscuit"],"maxChars":400}
+{"id":"R17","text":"which do you think is better, tea or coffee?","label":"simple","maxChars":700}
+{"id":"R18","text":"good night!","label":"simple","maxChars":200}
+{"id":"R19","text":"what's the difference between affect and effect?","label":"simple","must":["verb","noun"],"maxChars":900}
+{"id":"R20","text":"cool","label":"simple","maxChars":200}
+{"id":"H01","text":"can you check my inbox for anything from Ana?","label":"hard"}
+{"id":"H02","text":"fix the failing test in the ledger repo","label":"hard"}
+{"id":"H03","text":"look up flights from Lisbon to Oslo next Friday","label":"hard"}
+{"id":"H04","text":"remind me to call mom at 5","label":"hard"}
+{"id":"H05","text":"what's in notes/plan.md?","label":"hard"}
+{"id":"H06","text":"summarize https://example.com/post","label":"hard"}
+{"id":"H07","text":"email bob@example.com that I'm running late","label":"hard"}
+{"id":"H08","text":"please draft a reply to the landlord","label":"hard"}
+{"id":"H09","text":"schedule a call with Ana on Tuesday","label":"hard"}
+{"id":"H10","text":"yes, do it and send the draft","label":"hard"}
+{"id":"H11","text":"add milk to the shopping list","label":"hard"}
+{"id":"H12","text":"how do I reset my router","label":"hard"}
+{"id":"H13","text":"I need a summary of yesterday's meeting","label":"hard"}
+{"id":"H14","text":"run `npm test` in the app","label":"hard"}
+{"id":"H15","text":"compare these two quotes and tell me which is cheaper","label":"hard"}
+{"id":"H16","text":"book a table for two at 8","label":"hard"}
+{"id":"H17","text":"what's the weather like in Porto right now?","label":"hard"}
+{"id":"H18","text":"what's the latest news on the election?","label":"hard"}
+{"id":"H19","text":"could you translate this into French: see you tomorrow","label":"hard"}
+{"id":"H20","text":"Here is the error:\nTypeError: x is undefined","label":"hard"}

@@ -1,0 +1,76 @@
+#!/bin/sh
+# Root-owned. bothost starts/stops per-Bot displays (CMP-04). Usage: bot-display start <N> <token> [<bot account>] | stop <N> | status <N> | restart-chrome <N> | open-app <N> terminal|files|browser
+# Bug #66: with a Bot account (bot-user's, reserved uid range) the display's X session and Chromium run as that
+# account (a runtime drop-in: User=, its private group, HOME = its home, so Chrome's profile is its own), and
+# /run/bot-x/<N>.user names it for display-cookie and bot-atspi. Without one they run as box, as before.
+set -eu
+[ "${SUDO_USER:-}" = "bothost" ] || { echo "bot-display: must be invoked by bothost via sudo" >&2; exit 126; }
+verb="${1:-}"; n="${2:-}"; token="${3:-}"
+case "$n" in ''|*[!0-9]*) echo "bot-display: bad index" >&2; exit 2;; esac
+[ "$n" -ge 1 ] && [ "$n" -le 100 ] || { echo "bot-display: index out of range" >&2; exit 2; }
+owner="/run/bot-x/$n.owner"
+case "$verb" in
+  start)
+    case "$token" in ''|*[!A-Za-z0-9_-]*) echo "bot-display: bad token" >&2; exit 2;; esac
+    acct="${4:-}"
+    if [ -n "$acct" ]; then
+      X='[0-9a-f]'
+      case "$acct" in bot-$X$X$X$X$X$X$X$X$X$X$X$X) ;; *) echo "bot-display: bad account" >&2; exit 2;; esac
+      ent="$(getent passwd "$acct")" || { echo "bot-display: bad account" >&2; exit 2; }
+      auid="$(printf '%s' "$ent" | cut -d: -f3)"
+      case "$auid" in ''|*[!0-9]*) echo "bot-display: bad account" >&2; exit 2;; esac
+      { [ "$auid" -ge 60200 ] && [ "$auid" -le 61099 ] && [ "$(printf '%s' "$ent" | cut -d: -f6)" = "/home/bots/$acct" ]; } || { echo "bot-display: bad account" >&2; exit 2; }
+    fi
+    if [ -f "$owner" ] && [ "$(cat "$owner")" != "$token" ] && systemctl is-active --quiet "bot-display@$n"; then exit 75; fi
+    install -d -o root -g bots -m 0750 /run/bot-x   # secfix round 3 (ruling 1): root-owned, box can't plant a link here
+    [ ! -L "$owner" ] || { echo "bot-display: owner file is a symlink" >&2; exit 126; }
+    rm -f "$owner"; printf '%s' "$token" > "$owner"; chmod 0600 "$owner"
+    ufile="/run/bot-x/$n.user"
+    [ ! -L "$ufile" ] || { echo "bot-display: user file is a symlink" >&2; exit 126; }
+    changed=0
+    for u in bot-display bot-chrome; do
+      dd="/run/systemd/system/$u@$n.service.d"; di="$dd/50-bot-user.conf"
+      if [ -n "$acct" ]; then
+        want="$(printf '[Service]\nUser=%s\nGroup=%s\nSupplementaryGroups=bots\nEnvironment=HOME=/home/bots/%s\nProtectProc=invisible\n' "$acct" "$acct" "$acct")"
+        if [ "$(cat "$di" 2>/dev/null || true)" != "$want" ]; then install -d -m 0755 "$dd"; printf '%s\n' "$want" > "$di"; changed=1; fi
+      elif [ -e "$di" ]; then rm -f "$di"; changed=1; fi
+    done
+    if [ -n "$acct" ]; then rm -f "$ufile"; printf '%s' "$acct" > "$ufile"; chmod 0644 "$ufile"; else rm -f "$ufile"; fi
+    [ "$changed" = 0 ] || systemctl daemon-reload
+    systemctl start "bot-display@$n.service" "bot-vnc@$n.service" "bot-chrome@$n.service" ;;
+  stop)
+    systemctl stop "bot-chrome@$n.service" "bot-vnc@$n.service" "bot-display@$n.service" || true
+    rm -f "$owner" ;;
+  status)
+    if systemctl is-active --quiet "bot-display@$n.service" && systemctl is-active --quiet "bot-chrome@$n.service"; then echo running; else echo stopped; fi ;;
+  restart-chrome) systemctl restart "bot-chrome@$n.service" ;;
+  open-app)
+    # Bug 78: the app's "Open app" buttons start a dock app as the display's owner (the Bot's account, else box),
+    # so its windows join that display's accessibility bus (bothost can't; Live perception then saw "no
+    # accessibility info"). Only the three dock apps, only on a running display, detached as a transient unit.
+    app="${3:-}"
+    case "$app" in
+      terminal) set -- /usr/bin/xfce4-terminal --working-directory=/workspace ;;
+      files) set -- /usr/bin/thunar /workspace ;;
+      browser) set -- /usr/local/bin/box-chrome about:blank ;;
+      *) echo "bot-display: bad app" >&2; exit 2 ;;
+    esac
+    xa="/run/bot-x/$n.xauth"
+    { [ -f "$xa" ] && [ ! -L "$xa" ] && systemctl is-active --quiet "bot-display@$n.service"; } || { echo "bot-display: display :$n is not running" >&2; exit 3; }
+    u=box; g=bots; h=/home/box; uf="/run/bot-x/$n.user"; X='[0-9a-f]'
+    if [ -f "$uf" ] && [ ! -L "$uf" ]; then
+      # The same account checks as start: a Bot account name, in the reserved uid range, with its own home.
+      a="$(cat "$uf")"
+      case "$a" in bot-$X$X$X$X$X$X$X$X$X$X$X$X) ;; *) echo "bot-display: bad account" >&2; exit 2;; esac
+      ent="$(getent passwd "$a")" || { echo "bot-display: bad account" >&2; exit 2; }
+      auid="$(printf '%s' "$ent" | cut -d: -f3)"
+      case "$auid" in ''|*[!0-9]*) echo "bot-display: bad account" >&2; exit 2;; esac
+      { [ "$auid" -ge 60200 ] && [ "$auid" -le 61099 ] && [ "$(printf '%s' "$ent" | cut -d: -f6)" = "/home/bots/$a" ]; } || { echo "bot-display: bad account" >&2; exit 2; }
+      u="$a"; g="$a"; h="/home/bots/$a"
+    fi
+    exec systemd-run --quiet --collect --uid="$u" --gid="$g" -p SupplementaryGroups=bots -p UMask=0002 -p ProtectProc=invisible \
+      -p WorkingDirectory=-/workspace -p EnvironmentFile=-/etc/bots/desktop.env \
+      --setenv=DISPLAY=":$n" --setenv=XAUTHORITY="$xa" --setenv=HOME="$h" --setenv=PATH=/usr/local/bin:/usr/bin:/bin \
+      -- "$@" ;;
+  *) echo "bot-display: unknown verb" >&2; exit 2 ;;
+esac

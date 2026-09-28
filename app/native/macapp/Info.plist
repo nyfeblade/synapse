@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Embedded in the helper binary. Spawned by Synapse.app, the APP is the TCC responsible process and its
+     Info.plist (scripts/info-plist.mjs) supplies the prompts; these mirror them for a helper run on its own. -->
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>com.nyfeblade.synapse.macapp</string>
+  <key>CFBundleName</key><string>Synapse Mac Apps</string>
+  <key>NSAppleEventsUsageDescription</key><string>Synapse controls the Mac apps you ask your Bots to use, like Messages, Mail and Calendar.</string>
+  <key>NSContactsUsageDescription</key><string>Synapse reads your contacts so your Bots can find the person you mean.</string>
+  <key>NSCalendarsUsageDescription</key><string>Synapse reads and writes your calendar so your Bots can check and book your time.</string>
+  <key>NSRemindersUsageDescription</key><string>Synapse reads and writes your reminders so your Bots can keep your lists up to date.</string>
+</dict></plist>

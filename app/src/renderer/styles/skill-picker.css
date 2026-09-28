@@ -1,0 +1,16 @@
+/* `/` skill picker in the composer (SKL-03, Task 25). Scoped under .skill-picker-anchor / .skill-picker*
+   so these names never collide with app.css's own `.picker`/`.picker-row` (NewChat's recipient picker,
+   fixed-positioned relative to the whole window) or with any other track's stylesheet. `.chips-row`,
+   `.chip-x` and `.clamp1` are already defined identically in app.css (Task 4) and are reused as-is. */
+.skill-picker-anchor { position: relative; }
+.skill-picker { position: absolute; bottom: 100%; left: 0; right: 0; margin: 0 0 6px; padding: 6px; list-style: none; background: var(--surface-raised); border: var(--hairline) solid var(--line-modal); border-radius: var(--radius-control); box-shadow: var(--shadow-pop); z-index: 3; }
+.skill-picker-row { display: flex; flex-direction: column; padding: 6px 10px; border-radius: var(--radius-control); font-size: 13px; }
+.skill-picker-row.selected { background: var(--fill-selected); }
+
+/* Interaction states. `.selected` is the keyboard cursor; hover steps past it so the two never merge. */
+.skill-picker-row { transition: background-color var(--motion-tap); }
+.skill-picker-row:hover { background-color: var(--fill-hover); }
+.skill-picker-row:active { background-color: var(--fill-press); }
+.skill-picker-row.selected:hover { background-color: var(--fill-selected-hover); }
+.skill-picker-row.selected:active { background-color: var(--fill-selected-press); }
+.skill-picker-row:focus-visible { outline: 3px solid var(--focus-ring-soft); outline-offset: 2px; }

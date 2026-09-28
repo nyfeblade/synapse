@@ -1,0 +1,21 @@
+#!/bin/sh
+# Root-owned, root only (not in bothost's sudoers rule). Bug #66 follow-up: /proc hidepid=invisible, so each uid sees
+# only its own processes -- a Bot can't list another Bot's processes or read their cmdline. The group `procview` is
+# the exception and sees everything: bothost (the supervisor's per-Bot RSS walk, supervisor/rss.ts) and polkitd
+# (polkit reads its callers' /proc entries and breaks without it). root always sees everything (bot-reap, systemd).
+# A Bot's Shell and screen units also get ProtectProc=invisible, so they are covered even if this is off.
+# Usage: proc-hidepid on | off | status. `on` runs at boot from bots-hidepid.service once the migration enabled it.
+set -eu
+if [ -n "${SUDO_USER:-}" ] || [ "$(id -u)" != 0 ]; then echo "proc-hidepid: root only" >&2; exit 126; fi
+case "${1:-}" in
+  on)
+    getent group procview >/dev/null || groupadd --system procview
+    for u in bothost polkitd; do
+      if getent passwd "$u" >/dev/null && ! id -nG "$u" | tr ' ' '\n' | grep -qx procview; then usermod -aG procview "$u"; fi
+    done
+    gid="$(getent group procview | cut -d: -f3)"
+    mount -o "remount,hidepid=invisible,gid=$gid" /proc ;;
+  off) mount -o remount,hidepid=off /proc ;;
+  status) findmnt -no OPTIONS /proc ;;
+  *) echo "usage: proc-hidepid on|off|status" >&2; exit 2 ;;
+esac

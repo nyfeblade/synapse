@@ -1,0 +1,15 @@
+[Unit]
+Description=Bots Chromium on :%i (CDP 127.0.0.1:9222+%i)
+BindsTo=bot-display@%i.service
+After=bot-display@%i.service
+[Service]
+User=box
+Group=bots
+Environment=DISPLAY=:%i XAUTHORITY=/run/bot-x/%i.xauth HOME=/home/box
+EnvironmentFile=/etc/bots/desktop.env
+ExecStart=/usr/local/bin/box-chrome --serve %i
+Restart=always
+RestartSec=2
+KillMode=control-group
+[Install]
+WantedBy=multi-user.target

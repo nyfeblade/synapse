@@ -1,0 +1,32 @@
+[
+  {
+    "file": "src/ledger.ts",
+    "find": "import { compareDates, daysBetween, isValidDate, type ISODate } from \"./dates\";",
+    "replace": "import { compareDates, daysBetween, isValidDate, type ISODate } from \"./dates\";\nimport { Emitter } from \"./events\";"
+  },
+  {
+    "file": "src/ledger.ts",
+    "find": "export class LedgerError extends Error {",
+    "replace": "export type LedgerEvents = {\n  \"invoice.issued\": { id: string; customerId: string; total: Cents };\n  \"invoice.paid\": { id: string; paidOn: ISODate; total: Cents };\n};\n\nexport class LedgerError extends Error {"
+  },
+  {
+    "file": "src/ledger.ts",
+    "find": "  readonly customers: CustomerDirectory;\n  private entries",
+    "replace": "  readonly customers: CustomerDirectory;\n  readonly events = new Emitter<LedgerEvents>();\n  private entries"
+  },
+  {
+    "file": "src/ledger.ts",
+    "find": "    this.entries.set(inv.id, { invoice: { ...inv, lines: inv.lines.map((l) => ({ ...l })) } });",
+    "replace": "    this.entries.set(inv.id, { invoice: { ...inv, lines: inv.lines.map((l) => ({ ...l })) } });\n    this.events.emit(\"invoice.issued\", { id: inv.id, customerId: inv.customerId, total: this.total(inv.id) });"
+  },
+  {
+    "file": "src/ledger.ts",
+    "find": "    e.paidOn = paidOn;",
+    "replace": "    e.paidOn = paidOn;\n    this.events.emit(\"invoice.paid\", { id, paidOn, total: this.total(id) });"
+  },
+  {
+    "file": "src/index.ts",
+    "find": "export * from \"./seed\";",
+    "replace": "export * from \"./seed\";\nexport * from \"./payments-log\";"
+  }
+]

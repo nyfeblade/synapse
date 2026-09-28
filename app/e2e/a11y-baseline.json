@@ -1,0 +1,97 @@
+{
+  "_README": [
+    "Accessibility debt ledger for app/e2e/a11y.e2e.ts. This is NOT a suppression list.",
+    "Every entry is a real, known WCAG 2.2 A/AA violation that exists in the app today and has not been fixed yet.",
+    "The sweep fails if a surface/rule pair appears that is not listed here, or if a listed pair grows past its node count.",
+    "This file is expected to SHRINK and never grow. Deleting an entry is how a fix is recorded.",
+    "If the sweep reports fewer nodes than an entry allows, the debt was paid down: trim the number, or delete the entry.",
+    "Adding an entry is a decision, not a chore. Do it only when the fix genuinely belongs to someone else's branch,",
+    "and say so in the sweep summary. See docs/ui-audit-playbook.md.",
+    "",
+    "neverBaseline: elements that may never be filed as debt, however they are reported. These are plain bugs that",
+    "would otherwise sit in the ledger for ever looking like a contrast nit. A node matching one of these fails the",
+    "sweep unconditionally and is excluded from the counts below.",
+    "It is empty today. The one candidate — .teach-pill reported at 1.03:1 — turned out to be the 120ms colour",
+    "transition in app.css:542 caught mid-flight by the sweep's own theme switch, not a defect. The sweep now",
+    "freezes transitions before scanning. Entries below were identical across two consecutive runs.",
+    "",
+    "2026-09-20, bug 41. This file was stale in BOTH directions and is now re-measured end to end.",
+    "Nothing was added. Two entries were DELETED because the sweep now reports them clean, and eight were trimmed:",
+    "  main/settings [dark] — deleted. It allowed 1 and the sweep reported 3, which is bug 41 arriving: `.search`",
+    "    (--ink-faint #7a7a7a on the --fill-search card, 3.84:1) plus two `.settings-content h3` (the same ink on",
+    "    the --surface-raised #141414 modal, 4.29:1). `.search` now takes --ink-icon and dark --ink-faint is #848484.",
+    "  main/conversation [dark] — deleted, same `.search` node.",
+    "  onboarding/first-bot 23 -> 7 — stale in the other direction. The entry recorded 23; `main` measures 20, so 3",
+    "    had been paid and never trimmed. Of the 20, 13 were `.chip` (#6b6b6b on #eaeaea at 4.42:1) and --ink-icon",
+    "    #666666 closed all 13. Both halves of the staleness are recorded rather than folded into one number.",
+    "  The other six trims are the `.monogram` node (#6b6b6b on #e4e4e4 at 4.19:1) that appears once per main",
+    "    surface, and the `.search` node (#8a8a8a on #ededed at 2.94:1) likewise — one each, six surfaces.",
+    "Measured end to end: 126 nodes on `main` (the ledger said 127), 95 here. Two entries deleted, none added.",
+    "",
+    "WHAT IS LEFT, and why it is still here. All 95 nodes below are two light-mode greys used for secondary text:",
+    "#7a7a7a (--ink-muted: 4.29:1 on #ffffff, 3.93:1 on #f5f5f5, 3.43:1 on #e6e6e6) and #8a8a8a (--ink-faint:",
+    "3.45:1 on #ffffff). AA body text needs 4.5:1. This is one token decision, not 95 fixes, and it is NOT bug 41:",
+    "bug 41 is an ink that was proved against the PAGE and then painted on a CARD, and every node below is an ink",
+    "failing against the page it was proved on. Both greys are drawn verbatim by the approved boards in",
+    "the mockups — #7a7a7a 90+ times, #8a8a8a 70+ — so darkening them is a fidelity decision about the whole",
+    "app's secondary type, not a contrast patch, and it belongs to its own branch and its own bug row rather than",
+    "being smuggled into this one. #6b6b6b, the third grey this note used to name, is gone."
+  ],
+  "neverBaseline": [],
+  "entries": {
+    "onboarding/connect-claude :: color-contrast": {
+      "nodes": 2,
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "note": "#7a7a7a on #ffffff at 4.29:1 ×2 (needs 4.5:1)"
+    },
+    "onboarding/first-bot :: color-contrast": {
+      "nodes": 7,
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "note": "#7a7a7a on #ffffff at 4.29:1 ×7 (needs 4.5:1). Was 23; the 15 #6b6b6b-on-#eaeaea nodes are fixed and the ledger was stale."
+    },
+    "main/conversation :: color-contrast": {
+      "nodes": 6,
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "note": "#8a8a8a on #ffffff at 3.45:1 ×2; #7a7a7a on #ffffff at 4.29:1 ×3; #7a7a7a on #e6e6e6 at 3.43:1 ×1 (needs 4.5:1)"
+    },
+    "main/conversation [light] :: color-contrast": {
+      "nodes": 6,
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "note": "#8a8a8a on #ffffff at 3.45:1 ×2; #7a7a7a on #ffffff at 4.29:1 ×3; #7a7a7a on #e6e6e6 at 3.43:1 ×1 (needs 4.5:1)"
+    },
+    "main/marketplace :: color-contrast": {
+      "nodes": 25,
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "note": "#7a7a7a on #ffffff at 4.29:1 ×22; #8a8a8a on #ffffff at 3.45:1 ×2; #7a7a7a on #e6e6e6 at 3.43:1 ×1 (needs 4.5:1)"
+    },
+    "main/marketplace-your-plugins :: color-contrast": {
+      "nodes": 7,
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "note": "#7a7a7a on #ffffff at 4.29:1 ×4; #8a8a8a on #ffffff at 3.45:1 ×2; #7a7a7a on #e6e6e6 at 3.43:1 ×1 (needs 4.5:1)"
+    },
+    "main/palette :: color-contrast": {
+      "nodes": 14,
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "note": "#8a8a8a on #ffffff at 3.45:1 ×6; #7a7a7a on #ffffff at 4.29:1 ×7; #7a7a7a on #e6e6e6 at 3.43:1 ×1 (needs 4.5:1)"
+    },
+    "main/settings :: color-contrast": {
+      "nodes": 14,
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "note": "#8a8a8a on #ffffff at 3.45:1 ×6; #7a7a7a on #f5f5f5 at 3.93:1 ×4; #7a7a7a on #ffffff at 4.29:1 ×3; #7a7a7a on #e6e6e6 at 3.43:1 ×1 (needs 4.5:1)"
+    },
+    "main/settings [light] :: color-contrast": {
+      "nodes": 14,
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "note": "#8a8a8a on #ffffff at 3.45:1 ×6; #7a7a7a on #f5f5f5 at 3.93:1 ×4; #7a7a7a on #ffffff at 4.29:1 ×3; #7a7a7a on #e6e6e6 at 3.43:1 ×1 (needs 4.5:1)"
+    }
+  }
+}

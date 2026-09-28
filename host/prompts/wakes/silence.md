@@ -1,0 +1,1 @@
+<system_reminder>Several tool calls have gone by without a SendMessage, so from the user's side nothing is happening. Call the SendMessage tool now with a short progress note, then carry on.</system_reminder>

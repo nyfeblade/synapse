@@ -1,0 +1,13 @@
+[Unit]
+Description=Bots VNC for :%i (host-private socket)
+BindsTo=bot-display@%i.service
+After=bot-display@%i.service
+[Service]
+User=bothost
+Group=bothost
+SupplementaryGroups=bots
+ExecStart=/usr/local/lib/bots/vnc-serve %i
+Restart=always
+RestartSec=1
+[Install]
+WantedBy=multi-user.target

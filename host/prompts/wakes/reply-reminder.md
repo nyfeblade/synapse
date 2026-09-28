@@ -1,0 +1,1 @@
+<system_reminder>Answer this message by calling the SendMessage tool. The user never sees plain assistant text, only SendMessage. Put end_turn: true on the message that finishes your reply.</system_reminder>

@@ -1,0 +1,36 @@
+{
+  "name": "synapse",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "host",
+    "app"
+  ],
+  "engines": {
+    "node": ">=24.20.0"
+  },
+  "scripts": {
+    "test": "sh -c 'vitest run \"$@\"; s=$?; node scripts/tmp-hygiene.ts; exit $s' vitest",
+    "clean:tmp": "node scripts/tmp-hygiene.ts",
+    "typecheck": "tsc -p shared && tsc -p host && tsc -p app",
+    "build": "npm run build -w @synapse/host && npm run build -w @synapse/app",
+    "release": "npm run release -w @synapse/app",
+    "release:bump": "npm run release:bump -w @synapse/app --",
+    "publish-release": "npm run publish-release -w @synapse/app --",
+    "motion:check": "npm run motion:check -w @synapse/app",
+    "bench:context": "BENCH_RUN=${BENCH_RUN:-full} vitest run --project host host/test/bench/run.test.ts --silent=false",
+    "bench:cost": "BENCH_COST=${BENCH_COST:-full} vitest run --project host host/test/bench/compare/run.test.ts --silent=false",
+    "bench:coding": "node host/bench/coding/run.mjs",
+    "bench:cu": "node host/bench/computer-use/run.mjs",
+    "bench:voice": "BENCH_VOICE=1 vitest run --project host host/test/voice/fast-path-bench.test.ts --silent=false",
+    "eval:routing": "vitest run --project host host/test/evals/routing-real.live.test.ts --silent=false",
+    "dmg": "npm run dmg -w @synapse/app"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

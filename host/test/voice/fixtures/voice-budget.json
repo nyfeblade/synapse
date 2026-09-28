@@ -1,0 +1,2910 @@
+{
+ "source": {
+  "turnTaking": "test-reports/voice-call-feel/after/turn-taking-700 (real helper, 2026-09-23)",
+  "voice": "test-reports/voice-fast-path/real/report.md (Sonnet 5, low effort, 12 turns)",
+  "realFirstTextMs": "voice.log, the user's 1:1 fast-path turns without a speculative start (sent -> first text)"
+ },
+ "model": {
+  "partialLagMs": 350,
+  "wordMs": 20,
+  "appToHostMs": 100,
+  "hostToAppMs": 100,
+  "tts": {
+   "firstChunkBaseMs": 70,
+   "firstChunkPerCharMs": 5,
+   "playMsPerChar": 70,
+   "cachedFirstAudioMs": 5,
+   "fadeMs": 80
+  }
+ },
+ "utterances": [
+  {
+   "id": "l1-Ava_Premium_",
+   "kind": "long",
+   "speechEndMs": 4580,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Can",
+     "endAt": 254
+    },
+    {
+     "w": "you",
+     "endAt": 509
+    },
+    {
+     "w": "send",
+     "endAt": 763
+    },
+    {
+     "w": "a",
+     "endAt": 1017
+    },
+    {
+     "w": "message",
+     "endAt": 1271
+    },
+    {
+     "w": "to",
+     "endAt": 1526
+    },
+    {
+     "w": "Priya",
+     "endAt": 1780
+    },
+    {
+     "w": "and",
+     "endAt": 2743
+    },
+    {
+     "w": "tell",
+     "endAt": 3005
+    },
+    {
+     "w": "her",
+     "endAt": 3268
+    },
+    {
+     "w": "the",
+     "endAt": 3530
+    },
+    {
+     "w": "meeting",
+     "endAt": 3793
+    },
+    {
+     "w": "moved",
+     "endAt": 4055
+    },
+    {
+     "w": "to",
+     "endAt": 4318
+    },
+    {
+     "w": "Thursday.",
+     "endAt": 4580
+    }
+   ],
+   "events": [
+    {
+     "t": 100,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2199,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 5501,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 5533,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l1-Samantha",
+   "kind": "long",
+   "speechEndMs": 4220,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Can",
+     "endAt": 227
+    },
+    {
+     "w": "you",
+     "endAt": 452
+    },
+    {
+     "w": "send",
+     "endAt": 678
+    },
+    {
+     "w": "a",
+     "endAt": 903
+    },
+    {
+     "w": "message",
+     "endAt": 1129
+    },
+    {
+     "w": "to",
+     "endAt": 1354
+    },
+    {
+     "w": "Priya",
+     "endAt": 1580
+    },
+    {
+     "w": "and",
+     "endAt": 2505
+    },
+    {
+     "w": "tell",
+     "endAt": 2750
+    },
+    {
+     "w": "her",
+     "endAt": 2995
+    },
+    {
+     "w": "the",
+     "endAt": 3240
+    },
+    {
+     "w": "meeting",
+     "endAt": 3485
+    },
+    {
+     "w": "moved",
+     "endAt": 3730
+    },
+    {
+     "w": "to",
+     "endAt": 3975
+    },
+    {
+     "w": "Thursday.",
+     "endAt": 4220
+    }
+   ],
+   "events": [
+    {
+     "t": 101,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1899,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 5299,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 5339,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l10-Ava_Premium_",
+   "kind": "long",
+   "speechEndMs": 4420,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Okay",
+     "endAt": 243
+    },
+    {
+     "w": "so",
+     "endAt": 487
+    },
+    {
+     "w": "the",
+     "endAt": 732
+    },
+    {
+     "w": "thing",
+     "endAt": 976
+    },
+    {
+     "w": "is",
+     "endAt": 1220
+    },
+    {
+     "w": "the",
+     "endAt": 2654
+    },
+    {
+     "w": "client",
+     "endAt": 2949
+    },
+    {
+     "w": "wants",
+     "endAt": 3243
+    },
+    {
+     "w": "the",
+     "endAt": 3537
+    },
+    {
+     "w": "deck",
+     "endAt": 3831
+    },
+    {
+     "w": "by",
+     "endAt": 4126
+    },
+    {
+     "w": "Monday.",
+     "endAt": 4420
+    }
+   ],
+   "events": [
+    {
+     "t": 99,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1500,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 5401,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 5453,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l10-Samantha",
+   "kind": "long",
+   "speechEndMs": 4220,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Okay",
+     "endAt": 168
+    },
+    {
+     "w": "so",
+     "endAt": 436
+    },
+    {
+     "w": "the",
+     "endAt": 704
+    },
+    {
+     "w": "thing",
+     "endAt": 972
+    },
+    {
+     "w": "is",
+     "endAt": 1240
+    },
+    {
+     "w": "the",
+     "endAt": 2643
+    },
+    {
+     "w": "client",
+     "endAt": 2906
+    },
+    {
+     "w": "wants",
+     "endAt": 3169
+    },
+    {
+     "w": "the",
+     "endAt": 3431
+    },
+    {
+     "w": "deck",
+     "endAt": 3694
+    },
+    {
+     "w": "by",
+     "endAt": 3957
+    },
+    {
+     "w": "Monday.",
+     "endAt": 4220
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 4601,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 5198,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 5245,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l2-Ava_Premium_",
+   "kind": "long",
+   "speechEndMs": 6460,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "I",
+     "endAt": 116
+    },
+    {
+     "w": "need",
+     "endAt": 331
+    },
+    {
+     "w": "you",
+     "endAt": 547
+    },
+    {
+     "w": "to",
+     "endAt": 762
+    },
+    {
+     "w": "book",
+     "endAt": 978
+    },
+    {
+     "w": "a",
+     "endAt": 1193
+    },
+    {
+     "w": "table",
+     "endAt": 1409
+    },
+    {
+     "w": "for",
+     "endAt": 1624
+    },
+    {
+     "w": "four",
+     "endAt": 1840
+    },
+    {
+     "w": "at",
+     "endAt": 3091
+    },
+    {
+     "w": "that",
+     "endAt": 3403
+    },
+    {
+     "w": "Italian",
+     "endAt": 3714
+    },
+    {
+     "w": "place",
+     "endAt": 4026
+    },
+    {
+     "w": "near",
+     "endAt": 4337
+    },
+    {
+     "w": "the",
+     "endAt": 4649
+    },
+    {
+     "w": "office",
+     "endAt": 4960
+    },
+    {
+     "w": "around",
+     "endAt": 6010
+    },
+    {
+     "w": "seven.",
+     "endAt": 6460
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2400,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 7600,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 7628,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l2-Samantha",
+   "kind": "long",
+   "speechEndMs": 6180,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "I",
+     "endAt": 111
+    },
+    {
+     "w": "need",
+     "endAt": 322
+    },
+    {
+     "w": "you",
+     "endAt": 533
+    },
+    {
+     "w": "to",
+     "endAt": 744
+    },
+    {
+     "w": "book",
+     "endAt": 956
+    },
+    {
+     "w": "a",
+     "endAt": 1167
+    },
+    {
+     "w": "table",
+     "endAt": 1378
+    },
+    {
+     "w": "for",
+     "endAt": 1589
+    },
+    {
+     "w": "four",
+     "endAt": 1800
+    },
+    {
+     "w": "at",
+     "endAt": 2980
+    },
+    {
+     "w": "that",
+     "endAt": 3280
+    },
+    {
+     "w": "Italian",
+     "endAt": 3580
+    },
+    {
+     "w": "place",
+     "endAt": 3880
+    },
+    {
+     "w": "near",
+     "endAt": 4180
+    },
+    {
+     "w": "the",
+     "endAt": 4480
+    },
+    {
+     "w": "office",
+     "endAt": 4780
+    },
+    {
+     "w": "around",
+     "endAt": 5780
+    },
+    {
+     "w": "seven.",
+     "endAt": 6180
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2400,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 7100,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 7151,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l3-Ava_Premium_",
+   "kind": "long",
+   "speechEndMs": 4900,
+   "cutIns": 1,
+   "words": [
+    {
+     "w": "Check",
+     "endAt": 348
+    },
+    {
+     "w": "my",
+     "endAt": 694
+    },
+    {
+     "w": "email.",
+     "endAt": 1040
+    },
+    {
+     "w": "Actually,",
+     "endAt": 2358
+    },
+    {
+     "w": "look",
+     "endAt": 2676
+    },
+    {
+     "w": "for",
+     "endAt": 2993
+    },
+    {
+     "w": "anything",
+     "endAt": 3311
+    },
+    {
+     "w": "from",
+     "endAt": 3629
+    },
+    {
+     "w": "the",
+     "endAt": 3947
+    },
+    {
+     "w": "bank",
+     "endAt": 4264
+    },
+    {
+     "w": "this",
+     "endAt": 4582
+    },
+    {
+     "w": "week.",
+     "endAt": 4900
+    }
+   ],
+   "events": [
+    {
+     "t": 102,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2000,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2029,
+     "u": 1,
+     "type": "final"
+    },
+    {
+     "t": 2099,
+     "u": 2,
+     "type": "start"
+    },
+    {
+     "t": 5399,
+     "u": 2,
+     "type": "likely"
+    },
+    {
+     "t": 5998,
+     "u": 2,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 6022,
+     "u": 2,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l3-Samantha",
+   "kind": "long",
+   "speechEndMs": 4740,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Check",
+     "endAt": 326
+    },
+    {
+     "w": "my",
+     "endAt": 653
+    },
+    {
+     "w": "email.",
+     "endAt": 980
+    },
+    {
+     "w": "Actually,",
+     "endAt": 2287
+    },
+    {
+     "w": "look",
+     "endAt": 2593
+    },
+    {
+     "w": "for",
+     "endAt": 2900
+    },
+    {
+     "w": "anything",
+     "endAt": 3207
+    },
+    {
+     "w": "from",
+     "endAt": 3513
+    },
+    {
+     "w": "the",
+     "endAt": 3820
+    },
+    {
+     "w": "bank",
+     "endAt": 4127
+    },
+    {
+     "w": "this",
+     "endAt": 4433
+    },
+    {
+     "w": "week.",
+     "endAt": 4740
+    }
+   ],
+   "events": [
+    {
+     "t": 99,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1400,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 5999,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 6049,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l4-Ava_Premium_",
+   "kind": "long",
+   "speechEndMs": 4460,
+   "cutIns": 1,
+   "words": [
+    {
+     "w": "So",
+     "endAt": 259
+    },
+    {
+     "w": "I",
+     "endAt": 519
+    },
+    {
+     "w": "was",
+     "endAt": 780
+    },
+    {
+     "w": "thinking",
+     "endAt": 1040
+    },
+    {
+     "w": "maybe",
+     "endAt": 2309
+    },
+    {
+     "w": "we",
+     "endAt": 2578
+    },
+    {
+     "w": "should",
+     "endAt": 2847
+    },
+    {
+     "w": "move",
+     "endAt": 3116
+    },
+    {
+     "w": "the",
+     "endAt": 3384
+    },
+    {
+     "w": "launch",
+     "endAt": 3653
+    },
+    {
+     "w": "to",
+     "endAt": 3922
+    },
+    {
+     "w": "next",
+     "endAt": 4191
+    },
+    {
+     "w": "month.",
+     "endAt": 4460
+    }
+   ],
+   "events": [
+    {
+     "t": 98,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1301,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 1801,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 1853,
+     "u": 1,
+     "type": "final"
+    },
+    {
+     "t": 2098,
+     "u": 2,
+     "type": "start"
+    },
+    {
+     "t": 4900,
+     "u": 2,
+     "type": "likely"
+    },
+    {
+     "t": 5499,
+     "u": 2,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 5546,
+     "u": 2,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l4-Samantha",
+   "kind": "long",
+   "speechEndMs": 4260,
+   "cutIns": 1,
+   "words": [
+    {
+     "w": "So",
+     "endAt": 282
+    },
+    {
+     "w": "I",
+     "endAt": 561
+    },
+    {
+     "w": "was",
+     "endAt": 841
+    },
+    {
+     "w": "thinking",
+     "endAt": 1120
+    },
+    {
+     "w": "maybe",
+     "endAt": 2358
+    },
+    {
+     "w": "we",
+     "endAt": 2596
+    },
+    {
+     "w": "should",
+     "endAt": 2833
+    },
+    {
+     "w": "move",
+     "endAt": 3071
+    },
+    {
+     "w": "the",
+     "endAt": 3309
+    },
+    {
+     "w": "launch",
+     "endAt": 3547
+    },
+    {
+     "w": "to",
+     "endAt": 3784
+    },
+    {
+     "w": "next",
+     "endAt": 4022
+    },
+    {
+     "w": "month.",
+     "endAt": 4260
+    }
+   ],
+   "events": [
+    {
+     "t": 102,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1501,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 1999,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2034,
+     "u": 1,
+     "type": "final"
+    },
+    {
+     "t": 2201,
+     "u": 2,
+     "type": "start"
+    },
+    {
+     "t": 4601,
+     "u": 2,
+     "type": "likely"
+    },
+    {
+     "t": 5500,
+     "u": 2,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 5538,
+     "u": 2,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l5-Ava_Premium_",
+   "kind": "long",
+   "speechEndMs": 5300,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Write",
+     "endAt": 161
+    },
+    {
+     "w": "a",
+     "endAt": 421
+    },
+    {
+     "w": "note",
+     "endAt": 681
+    },
+    {
+     "w": "to",
+     "endAt": 941
+    },
+    {
+     "w": "Sam",
+     "endAt": 1201
+    },
+    {
+     "w": "saying",
+     "endAt": 1460
+    },
+    {
+     "w": "the",
+     "endAt": 1720
+    },
+    {
+     "w": "build",
+     "endAt": 1980
+    },
+    {
+     "w": "is",
+     "endAt": 2240
+    },
+    {
+     "w": "fixed",
+     "endAt": 2500
+    },
+    {
+     "w": "and",
+     "endAt": 3498
+    },
+    {
+     "w": "that",
+     "endAt": 3755
+    },
+    {
+     "w": "he",
+     "endAt": 4013
+    },
+    {
+     "w": "can",
+     "endAt": 4270
+    },
+    {
+     "w": "deploy",
+     "endAt": 4528
+    },
+    {
+     "w": "whenever",
+     "endAt": 4785
+    },
+    {
+     "w": "he's",
+     "endAt": 5043
+    },
+    {
+     "w": "ready.",
+     "endAt": 5300
+    }
+   ],
+   "events": [
+    {
+     "t": 1,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2897,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 6401,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 6471,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l5-Samantha",
+   "kind": "long",
+   "speechEndMs": 5000,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Write",
+     "endAt": 227
+    },
+    {
+     "w": "a",
+     "endAt": 453
+    },
+    {
+     "w": "note",
+     "endAt": 679
+    },
+    {
+     "w": "to",
+     "endAt": 905
+    },
+    {
+     "w": "Sam",
+     "endAt": 1131
+    },
+    {
+     "w": "saying",
+     "endAt": 1356
+    },
+    {
+     "w": "the",
+     "endAt": 1582
+    },
+    {
+     "w": "build",
+     "endAt": 1808
+    },
+    {
+     "w": "is",
+     "endAt": 2034
+    },
+    {
+     "w": "fixed",
+     "endAt": 2260
+    },
+    {
+     "w": "and",
+     "endAt": 3285
+    },
+    {
+     "w": "that",
+     "endAt": 3530
+    },
+    {
+     "w": "he",
+     "endAt": 3775
+    },
+    {
+     "w": "can",
+     "endAt": 4020
+    },
+    {
+     "w": "deploy",
+     "endAt": 4265
+    },
+    {
+     "w": "whenever",
+     "endAt": 4510
+    },
+    {
+     "w": "he's",
+     "endAt": 4755
+    },
+    {
+     "w": "ready.",
+     "endAt": 5000
+    }
+   ],
+   "events": [
+    {
+     "t": 101,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2701,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 6201,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 6273,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l6-Ava_Premium_",
+   "kind": "long",
+   "speechEndMs": 4180,
+   "cutIns": 1,
+   "words": [
+    {
+     "w": "Remind",
+     "endAt": 289
+    },
+    {
+     "w": "me",
+     "endAt": 579
+    },
+    {
+     "w": "to",
+     "endAt": 870
+    },
+    {
+     "w": "call",
+     "endAt": 1160
+    },
+    {
+     "w": "the",
+     "endAt": 1450
+    },
+    {
+     "w": "dentist",
+     "endAt": 1740
+    },
+    {
+     "w": "on",
+     "endAt": 3367
+    },
+    {
+     "w": "Friday",
+     "endAt": 3773
+    },
+    {
+     "w": "morning.",
+     "endAt": 4180
+    }
+   ],
+   "events": [
+    {
+     "t": 99,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2200,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2797,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2825,
+     "u": 1,
+     "type": "final"
+    },
+    {
+     "t": 3000,
+     "u": 2,
+     "type": "start"
+    },
+    {
+     "t": 4499,
+     "u": 2,
+     "type": "likely"
+    },
+    {
+     "t": 5100,
+     "u": 2,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 5151,
+     "u": 2,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l6-Samantha",
+   "kind": "long",
+   "speechEndMs": 3980,
+   "cutIns": 1,
+   "words": [
+    {
+     "w": "Remind",
+     "endAt": 191
+    },
+    {
+     "w": "me",
+     "endAt": 481
+    },
+    {
+     "w": "to",
+     "endAt": 771
+    },
+    {
+     "w": "call",
+     "endAt": 1060
+    },
+    {
+     "w": "the",
+     "endAt": 1350
+    },
+    {
+     "w": "dentist",
+     "endAt": 1640
+    },
+    {
+     "w": "on",
+     "endAt": 3273
+    },
+    {
+     "w": "Friday",
+     "endAt": 3627
+    },
+    {
+     "w": "morning.",
+     "endAt": 3980
+    }
+   ],
+   "events": [
+    {
+     "t": 1,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2002,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2498,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2526,
+     "u": 1,
+     "type": "final"
+    },
+    {
+     "t": 3001,
+     "u": 2,
+     "type": "start"
+    },
+    {
+     "t": 4200,
+     "u": 2,
+     "type": "likely"
+    },
+    {
+     "t": 5001,
+     "u": 2,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 5034,
+     "u": 2,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l7-Ava_Premium_",
+   "kind": "long",
+   "speechEndMs": 3620,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "What",
+     "endAt": 230
+    },
+    {
+     "w": "do",
+     "endAt": 463
+    },
+    {
+     "w": "you",
+     "endAt": 695
+    },
+    {
+     "w": "think",
+     "endAt": 928
+    },
+    {
+     "w": "about",
+     "endAt": 1160
+    },
+    {
+     "w": "moving",
+     "endAt": 2356
+    },
+    {
+     "w": "the",
+     "endAt": 2672
+    },
+    {
+     "w": "standup",
+     "endAt": 2988
+    },
+    {
+     "w": "to",
+     "endAt": 3304
+    },
+    {
+     "w": "ten?",
+     "endAt": 3620
+    }
+   ],
+   "events": [
+    {
+     "t": 98,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 3900,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 4899,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 4962,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l7-Samantha",
+   "kind": "long",
+   "speechEndMs": 3620,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "What",
+     "endAt": 164
+    },
+    {
+     "w": "do",
+     "endAt": 428
+    },
+    {
+     "w": "you",
+     "endAt": 692
+    },
+    {
+     "w": "think",
+     "endAt": 956
+    },
+    {
+     "w": "about",
+     "endAt": 1220
+    },
+    {
+     "w": "moving",
+     "endAt": 2388
+    },
+    {
+     "w": "the",
+     "endAt": 2696
+    },
+    {
+     "w": "standup",
+     "endAt": 3004
+    },
+    {
+     "w": "to",
+     "endAt": 3312
+    },
+    {
+     "w": "ten?",
+     "endAt": 3620
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 4198,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 4599,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 4654,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l8-Ava_Premium_",
+   "kind": "long",
+   "speechEndMs": 6160,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Look",
+     "endAt": 255
+    },
+    {
+     "w": "up",
+     "endAt": 610
+    },
+    {
+     "w": "flights",
+     "endAt": 965
+    },
+    {
+     "w": "to",
+     "endAt": 1320
+    },
+    {
+     "w": "Denver",
+     "endAt": 1675
+    },
+    {
+     "w": "for",
+     "endAt": 2030
+    },
+    {
+     "w": "next",
+     "endAt": 2385
+    },
+    {
+     "w": "weekend,",
+     "endAt": 2740
+    },
+    {
+     "w": "the",
+     "endAt": 3720
+    },
+    {
+     "w": "cheapest",
+     "endAt": 4080
+    },
+    {
+     "w": "ones,",
+     "endAt": 4440
+    },
+    {
+     "w": "and",
+     "endAt": 5243
+    },
+    {
+     "w": "put",
+     "endAt": 5427
+    },
+    {
+     "w": "them",
+     "endAt": 5610
+    },
+    {
+     "w": "in",
+     "endAt": 5793
+    },
+    {
+     "w": "the",
+     "endAt": 5977
+    },
+    {
+     "w": "chat.",
+     "endAt": 6160
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 4801,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 7300,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 7333,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l8-Samantha",
+   "kind": "long",
+   "speechEndMs": 5700,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Look",
+     "endAt": 208
+    },
+    {
+     "w": "up",
+     "endAt": 515
+    },
+    {
+     "w": "flights",
+     "endAt": 823
+    },
+    {
+     "w": "to",
+     "endAt": 1130
+    },
+    {
+     "w": "Denver",
+     "endAt": 1438
+    },
+    {
+     "w": "for",
+     "endAt": 1745
+    },
+    {
+     "w": "next",
+     "endAt": 2053
+    },
+    {
+     "w": "weekend,",
+     "endAt": 2360
+    },
+    {
+     "w": "the",
+     "endAt": 3327
+    },
+    {
+     "w": "cheapest",
+     "endAt": 3673
+    },
+    {
+     "w": "ones,",
+     "endAt": 4020
+    },
+    {
+     "w": "and",
+     "endAt": 4800
+    },
+    {
+     "w": "put",
+     "endAt": 4980
+    },
+    {
+     "w": "them",
+     "endAt": 5160
+    },
+    {
+     "w": "in",
+     "endAt": 5340
+    },
+    {
+     "w": "the",
+     "endAt": 5520
+    },
+    {
+     "w": "chat.",
+     "endAt": 5700
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2699,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 6896,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 6944,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l9-Ava_Premium_",
+   "kind": "long",
+   "speechEndMs": 5000,
+   "cutIns": 1,
+   "words": [
+    {
+     "w": "Tell",
+     "endAt": 193
+    },
+    {
+     "w": "Nova",
+     "endAt": 487
+    },
+    {
+     "w": "the",
+     "endAt": 780
+    },
+    {
+     "w": "report",
+     "endAt": 1073
+    },
+    {
+     "w": "looks",
+     "endAt": 1367
+    },
+    {
+     "w": "good.",
+     "endAt": 1660
+    },
+    {
+     "w": "Oh,",
+     "endAt": 3056
+    },
+    {
+     "w": "and",
+     "endAt": 3272
+    },
+    {
+     "w": "ask",
+     "endAt": 3488
+    },
+    {
+     "w": "her",
+     "endAt": 3704
+    },
+    {
+     "w": "to",
+     "endAt": 3920
+    },
+    {
+     "w": "send",
+     "endAt": 4136
+    },
+    {
+     "w": "it",
+     "endAt": 4352
+    },
+    {
+     "w": "to",
+     "endAt": 4568
+    },
+    {
+     "w": "the",
+     "endAt": 4784
+    },
+    {
+     "w": "team.",
+     "endAt": 5000
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2000,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2798,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2891,
+     "u": 1,
+     "type": "final"
+    },
+    {
+     "t": 2898,
+     "u": 2,
+     "type": "start"
+    },
+    {
+     "t": 5496,
+     "u": 2,
+     "type": "likely"
+    },
+    {
+     "t": 6100,
+     "u": 2,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 6135,
+     "u": 2,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "l9-Samantha",
+   "kind": "long",
+   "speechEndMs": 5060,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Tell",
+     "endAt": 265
+    },
+    {
+     "w": "Nova",
+     "endAt": 532
+    },
+    {
+     "w": "the",
+     "endAt": 799
+    },
+    {
+     "w": "report",
+     "endAt": 1066
+    },
+    {
+     "w": "looks",
+     "endAt": 1333
+    },
+    {
+     "w": "good.",
+     "endAt": 1600
+    },
+    {
+     "w": "Oh,",
+     "endAt": 2972
+    },
+    {
+     "w": "and",
+     "endAt": 3204
+    },
+    {
+     "w": "ask",
+     "endAt": 3436
+    },
+    {
+     "w": "her",
+     "endAt": 3668
+    },
+    {
+     "w": "to",
+     "endAt": 3900
+    },
+    {
+     "w": "send",
+     "endAt": 4132
+    },
+    {
+     "w": "it",
+     "endAt": 4364
+    },
+    {
+     "w": "to",
+     "endAt": 4596
+    },
+    {
+     "w": "the",
+     "endAt": 4828
+    },
+    {
+     "w": "team.",
+     "endAt": 5060
+    }
+   ],
+   "events": [
+    {
+     "t": 98,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1898,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 6200,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 6253,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q1-Ava_Premium_",
+   "kind": "short",
+   "speechEndMs": 1720,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "What's",
+     "endAt": 264
+    },
+    {
+     "w": "on",
+     "endAt": 628
+    },
+    {
+     "w": "my",
+     "endAt": 992
+    },
+    {
+     "w": "calendar",
+     "endAt": 1356
+    },
+    {
+     "w": "tomorrow?",
+     "endAt": 1720
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1998,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2598,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 2655,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q1-Samantha",
+   "kind": "short",
+   "speechEndMs": 1720,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "What's",
+     "endAt": 264
+    },
+    {
+     "w": "on",
+     "endAt": 628
+    },
+    {
+     "w": "my",
+     "endAt": 992
+    },
+    {
+     "w": "calendar",
+     "endAt": 1356
+    },
+    {
+     "w": "tomorrow?",
+     "endAt": 1720
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2000,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2600,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 2636,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q2-Ava_Premium_",
+   "kind": "short",
+   "speechEndMs": 1420,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Did",
+     "endAt": 204
+    },
+    {
+     "w": "Sam",
+     "endAt": 508
+    },
+    {
+     "w": "text",
+     "endAt": 812
+    },
+    {
+     "w": "me",
+     "endAt": 1116
+    },
+    {
+     "w": "back?",
+     "endAt": 1420
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1801,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2401,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 2444,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q2-Samantha",
+   "kind": "short",
+   "speechEndMs": 1300,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Did",
+     "endAt": 261
+    },
+    {
+     "w": "Sam",
+     "endAt": 521
+    },
+    {
+     "w": "text",
+     "endAt": 780
+    },
+    {
+     "w": "me",
+     "endAt": 1040
+    },
+    {
+     "w": "back?",
+     "endAt": 1300
+    }
+   ],
+   "events": [
+    {
+     "t": 101,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1604,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2399,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 2432,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q3-Ava_Premium_",
+   "kind": "short",
+   "speechEndMs": 2040,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "How's",
+     "endAt": 340
+    },
+    {
+     "w": "the",
+     "endAt": 680
+    },
+    {
+     "w": "weather",
+     "endAt": 1020
+    },
+    {
+     "w": "looking",
+     "endAt": 1360
+    },
+    {
+     "w": "this",
+     "endAt": 1700
+    },
+    {
+     "w": "afternoon?",
+     "endAt": 2040
+    }
+   ],
+   "events": [
+    {
+     "t": 100,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2400,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2801,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 2837,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q3-Samantha",
+   "kind": "short",
+   "speechEndMs": 1860,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "How's",
+     "endAt": 311
+    },
+    {
+     "w": "the",
+     "endAt": 621
+    },
+    {
+     "w": "weather",
+     "endAt": 931
+    },
+    {
+     "w": "looking",
+     "endAt": 1240
+    },
+    {
+     "w": "this",
+     "endAt": 1550
+    },
+    {
+     "w": "afternoon?",
+     "endAt": 1860
+    }
+   ],
+   "events": [
+    {
+     "t": 101,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2401,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2801,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 2842,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q4-Ava_Premium_",
+   "kind": "short",
+   "speechEndMs": 1420,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Turn",
+     "endAt": 237
+    },
+    {
+     "w": "the",
+     "endAt": 473
+    },
+    {
+     "w": "volume",
+     "endAt": 710
+    },
+    {
+     "w": "down",
+     "endAt": 947
+    },
+    {
+     "w": "a",
+     "endAt": 1183
+    },
+    {
+     "w": "bit.",
+     "endAt": 1420
+    }
+   ],
+   "events": [
+    {
+     "t": 100,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1901,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2500,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2534,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q4-Samantha",
+   "kind": "short",
+   "speechEndMs": 1420,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Turn",
+     "endAt": 153
+    },
+    {
+     "w": "the",
+     "endAt": 407
+    },
+    {
+     "w": "volume",
+     "endAt": 660
+    },
+    {
+     "w": "down",
+     "endAt": 913
+    },
+    {
+     "w": "a",
+     "endAt": 1167
+    },
+    {
+     "w": "bit.",
+     "endAt": 1420
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1897,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2498,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2525,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q5-Ava_Premium_",
+   "kind": "short",
+   "speechEndMs": 2140,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "What",
+     "endAt": 180
+    },
+    {
+     "w": "time",
+     "endAt": 460
+    },
+    {
+     "w": "is",
+     "endAt": 740
+    },
+    {
+     "w": "it",
+     "endAt": 1020
+    },
+    {
+     "w": "in",
+     "endAt": 1300
+    },
+    {
+     "w": "Tokyo",
+     "endAt": 1580
+    },
+    {
+     "w": "right",
+     "endAt": 1860
+    },
+    {
+     "w": "now",
+     "endAt": 2140
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2501,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 3098,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 3131,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q5-Samantha",
+   "kind": "short",
+   "speechEndMs": 2000,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "What",
+     "endAt": 163
+    },
+    {
+     "w": "time",
+     "endAt": 425
+    },
+    {
+     "w": "is",
+     "endAt": 688
+    },
+    {
+     "w": "it",
+     "endAt": 950
+    },
+    {
+     "w": "in",
+     "endAt": 1213
+    },
+    {
+     "w": "Tokyo",
+     "endAt": 1475
+    },
+    {
+     "w": "right",
+     "endAt": 1738
+    },
+    {
+     "w": "now",
+     "endAt": 2000
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2200,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2999,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 3042,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q6-Ava_Premium_",
+   "kind": "short",
+   "speechEndMs": 1520,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Thanks,",
+     "endAt": 507
+    },
+    {
+     "w": "that's",
+     "endAt": 1013
+    },
+    {
+     "w": "perfect.",
+     "endAt": 1520
+    }
+   ],
+   "events": [
+    {
+     "t": 100,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1897,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2301,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2326,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q6-Samantha",
+   "kind": "short",
+   "speechEndMs": 1480,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Thanks,",
+     "endAt": 494
+    },
+    {
+     "w": "that's",
+     "endAt": 987
+    },
+    {
+     "w": "perfect.",
+     "endAt": 1480
+    }
+   ],
+   "events": [
+    {
+     "t": 101,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2501,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2543,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q7-Ava_Premium_",
+   "kind": "short",
+   "speechEndMs": 1220,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Yes,",
+     "endAt": 406
+    },
+    {
+     "w": "send",
+     "endAt": 813
+    },
+    {
+     "w": "it",
+     "endAt": 1220
+    }
+   ],
+   "events": [
+    {
+     "t": 99,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1500,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2299,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2325,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q7-Samantha",
+   "kind": "short",
+   "speechEndMs": 1100,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Yes,",
+     "endAt": 300
+    },
+    {
+     "w": "send",
+     "endAt": 700
+    },
+    {
+     "w": "it",
+     "endAt": 1100
+    }
+   ],
+   "events": [
+    {
+     "t": 0,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 1401,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2301,
+     "u": 1,
+     "type": "eot",
+     "reason": "silence"
+    },
+    {
+     "t": 2341,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q8-Ava_Premium_",
+   "kind": "short",
+   "speechEndMs": 2320,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Can",
+     "endAt": 260
+    },
+    {
+     "w": "you",
+     "endAt": 517
+    },
+    {
+     "w": "read",
+     "endAt": 775
+    },
+    {
+     "w": "me",
+     "endAt": 1032
+    },
+    {
+     "w": "the",
+     "endAt": 1290
+    },
+    {
+     "w": "last",
+     "endAt": 1547
+    },
+    {
+     "w": "email",
+     "endAt": 1805
+    },
+    {
+     "w": "from",
+     "endAt": 2062
+    },
+    {
+     "w": "Priya?",
+     "endAt": 2320
+    }
+   ],
+   "events": [
+    {
+     "t": 102,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2902,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 3302,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 3341,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  },
+  {
+   "id": "q8-Samantha",
+   "kind": "short",
+   "speechEndMs": 2100,
+   "cutIns": 0,
+   "words": [
+    {
+     "w": "Can",
+     "endAt": 234
+    },
+    {
+     "w": "you",
+     "endAt": 467
+    },
+    {
+     "w": "read",
+     "endAt": 701
+    },
+    {
+     "w": "me",
+     "endAt": 934
+    },
+    {
+     "w": "the",
+     "endAt": 1167
+    },
+    {
+     "w": "last",
+     "endAt": 1400
+    },
+    {
+     "w": "email",
+     "endAt": 1634
+    },
+    {
+     "w": "from",
+     "endAt": 1867
+    },
+    {
+     "w": "Priya?",
+     "endAt": 2100
+    }
+   ],
+   "events": [
+    {
+     "t": 101,
+     "u": 1,
+     "type": "start"
+    },
+    {
+     "t": 2599,
+     "u": 1,
+     "type": "likely"
+    },
+    {
+     "t": 2999,
+     "u": 1,
+     "type": "eot",
+     "reason": "punctuation"
+    },
+    {
+     "t": 3051,
+     "u": 1,
+     "type": "final"
+    }
+   ]
+  }
+ ],
+ "voice": [
+  {
+   "firstTextMs": 1985,
+   "text": "Going fine on my end! Want me to check those retainer numbers now, or just keep watching in the background like planned?",
+   "delegated": false,
+   "tokens": 2531
+  },
+  {
+   "firstTextMs": 429,
+   "text": "Let me pull those up for you now.",
+   "delegated": true,
+   "tokens": 1792
+  },
+  {
+   "firstTextMs": 568,
+   "text": "On it — texting Sam now.",
+   "delegated": true,
+   "tokens": 1998
+  },
+  {
+   "firstTextMs": 512,
+   "text": "Yep, already sent it your way — I'll let you know once it's confirmed sent.",
+   "delegated": false,
+   "tokens": 2134
+  },
+  {
+   "firstTextMs": 435,
+   "text": "Anytime — I'll ping you once the retainer numbers and the text to Sam both come back.",
+   "delegated": false,
+   "tokens": 2213
+  },
+  {
+   "firstTextMs": 603,
+   "text": "Checking that now.",
+   "delegated": true,
+   "tokens": 2377
+  },
+  {
+   "firstTextMs": 404,
+   "text": "I don't have tomorrow's schedule back yet, so I can't confirm which one that is — give me a sec and I'll have the full rundown for you.",
+   "delegated": false,
+   "tokens": 2543
+  },
+  {
+   "firstTextMs": 590,
+   "text": "I need to know which event's deck you mean first — once I get tomorrow's calendar back I'll confirm the afternoon one is the lawyers meeting, then open its deck. Give me just a moment.",
+   "delegated": false,
+   "tokens": 2661
+  },
+  {
+   "firstTextMs": 647,
+   "text": "I'm still waiting on tomorrow's calendar to come back, so I don't actually know what the two meetings are yet — I'll sort out which is which and open the right deck as soon as it lands.",
+   "delegated": false,
+   "tokens": 2773
+  },
+  {
+   "firstTextMs": 568,
+   "text": "Of course — I'll follow up as soon as everything comes back in.",
+   "delegated": false,
+   "tokens": 2847
+  },
+  {
+   "firstTextMs": 509,
+   "text": "Got it, setting that reminder now.",
+   "delegated": true,
+   "tokens": 3016
+  },
+  {
+   "firstTextMs": 507,
+   "text": "Sounds good, talk later — I'll have all those updates waiting for you.",
+   "delegated": false,
+   "tokens": 3152
+  }
+ ],
+ "realFirstTextMs": [
+  1320,
+  1947,
+  1120,
+  1446,
+  1755,
+  1033,
+  947,
+  1131,
+  2110,
+  877,
+  870,
+  2255,
+  3348,
+  1964,
+  1605,
+  2954,
+  7802,
+  686,
+  1255,
+  1113,
+  639,
+  1935,
+  1676,
+  3152,
+  630,
+  2063,
+  2647,
+  806,
+  609,
+  657,
+  675,
+  571,
+  643,
+  595,
+  761,
+  973,
+  577,
+  593,
+  563,
+  564,
+  624,
+  1347,
+  2253,
+  707,
+  1357,
+  896,
+  1296,
+  633,
+  595,
+  2208,
+  767,
+  703,
+  691,
+  652,
+  683,
+  721,
+  763,
+  1568,
+  1041,
+  787,
+  638,
+  871,
+  847,
+  1998,
+  649,
+  991,
+  934,
+  1192,
+  1707,
+  823,
+  789,
+  768,
+  710,
+  326,
+  819,
+  1355,
+  1524,
+  4136,
+  759,
+  790,
+  681,
+  590,
+  1146,
+  772,
+  765,
+  909,
+  1026,
+  878,
+  967,
+  1070,
+  615,
+  349,
+  321,
+  1070,
+  1260,
+  1172,
+  750,
+  6310,
+  3719,
+  2855
+ ]
+}

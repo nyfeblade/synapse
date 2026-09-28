@@ -1,0 +1,25 @@
+#!/bin/bash
+# Root-owned. Open item 1: starts a host-proxied command MCP server as its own uid boxmcp (ruling: never box, so a
+# Bot can't read the server's API keys through /proc/<pid>/environ). Its env (API keys from the vault)
+# comes in a one-shot bothost-owned 0600 file under /home/box/.host/run, read and deleted here, so the values are
+# never in argv, never in the Bot's CLI config and never in the Bot's own env. Only bothost may invoke it via sudo.
+# Usage: bot-mcp-as-box <env-file> -- <command> [args...]
+set -euo pipefail
+[ "${SUDO_USER:-}" = "bothost" ] || { echo "bot-mcp-as-box: must be invoked by bothost via sudo" >&2; exit 126; }
+envf="${1:-}"; shift || true
+case "$envf" in /home/box/.host/run/mcp-*.env) ;; *) echo "bot-mcp-as-box: bad env file" >&2; exit 2;; esac
+{ [ -f "$envf" ] && [ ! -L "$envf" ] && [ "$(stat -c %U "$envf")" = bothost ] && [ -z "$(find "$envf" -maxdepth 0 -perm /077)" ]; } || { echo "bot-mcp-as-box: bad env file" >&2; exit 2; }
+[ "${1:-}" = "--" ] || { echo "bot-mcp-as-box: missing --" >&2; exit 2; }
+shift
+[ "$#" -ge 1 ] || { echo "bot-mcp-as-box: missing command" >&2; exit 2; }
+unset $(env | cut -d= -f1 | grep -v '^PATH$') 2>/dev/null || true
+while IFS= read -r line; do
+  name="${line%%=*}"
+  case "$name" in ''|*[!A-Za-z0-9_]*|LD_*|BASH_ENV|ENV|PATH|HOME|USER) continue;; esac
+  export "$line"
+done < "$envf"
+rm -f -- "$envf"
+export HOME=/var/lib/boxmcp USER=boxmcp LOGNAME=boxmcp PATH=/usr/local/bin:/usr/bin:/bin LANG=C.UTF-8
+cd /workspace
+umask 002
+exec setpriv --reuid=boxmcp --regid=boxmcp --init-groups --pdeathsig=KILL -- "$@"

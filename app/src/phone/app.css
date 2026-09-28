@@ -1,0 +1,116 @@
+/* Bug 198: Synapse on the phone — the smooth-pass look: one black and white, the system font, soft fills. */
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --bg: #FFFFFF;
+  --ink: #111111;
+  --ink-2: #3A3A3A;
+  --ink-muted: #6B6B6B;
+  --fill-soft: #F0F0F0;
+  --fill-group: #F5F5F5;
+  --fill-press: #E4E4E4;
+  --line: #E6E6E6;
+  --primary: #111111;
+  --primary-ink: #FFFFFF;
+  --danger: #CE383D;
+  --danger-ink: #B3261E;
+  --on-danger: #FFFFFF;
+  --bot-white: #FFFFFF;
+  --focus: #111111;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0C0C0C; --ink: #EDEDED; --ink-2: #A8A8A8; --ink-muted: #8C8C8C; --fill-soft: #161616; --fill-group: #131313;
+    --fill-press: #262626; --line: #242424; --primary: #EDEDED; --primary-ink: #0C0C0C; --danger-ink: #F4918A; --bot-white: #E6E6E6;
+    --focus: #D8D8D8; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0C0C0C; --ink: #EDEDED; --ink-2: #A8A8A8; --ink-muted: #8C8C8C; --fill-soft: #161616; --fill-group: #131313;
+  --fill-press: #262626; --line: #242424; --primary: #EDEDED; --primary-ink: #0C0C0C; --danger-ink: #F4918A; --bot-white: #E6E6E6;
+  --focus: #D8D8D8; color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 17px; line-height: 1.35;
+  -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; overscroll-behavior: none;
+}
+main { min-height: 100%; }
+h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+p { margin: 0; }
+button { font: inherit; color: inherit; border: none; background: none; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.screen {
+  min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; gap: 20px;
+  padding: calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 20px);
+}
+.screen.center { align-items: center; justify-content: center; text-align: center; }
+.muted { color: var(--ink-muted); }
+.grow { flex: 1 1 auto; min-width: 0; }
+
+.btn {
+  min-height: 44px; padding: 0 18px; border-radius: 22px; background: var(--fill-soft); font-weight: 600;
+  transition: background-color 160ms ease, transform 160ms cubic-bezier(.2, .8, .2, 1);
+}
+.btn:active { background: var(--fill-press); transform: scale(0.97); }
+.btn.primary { background: var(--primary); color: var(--primary-ink); }
+.btn.small { min-height: 36px; padding: 0 14px; font-size: 15px; border-radius: 18px; }
+
+/* Pairing */
+.pair { display: flex; flex-direction: column; align-items: stretch; gap: 12px; width: min(320px, 100%); }
+.label { font-size: 15px; color: var(--ink-muted); }
+.code {
+  font: inherit; font-size: 32px; font-weight: 600; letter-spacing: 0.3em; text-align: center; font-variant-numeric: tabular-nums;
+  height: 64px; border-radius: 16px; border: none; background: var(--fill-soft); color: var(--ink); padding: 0 12px;
+}
+.code::placeholder { color: var(--ink-muted); opacity: 0.4; }
+.error { color: var(--danger-ink); font-size: 15px; }
+
+/* Bots */
+.list header { padding: 8px 4px 0; }
+.bots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; border-radius: 16px; background: var(--fill-group); overflow: hidden; }
+.bot {
+  width: 100%; display: flex; align-items: center; gap: 14px; padding: 12px 14px; min-height: 64px; text-align: left;
+  transition: background-color 140ms ease;
+}
+.bot:active { background: var(--fill-press); }
+.bot .name { flex: 1 1 auto; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bot .call-glyph { color: var(--ink-muted); display: grid; place-items: center; }
+.bot .call-glyph svg { width: 20px; height: 20px; }
+.avatar { flex-shrink: 0; }
+.empty { padding: 24px 4px; }
+.row.setting { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 56px; border-radius: 16px; background: var(--fill-group); }
+.hint { color: var(--ink-muted); font-size: 15px; padding: 0 4px; }
+.ringing { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--fill-soft); font-weight: 600; }
+
+/* The call */
+.call { align-items: center; justify-content: space-between; text-align: center; }
+.who { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 6vh; }
+.avatar-wrap { position: relative; display: grid; place-items: center; width: 180px; height: 180px; }
+.halo {
+  position: absolute; inset: 8px; border-radius: 50%; background: var(--primary); opacity: 0; transform: scale(var(--level, 1));
+  transition: transform 120ms ease-out, opacity 200ms ease;
+}
+.halo[data-on="true"] { opacity: 0.1; }
+.avatar-wrap .avatar { position: relative; }
+.who h1 { font-size: 30px; margin-top: 6px; }
+.state { font-size: 17px; color: var(--ink-2); min-height: 1.35em; }
+.timer { font-variant-numeric: tabular-nums; font-size: 15px; min-height: 1.35em; }
+.captions { width: min(440px, 100%); min-height: 5.6em; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; font-size: 16px; color: var(--ink-2); }
+.captions b { color: var(--ink); font-weight: 600; }
+.controls { display: flex; gap: 40px; align-items: center; justify-content: center; padding-bottom: 10px; }
+.round {
+  width: 72px; height: 72px; border-radius: 50%; background: var(--fill-soft); display: grid; place-items: center;
+  transition: background-color 160ms ease, transform 180ms cubic-bezier(.2, .8, .2, 1);
+}
+.round:active { transform: scale(0.94); background: var(--fill-press); }
+.round.on { background: var(--primary); color: var(--primary-ink); }
+.round.hang-up { background: var(--danger); color: var(--on-danger); }
+.round.hang-up:active { background: var(--danger); opacity: 0.86; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

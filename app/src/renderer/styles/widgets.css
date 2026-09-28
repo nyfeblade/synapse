@@ -1,0 +1,27 @@
+/* Task 8 (CHAT-16, CHAT-17): widget/card styles not already shared as primitives in app.css
+   (Decision 8's .card-primitive, .btn-outline, .card-actions, .card-error, .form-field, .card-title,
+   .card-head and .muted are reused as-is — see fix round 1, finding 2 in app.css). */
+.widget-options{display:flex;flex-wrap:wrap;gap:8px}
+/* Fix round 2, finding 1: options stay visible once answered (disabled), so the chosen one needs
+   its own look — otherwise `.btn-outline:disabled{color:var(--ink-disabled)}` (app.css) makes it look the
+   same as every other now-unpickable option. */
+/* The one deliberate exception to app.css's single disabled treatment, and it is an exception
+   because this is not an unavailable action: it is the option the user PICKED, kept on screen as a
+   record of the decision. Fading it with the options they did not pick would erase the answer. */
+.btn-outline.chosen:disabled{opacity:1;color:var(--ink);border-color:var(--primary)}
+.text-input{height:30px;padding:0 10px;border-radius:var(--radius-control);border:var(--hairline) solid var(--line-button);background:var(--bg);color:var(--ink);font:inherit;font-size:13px}
+.card-settled{font-size:13px}
+.email-fields{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:0;font-size:13px}
+.email-fields dt{color:var(--ink-muted)}
+.email-body{white-space:pre-wrap;font-size:14px}
+.table-card table{border-collapse:collapse;font-size:13px}
+.table-card th,.table-card td{border-bottom:var(--hairline) solid var(--line-row);padding:4px 8px;text-align:left}
+.link-card{text-decoration:none;color:var(--ink)}
+
+/* Interaction states. `.btn-outline.chosen:disabled` is deliberately excluded — answered options stay inert. */
+.link-card { transition: background-color var(--motion-tap), border-color var(--motion-tap); }
+.link-card:hover { background-color: var(--fill-hover); border-color: var(--line-button-hover); }
+.link-card:active { background-color: var(--fill-press); }
+.text-input { transition: border-color var(--motion-tap); }
+.text-input:not(:disabled):hover { border-color: var(--line-button-hover); }
+.link-card:focus-visible, .text-input:focus-visible { outline: 3px solid var(--focus-ring-soft); outline-offset: 2px; }

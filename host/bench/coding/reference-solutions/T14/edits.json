@@ -1,0 +1,7 @@
+[
+  {
+    "file": "src/cache.ts",
+    "find": "    const value = this.map.get(key)!;\n    return value;",
+    "replace": "    const value = this.map.get(key)!;\n    this.map.delete(key);\n    this.map.set(key, value);\n    return value;"
+  }
+]

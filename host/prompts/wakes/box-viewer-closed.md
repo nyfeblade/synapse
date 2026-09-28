@@ -1,0 +1,1 @@
+[The user closed the computer view without saying they were done with: “{{INSTRUCTION}}”. Start with the read-only mcp__bot__Screenshot tool to check whether that step was completed before you continue.]

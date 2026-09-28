@@ -1,0 +1,80 @@
+{
+ "scenario": "s09-count-tokens",
+ "seq": 23,
+ "request": {
+  "method": "POST",
+  "path": "/v1/messages/count_tokens?beta=true",
+  "auth": "oauth-access-token (authorization header)",
+  "headers": {
+   "accept": "application/json",
+   "content-type": "application/json",
+   "user-agent": "claude-cli/2.1.283 (external, sdk-cli)",
+   "x-claude-code-session-id": "<redacted>",
+   "x-stainless-arch": "arm64",
+   "x-stainless-lang": "js",
+   "x-stainless-os": "MacOS",
+   "x-stainless-package-version": "0.112.1",
+   "x-stainless-retry-count": "0",
+   "x-stainless-runtime": "node",
+   "x-stainless-runtime-version": "v26.3.0",
+   "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,token-counting-2024-11-01",
+   "anthropic-dangerous-direct-browser-access": "true",
+   "anthropic-version": "2023-06-01",
+   "x-app": "cli",
+   "connection": "keep-alive",
+   "host": "127.0.0.1:8787",
+   "accept-encoding": "gzip, deflate, br, zstd",
+   "content-length": "3674"
+  },
+  "dropped_headers": [
+   "authorization"
+  ],
+  "body_bytes_original": 3674,
+  "body_kind": "json",
+  "body": {
+   "model": "claude-sonnet-5",
+   "messages": [
+    {
+     "role": "user",
+     "content": "lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolo\n\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsu\n\nm d\nolor sit amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\nlor\n\n sit amet lorem\n ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem i\npsum dolor sit a\n\nmet lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l\n\norem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \n\namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lore\n\nm ipsum dol\n\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \n\ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\n\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\n\nt amet lorem ipsu\n\nm dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor\n\nem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n\n lorem ipsum\n\n dolor sit amet lorem ipsum dolor sit amet lor\n\nem ipsum dolor sit am\net lorem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo\n\nr sit amet lorem ipsum\n\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\n\num dolor sit amet lorem ipsum dolor sit amet lor\nem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dol\nor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem \n\nipsum dolor sit amet\n\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\nt amet lorem ipsum dol\nor sit amet lorem "
+    }
+   ],
+   "tools": []
+  }
+ },
+ "response": {
+  "status": 200,
+  "headers": {
+   "date": "Sat, 26 Sep 2026 01:48:14 GMT",
+   "content-type": "application/json",
+   "transfer-encoding": "chunked",
+   "connection": "keep-alive",
+   "anthropic-workspace-id": "<redacted>",
+   "vary": "Accept-Encoding",
+   "content-encoding": "br",
+   "server": "cloudflare",
+   "server-timing": "x-originResponse;dur=45",
+   "cf-cache-status": "<redacted>",
+   "x-robots-tag": "none",
+   "content-security-policy": "default-src 'none'; frame-ancestors 'none'"
+  },
+  "dropped_headers": [
+   "request-id",
+   "anthropic-organization-id",
+   "cf-ray"
+  ],
+  "ttfb_ms": 143.9,
+  "total_ms": 144.1,
+  "chunk_timing": [
+   {
+    "t_ms": 144,
+    "bytes": 25
+   }
+  ],
+  "kind": "json",
+  "body": {
+   "input_tokens": 1326
+  }
+ },
+ "error": null
+}

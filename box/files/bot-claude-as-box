@@ -1,0 +1,35 @@
+#!/bin/sh
+# Root-owned. Drops to the Bot's uid and runs the Claude Code CLI. Only bothost may invoke it through sudo.
+# Bug #66: when the host names the Bot's own account (BOT_UNIX_USER, set by buildBotEnv once the box is migrated),
+# the CLI runs as that account -- which must be a bot-user account in the reserved range whose GECOS names BOT_ACCOUNT_OF
+# -- with its own HOME and CLAUDE_CONFIG_DIR, forced here whatever the caller's env said. umask 002 keeps what it
+# writes in the shared /workspace (group bots, setgid) editable by teammates; its 0700 home keeps the rest private.
+# Without BOT_UNIX_USER (not migrated yet, or a host-internal call) it runs as box, as before.
+# Bug 231: BOT_CWD (a folder inside that Bot's own home, e.g. a coding agent's ~/code worktree) is entered AFTER the drop
+# to the Bot's uid: bothost can't enter the 0700 home to spawn there, and the Bot can only enter what it may read anyway.
+set -e
+[ "${SUDO_USER:-}" = "bothost" ] || { echo "bot-claude-as-box: must be invoked by bothost via sudo" >&2; exit 126; }
+u="${BOT_UNIX_USER:-}"
+if [ -n "$u" ]; then
+  no() { echo "bot-claude-as-box: $u is not this Bot's account" >&2; exit 126; }
+  case "$u" in bot-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;; *) no ;; esac
+  ent="$(getent passwd "$u")" || no
+  uid="$(printf '%s' "$ent" | cut -d: -f3)"; gid="$(printf '%s' "$ent" | cut -d: -f4)"
+  gecos="$(printf '%s' "$ent" | cut -d: -f5)"; home="$(printf '%s' "$ent" | cut -d: -f6)"
+  case "$uid$gid" in ''|*[!0-9]*) no ;; esac
+  [ "$uid" -ge 60200 ] && [ "$uid" -le 61099 ] && [ "$gid" -ge 60200 ] && [ "$gid" -le 61099 ] || no
+  [ -n "${BOT_ACCOUNT_OF:-}" ] && [ "$gecos" = "synapse-bot $BOT_ACCOUNT_OF" ] && [ "$home" = "/home/bots/$u" ] || no
+  export HOME="$home" USER="$u" LOGNAME="$u" CLAUDE_CONFIG_DIR="$home/.claude"
+  cwd="${BOT_CWD:-}"
+  unset BOT_UNIX_USER BOT_ACCOUNT_OF BOT_CWD
+  umask 002
+  if [ -n "$cwd" ]; then
+    case "$cwd" in "$home"/*) ;; *) echo "bot-claude-as-box: BOT_CWD must be inside the Bot's home" >&2; exit 126 ;; esac
+    case "$cwd" in */../*|*/..|*/./*|*/.) echo "bot-claude-as-box: BOT_CWD must be a plain path" >&2; exit 126 ;; esac
+    exec setpriv --reuid="$uid" --regid="$gid" --init-groups --pdeathsig=KILL -- /bin/sh -c 'cd -P -- "$1" || exit 1; shift; exec /usr/local/bin/claude "$@"' sh "$cwd" "$@"
+  fi
+  exec setpriv --reuid="$uid" --regid="$gid" --init-groups --pdeathsig=KILL -- /usr/local/bin/claude "$@"
+fi
+unset BOT_CWD
+export HOME=/home/box USER=box LOGNAME=box
+exec setpriv --reuid=box --regid=box --init-groups --pdeathsig=KILL -- /usr/local/bin/claude "$@"

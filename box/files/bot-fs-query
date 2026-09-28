@@ -1,0 +1,135 @@
+#!/bin/sh
+# Root-owned. Bug 231 round 1: read-only file queries AS a Bot's own account, for the review gate's fast path.
+# bothost can't enter a Bot's 0700 home, so without this every command in ~/code fell to the model reviewer.
+# Usage (bothost via sudo): bot-fs-query <bot account> <botId>   -- one JSON request on stdin, one JSON answer on stdout.
+#   request: {"ops": [["lstat"|"realpath"|"ls"|"read", "<absolute path inside that Bot's home>"], ...]}
+#   answer:  {"r": [<one result per op, in order>]}
+#     lstat    -> null (not there) | {"u": uid, "g": gid, "m": mode, "l": is_link} | {"err": true} (unreadable)
+#     realpath -> null | "<real path>" | {"err": true}         (every link resolved; null when it doesn't exist)
+#     ls       -> null | {"err": true} | {"n": [[name, lstat, real|null, lstat of real|null], ...], "more": bool}   (real only for links)
+#     read     -> null | {"t": "<utf-8 text>"} | {"big": true} | {"denied": true} | {"err": true}
+# Rules: the account is checked exactly as bot-claude-as-box checks it (reserved uid range, GECOS names the Bot, home
+# /home/bots/<account>); the worker runs as that uid/gid (--init-groups) with an empty environment, whatever the
+# caller's env said; every path must be absolute, free of "." and ".." parts and inside the Bot's home; nothing is
+# written; `read` only opens small config and script files (64 KiB cap), never through a link, a hard link, a dotted
+# folder or a credential-shaped name; at most 4000 ops, 2000 names per folder and
+# 4 MiB of answer; the worker kills itself after 5 s.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+no() { echo "bot-fs-query: $1" >&2; exit 126; }
+[ "${SUDO_USER:-}" = "bothost" ] || no "must be invoked by bothost via sudo"
+[ $# -eq 2 ] || no "usage: bot-fs-query <bot account> <botId>"
+u="$1"; bid="$2"
+case "$u" in bot-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;; *) no "$u is not a Bot account" ;; esac
+case "$bid" in ''|*[!A-Za-z0-9_-]*) no "bad Bot id" ;; esac
+[ "${#bid}" -le 64 ] || no "bad Bot id"
+ent="$(/usr/bin/getent passwd "$u")" || no "$u is not a Bot account"
+uid="$(printf '%s' "$ent" | /usr/bin/cut -d: -f3)"; gid="$(printf '%s' "$ent" | /usr/bin/cut -d: -f4)"
+gecos="$(printf '%s' "$ent" | /usr/bin/cut -d: -f5)"; home="$(printf '%s' "$ent" | /usr/bin/cut -d: -f6)"
+case "$uid$gid" in ''|*[!0-9]*) no "$u is not a Bot account" ;; esac
+[ "$uid" -ge 60200 ] && [ "$uid" -le 61099 ] && [ "$gid" -ge 60200 ] && [ "$gid" -le 61099 ] || no "$u is not a Bot account"
+[ "$gecos" = "synapse-bot $bid" ] && [ "$home" = "/home/bots/$u" ] || no "$u is not this Bot's account"
+
+WORKER='
+import json, os, signal, stat, sys
+signal.alarm(5)
+home = sys.argv[1]
+MAX_OPS, MAX_NAMES, MAX_READ, MAX_OUT = 4000, 2000, 65536, 4 * 1024 * 1024
+import re
+# Round 2 (B1): what `read` may open, by path relative to the home. No other dotted folder or file (~/.config/gh,
+# ~/.ssh, ~/.claude, .env...), nothing shaped like a credential (a mirror of review/static.ts CREDENTIAL_PATH), no link
+# anywhere on the way (each part opened O_NOFOLLOW from the home down) and no hard link to another name (st_nlink 1).
+READ_NAMES = {"package.json", ".gitattributes"}
+READ_GIT = ("/.git/config", "/.git/info/attributes", "/.git/commondir", "/.git/config.worktree")
+READ_EXT = (".js", ".mjs", ".cjs", ".ts", ".py", ".sh", ".rb", ".pl")
+DOT_OK = {".git", ".gitattributes", ".github"}
+CRED = re.compile(r"(^|/)(id_(rsa|dsa|ecdsa|ed25519|xmss)(\.pub)?|\.netrc|\.git-credentials|\.npmrc|\.pypirc|\.pgpass|\.my\.cnf|\.s3cfg|\.boto|credentials(\.json)?|secring\.gpg|[^/]*\.(pem|key|p12|pfx|keychain|keychain-db|kdbx|ppk|jks)|hosts\.yml|Cookies|Login Data)$|(^|/)\.env(\.(?!(example|sample|template|dist)$)[\w-]+)?$", re.I)
+def readable(p):
+    rel = p[len(home) + 1:]
+    parts = rel.split("/")
+    if any(x.startswith(".") and x not in DOT_OK for x in parts): return False
+    if CRED.search(rel): return False
+    b = parts[-1]
+    return b in READ_NAMES or b == ".git" or p.endswith(READ_GIT) or b.endswith(READ_EXT)
+def fail(msg):
+    sys.stderr.write("bot-fs-query: " + msg + "\n"); sys.exit(2)
+def ok_path(p):
+    if not isinstance(p, str) or not p.startswith("/") or "\0" in p or len(p) > 4096: return False
+    parts = p.split("/")[1:]
+    if any(x in ("", ".", "..") for x in parts): return False
+    return p == home or p.startswith(home + "/")
+def st(p):
+    try: s = os.lstat(p)
+    except (FileNotFoundError, NotADirectoryError): return None
+    except OSError: return {"err": True}
+    return {"u": s.st_uid, "g": s.st_gid, "m": s.st_mode, "l": stat.S_ISLNK(s.st_mode)}
+def real(p):
+    try: os.stat(p)
+    except (FileNotFoundError, NotADirectoryError): return None
+    except OSError: return {"err": True}
+    try: return os.path.realpath(p, strict=True)
+    except TypeError: return os.path.realpath(p)  # python < 3.10: os.stat above already proved it exists
+    except (FileNotFoundError, NotADirectoryError): return None
+    except OSError: return {"err": True}
+def ls(p):
+    try: names = sorted(os.listdir(p))
+    except (FileNotFoundError, NotADirectoryError): return None
+    except OSError: return {"err": True}
+    out = []
+    for n in names[:MAX_NAMES]:
+        c = os.path.join(p, n); s = st(c); r = rs = None
+        if s is not None and s.get("l"):
+            r = real(c); rs = st(r) if r is not None else None
+        out.append([n, s, r, rs])
+    return {"n": out, "more": len(names) > MAX_NAMES}
+def link_on_way(parts):
+    d = home
+    for part in parts:
+        d = d + "/" + part
+        try:
+            if stat.S_ISLNK(os.lstat(d).st_mode): return True
+        except OSError: return False
+    return False
+def read(p):
+    if not readable(p): return {"denied": True}
+    parts = p[len(home) + 1:].split("/")
+    fd = None
+    try:
+        fd = os.open(home, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        for k, part in enumerate(parts):
+            last = k == len(parts) - 1
+            nfd = os.open(part, (os.O_RDONLY | os.O_NONBLOCK if last else os.O_RDONLY | os.O_DIRECTORY) | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd); fd = nfd
+        s = os.fstat(fd)
+        if not stat.S_ISREG(s.st_mode): return None
+        if s.st_nlink != 1: return {"denied": True}
+        data = os.read(fd, MAX_READ + 1)
+    except (FileNotFoundError, NotADirectoryError, IsADirectoryError):
+        # O_NOFOLLOW|O_DIRECTORY on a link is ENOTDIR on some systems: a link on the way is refused, not "not there".
+        return {"denied": True} if link_on_way(parts) else None
+    except OSError as e:
+        import errno
+        return {"denied": True} if e.errno in (errno.ELOOP, errno.EMLINK) else {"err": True}
+    finally:
+        if fd is not None: os.close(fd)
+    if len(data) > MAX_READ: return {"big": True}
+    try: return {"t": data.decode("utf-8")}
+    except UnicodeDecodeError: return {"big": True}
+raw = sys.stdin.buffer.read(1024 * 1024 + 1)
+if len(raw) > 1024 * 1024: fail("request too large")
+try: ops = json.loads(raw)["ops"]
+except Exception: fail("bad request")
+if not isinstance(ops, list) or len(ops) > MAX_OPS: fail("bad request")
+FN = {"lstat": st, "realpath": real, "ls": ls, "read": read}
+res = []
+for o in ops:
+    if not (isinstance(o, list) and len(o) == 2 and o[0] in FN): fail("bad op")
+    if not ok_path(o[1]): fail("path must be absolute, plain and inside the Bot home")
+    res.append(FN[o[0]](o[1]))
+out = json.dumps({"r": res}, separators=(",", ":"))
+if len(out) > MAX_OUT: fail("answer too large")
+sys.stdout.write(out)
+'
+cd /
+exec /usr/bin/setpriv --reuid="$uid" --regid="$gid" --init-groups --pdeathsig=KILL -- \
+  /usr/bin/env -i /usr/bin/python3 -I -S -c "$WORKER" "$home"

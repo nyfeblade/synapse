@@ -1,0 +1,187 @@
+{
+  "reports": [
+    {
+      "retriever": "hosted-agent mode (raw history up to 180k tokens + memory, no search)",
+      "label": "realistic",
+      "schemaTokens": 0,
+      "referenceTokens": 8809786,
+      "turns": 10000,
+      "perKind": {
+        "buried": {
+          "kind": "buried",
+          "n": 40,
+          "weight": 1,
+          "evidenceRecall": 0,
+          "exact": 0,
+          "judged": null,
+          "tokensMean": 182750,
+          "savingMean": 8627036,
+          "netPerTurn": 0
+        },
+        "summarised": {
+          "kind": "summarised",
+          "n": 40,
+          "weight": 1,
+          "evidenceRecall": 0.775,
+          "exact": 0.775,
+          "judged": null,
+          "tokensMean": 182750,
+          "savingMean": 8627036,
+          "netPerTurn": 0
+        },
+        "superseded": {
+          "kind": "superseded",
+          "n": 40,
+          "weight": 3,
+          "evidenceRecall": 0.7,
+          "exact": 0.7,
+          "judged": null,
+          "tokensMean": 182750,
+          "savingMean": 8627036,
+          "netPerTurn": 0
+        },
+        "scattered": {
+          "kind": "scattered",
+          "n": 40,
+          "weight": 1,
+          "evidenceRecall": 0.46499999999999997,
+          "exact": 0.05,
+          "judged": null,
+          "tokensMean": 182750,
+          "savingMean": 8627036,
+          "netPerTurn": 0
+        },
+        "document": {
+          "kind": "document",
+          "n": 40,
+          "weight": 1,
+          "evidenceRecall": 0,
+          "exact": 0,
+          "judged": null,
+          "tokensMean": 182750,
+          "savingMean": 8627036,
+          "netPerTurn": 0
+        },
+        "negative": {
+          "kind": "negative",
+          "n": 40,
+          "weight": 1,
+          "evidenceRecall": null,
+          "exact": 1,
+          "judged": null,
+          "tokensMean": 182750,
+          "savingMean": 8627036,
+          "netPerTurn": 0
+        }
+      },
+      "overall": {
+        "weightedExact": 0.490625,
+        "weightedRecall": 0.47714285714285704,
+        "tokensMean": 182750,
+        "firingRate": 0,
+        "netPerTurn": 0,
+        "netTotal": 0
+      }
+    },
+    {
+      "retriever": "archive (baseline + SearchHistory: FTS5 BM25 over prefixed turns, summaries, document chunks)",
+      "label": "realistic",
+      "schemaTokens": 223,
+      "referenceTokens": 8809786,
+      "turns": 10000,
+      "perKind": {
+        "buried": {
+          "kind": "buried",
+          "n": 40,
+          "weight": 1,
+          "evidenceRecall": 1,
+          "exact": 1,
+          "judged": null,
+          "tokensMean": 5713.375,
+          "savingMean": 8804072.625,
+          "netPerTurn": 8803849.625
+        },
+        "summarised": {
+          "kind": "summarised",
+          "n": 40,
+          "weight": 1,
+          "evidenceRecall": 1,
+          "exact": 1,
+          "judged": null,
+          "tokensMean": 5771.2,
+          "savingMean": 8804014.8,
+          "netPerTurn": 8803791.8
+        },
+        "superseded": {
+          "kind": "superseded",
+          "n": 40,
+          "weight": 3,
+          "evidenceRecall": 1,
+          "exact": 1,
+          "judged": null,
+          "tokensMean": 5655,
+          "savingMean": 8804131,
+          "netPerTurn": 8803908
+        },
+        "scattered": {
+          "kind": "scattered",
+          "n": 40,
+          "weight": 1,
+          "evidenceRecall": 1,
+          "exact": 1,
+          "judged": null,
+          "tokensMean": 5800.35,
+          "savingMean": 8803985.65,
+          "netPerTurn": 8803762.65
+        },
+        "document": {
+          "kind": "document",
+          "n": 40,
+          "weight": 1,
+          "evidenceRecall": 1,
+          "exact": 1,
+          "judged": null,
+          "tokensMean": 6462.625,
+          "savingMean": 8803323.375,
+          "netPerTurn": 8803100.375
+        },
+        "negative": {
+          "kind": "negative",
+          "n": 40,
+          "weight": 1,
+          "evidenceRecall": null,
+          "exact": 1,
+          "judged": null,
+          "tokensMean": 5700.075,
+          "savingMean": 8804085.925,
+          "netPerTurn": 8803862.925
+        }
+      },
+      "overall": {
+        "weightedExact": 1,
+        "weightedRecall": 1,
+        "tokensMean": 5850.4375,
+        "firingRate": 1,
+        "netPerTurn": 8803712.5625,
+        "netTotal": 88037125625
+      }
+    }
+  ],
+  "resources": {
+    "rows": 72895,
+    "indexMs": 9303,
+    "rowsPerSec": 7835,
+    "diskBytesTurnsAndSummaries": 8478720,
+    "diskBytesTotal": 85610496,
+    "diskBytesPer1kTurns": 423936,
+    "rssMB": {
+      "archive": 17.6,
+      "processTotal": 111.1
+    },
+    "searchMs": {
+      "p50": 0.87,
+      "p95": 42.92
+    },
+    "schemaTokensPerCall": 223
+  }
+}

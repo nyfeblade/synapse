@@ -1,0 +1,7 @@
+[
+  {
+    "file": "src/dates.ts",
+    "find": "  return Math.round((parseDate(b) - parseDate(a)) / DAY_MS) + 1;",
+    "replace": "  return Math.round((parseDate(b) - parseDate(a)) / DAY_MS);"
+  }
+]

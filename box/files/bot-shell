@@ -1,0 +1,60 @@
+#!/bin/sh
+# Root-owned. Background shells as transient units running as box (TOOL-11, Decision 4).
+# Usage: bot-shell start <id> <cwd> [<bot account> <botId>] | stop <id> | status <id>
+# Bug #66: with a Bot account (bot-user's, reserved uid range) the unit runs as that account (its private group,
+# supplementary bots for the shared /workspace, umask 002) and may start in its own home; without one, as box.
+# Its transcript is the Bot's private /workspace/.host-out/terminals/<botId>/<id>.txt (bothost-owned, the Bot's
+# group, 0640): systemd appends the unit's output to it as root, so the Bot's uid never needs to write it; the cwd
+# note goes to a mktemp file (shell-runner). ProtectProc=invisible is inert on OrbStack's systemd (live finding: it and
+# PrivateTmp are silently ignored there); other Bots' processes are hidden by /proc hidepid once migrated.
+set -eu
+[ "${SUDO_USER:-}" = "bothost" ] || { echo "bot-shell: must be invoked by bothost via sudo" >&2; exit 126; }
+verb="${1:-}"; id="${2:-}"
+case "$id" in shell-*) ;; *) echo "bot-shell: bad id" >&2; exit 2;; esac
+case "${id#shell-}" in ''|*[!a-z0-9-]*) echo "bot-shell: bad id" >&2; exit 2;; esac
+unit="bot-shell-$id"
+case "$verb" in
+  start)
+    # Security re-review item 5: the script comes from the host-private run dir (bothost 0700), must be
+    # bothost-owned and not group/world-writable, and runs from a root-owned copy box can read but not change.
+    src="/home/box/.host/run/$id.sh"; envf="/home/box/.host/run/$id.env"; copies=/run/bots-shell
+    { [ -f "$src" ] && [ ! -L "$src" ] && [ "$(stat -c %U "$src")" = bothost ] && [ -z "$(find "$src" -maxdepth 0 -perm /022)" ]; } || { echo "bot-shell: bad script" >&2; exit 2; }
+    { [ -f "$envf" ] && [ ! -L "$envf" ] && [ "$(stat -c %U "$envf")" = bothost ]; } || { echo "bot-shell: bad env file" >&2; exit 2; }
+    install -d -m 0755 -o root -g root "$copies"
+    find "$copies" -maxdepth 1 -name 'shell-*.sh' -mmin +1440 -delete 2>/dev/null || true
+    script="$copies/$id.sh"
+    install -m 0644 -o root -g root "$src" "$script"
+    acct="${4:-}"
+    if [ -n "$acct" ]; then
+      X='[0-9a-f]'
+      case "$acct" in bot-$X$X$X$X$X$X$X$X$X$X$X$X) ;; *) echo "bot-shell: bad account" >&2; exit 2;; esac
+      ent="$(getent passwd "$acct")" || { echo "bot-shell: bad account" >&2; exit 2; }
+      auid="$(printf '%s' "$ent" | cut -d: -f3)"
+      case "$auid" in ''|*[!0-9]*) echo "bot-shell: bad account" >&2; exit 2;; esac
+      { [ "$auid" -ge 60200 ] && [ "$auid" -le 61099 ] && [ "$(printf '%s' "$ent" | cut -d: -f6)" = "/home/bots/$acct" ]; } || { echo "bot-shell: bad account" >&2; exit 2; }
+      bid="${5:-}"
+      case "$bid" in ''|*[!A-Za-z0-9_-]*) echo "bot-shell: bad Bot id" >&2; exit 2;; esac
+      [ "$(printf '%s' "$ent" | cut -d: -f5)" = "synapse-bot $bid" ] || { echo "bot-shell: bad Bot id" >&2; exit 2; }
+      term="/workspace/.host-out/terminals/$bid/$id.txt"
+      { [ -f "$term" ] && [ ! -L "$term" ] && [ "$(stat -c %U "$term")" = bothost ]; } || { echo "bot-shell: bad terminal file" >&2; exit 2; }
+    fi
+    rc="$(realpath -m -- "${3:-/workspace}")"
+    if [ -n "$acct" ]; then
+      case "$rc" in /workspace|/workspace/*|"/home/bots/$acct"|"/home/bots/$acct"/*) ;; *) rc=/workspace;; esac
+    else
+      case "$rc" in /workspace|/workspace/*|/home/box|/home/box/*) ;; *) rc=/workspace;; esac
+      case "$rc" in /home/box/.host|/home/box/.host/*) rc=/workspace;; esac
+    fi
+    if [ -n "$acct" ]; then
+      exec systemd-run --quiet --unit="$unit" --uid="$acct" --gid="$acct" -p SupplementaryGroups=bots -p UMask=0002 --collect \
+        -p EnvironmentFile="$envf" -p WorkingDirectory="-$rc" -p KillMode=control-group -p TimeoutStopSec=3 \
+        -p StandardOutput="append:$term" -p StandardError="append:$term" -p ProtectProc=invisible \
+        /usr/local/lib/bots/shell-runner "$id" "$script" --stdout
+    fi
+    exec systemd-run --quiet --unit="$unit" --uid=box --gid=bots --collect \
+      -p EnvironmentFile="$envf" -p WorkingDirectory="-$rc" -p KillMode=control-group -p TimeoutStopSec=3 \
+      /usr/local/lib/bots/shell-runner "$id" "$script" ;;
+  stop) systemctl stop "$unit.service" 2>/dev/null || true; rm -f "/run/bots-shell/$id.sh" ;;
+  status) if systemctl is-active --quiet "$unit.service"; then echo running; else echo stopped; fi ;;
+  *) echo "bot-shell: unknown verb" >&2; exit 2 ;;
+esac

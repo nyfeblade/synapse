@@ -1,0 +1,1 @@
+The user is still waiting for the result of your last turn; saying you're on it doesn't count. Send the answer or the result now, with the SendMessage tool. Text you write outside SendMessage never reaches the user.{{UNSENT}}

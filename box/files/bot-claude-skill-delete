@@ -1,0 +1,37 @@
+#!/bin/sh
+# Root-owned. Removes one user-authored skill's directory under ~/.claude/skills for bothost (SkillLibrary.remove),
+# confined to /home/box/.claude/skills/<validated id>. Idempotent: a missing skill directory is not an error.
+#
+# Final secfix round 3 (ruling 1): root only validates the id and re-execs this script as box (setpriv --reuid=box
+# --regid=bots --init-groups --reset-env); the checks and the `rm -rf` run as box, so a skills directory swapped for a
+# link to / after the checks can only ever lead box's own rm somewhere box could already delete.
+set -eu
+N=bot-claude-skill-delete
+ROOT=/home/box/.claude/skills
+
+check_args() {
+  [ $# -eq 1 ] || { echo "$N: exactly one skill id argument required" >&2; exit 2; }
+  case "$1" in *..*) echo "$N: invalid skill id" >&2; exit 126 ;; esac
+  case "$1" in [a-z0-9]*) ;; *) echo "$N: invalid skill id" >&2; exit 126 ;; esac
+  case "$1" in *[!a-z0-9._-]*) echo "$N: invalid skill id" >&2; exit 126 ;; esac
+}
+
+if [ "$(id -u)" = 0 ]; then
+  [ "${SUDO_USER:-}" = "bothost" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+  check_args "$@"
+  exec setpriv --reuid=box --regid=bots --init-groups --reset-env -- "$0" "$@"
+fi
+[ "$(id -u)" = "$(id -u box 2>/dev/null || echo none)" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+check_args "$@"
+
+# ---- everything below runs as box ----
+[ -d "$ROOT" ] || exit 0
+[ ! -L "$ROOT" ] || { echo "$N: skills directory is a symlink" >&2; exit 126; }
+[ "$(readlink -f -- "$ROOT")" = "$ROOT" ] || { echo "$N: skills directory resolves elsewhere (symlink?)" >&2; exit 126; }
+DIR="$ROOT/$1"
+if [ -e "$DIR" ] || [ -L "$DIR" ]; then
+  [ ! -L "$DIR" ] || { echo "$N: skill directory is a symlink" >&2; exit 126; }
+  [ "$(readlink -f -- "$DIR")" = "$DIR" ] || { echo "$N: skill directory resolves elsewhere (symlink?)" >&2; exit 126; }
+  rm -rf -- "$DIR"
+fi
+exit 0

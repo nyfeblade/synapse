@@ -1,0 +1,14 @@
+#!/bin/sh
+# Spike fixes carried in (phase3-spike-findings.md):
+#  - x11vnc 0.9.16 on Debian 12 has no -unixsockonly flag; the real option is -unixsock (S3-06).
+#  - box (Xvfb) and bothost (x11vnc) are different uids, so MIT-SHM shared-memory attach fails
+#    cross-user with BadAccess; -noshm falls back to plain XGetImage over the wire (S3-06).
+set -eu
+n="$1"; . /etc/bots/desktop.env
+common="-display :$n -auth /run/bot-x/$n.xauth -shared -forever -nopw -quiet -noxdamage -noshm -cursor arrow"
+if [ "${VNC_TRANSPORT:-unix}" = unix ]; then
+  rm -f "/run/bothost-vnc/$n.sock"
+  exec x11vnc $common -unixsock "/run/bothost-vnc/$n.sock"
+else
+  exec x11vnc $common -rfbport $((5900 + n)) -localhost
+fi

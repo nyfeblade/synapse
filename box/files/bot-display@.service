@@ -1,0 +1,13 @@
+[Unit]
+Description=Bots display :%i (Xvfb, xfwm4, dock, wallpaper)
+[Service]
+User=box
+Group=bots
+Environment=DISPLAY=:%i XAUTHORITY=/run/bot-x/%i.xauth HOME=/home/box
+ExecStartPre=+/usr/local/lib/bots/display-cookie %i
+ExecStart=/usr/local/lib/bots/bot-desktop-session %i
+Restart=on-failure
+RestartSec=1
+KillMode=control-group
+[Install]
+WantedBy=multi-user.target

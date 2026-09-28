@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+# Bug #66: moves the box from the one uid `box` to one OS account per Bot, or back. Runs ON the box as root; the Mac
+# wrappers box/migrate-per-bot-uid.sh and box/rollback-per-bot-uid.sh stream it in. ONLY the user runs it.
+#
+#   per-bot-uid-migrate [--dry-run]            print every step; changes nothing but saving the plan (the default)
+#   per-bot-uid-migrate --apply                stop the host, make the accounts, move the files, switch the host over
+#   per-bot-uid-migrate --rollback [--apply]   move everything back, switch the host back to uid box (dry run
+#                                              unless --apply, like the migration)
+#   ... [--plan FILE]                          use this plan instead of asking the host (host.mjs walls-migration-plan)
+#
+# Idempotent and resumable: a step whose source is gone and whose target is there is done (its owner is re-applied);
+# every move is journalled BEFORE it happens (/var/lib/bots/per-bot-uid/journal.tsv), so an interrupted run is
+# finished by running it again and undone by --rollback. Only paths under /home/box/.claude/projects/,
+# /home/box/.chrome-screens/ and the Bot's own /home/bots/<account>/ are ever moved; links are never followed.
+set -euo pipefail
+MODE=dry-run; ROLLBACK=0; PLAN=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) MODE=dry-run ;;
+    --apply) MODE=apply ;;
+    --rollback) ROLLBACK=1 ;;
+    --plan) PLAN="${2:?--plan needs a file}"; shift ;;
+    *) echo "usage: $0 [--rollback] [--dry-run|--apply] [--plan FILE]" >&2; exit 2 ;;
+  esac
+  shift
+done
+[ "$(id -u)" = 0 ] || { echo "per-bot-uid-migrate: run as root" >&2; exit 126; }
+
+STATE=/var/lib/bots/per-bot-uid
+JOURNAL="$STATE/journal.tsv"
+DROPIN=/etc/systemd/system/bothost.service.d/50-per-bot-uid.conf
+LEGACY=/home/box/.claude/projects/
+SCREENS=/home/box/.chrome-screens/
+HOMES=/home/bots/
+HOSTOUT=/workspace/.host-out
+BOTUSER=/usr/local/libexec/bot-user
+HIDEPID=/usr/local/lib/bots/proc-hidepid
+X='[0-9a-f]'
+ACCT_GLOB="bot-$X$X$X$X$X$X$X$X$X$X$X$X"
+n_done=0; n_moved=0; n_skipped=0
+
+say() { printf '%s\n' "$*"; }
+run() { if [ "$MODE" = apply ]; then "$@"; else say "  would run: $*"; fi; }
+safe() { case "$1" in *..*|*$'\n'*|*$'\t'*) return 1 ;; esac; }
+acct_ok() { case "$1" in $ACCT_GLOB) getent passwd "$1" >/dev/null ;; *) return 1 ;; esac; }
+ids_of() { getent passwd "$1" | cut -d: -f3,4; }
+
+stop_everything() {
+  run systemctl stop bothost
+  # A Bot's screen (Chrome holds its profile open) is restarted lazily by the host, as its new owner.
+  for u in $(systemctl list-units --plain --no-legend --all 'bot-display@*' 2>/dev/null | awk '{print $1}'); do
+    i="${u#bot-display@}"; i="${i%.service}"
+    case "$i" in ''|*[!0-9]*|1) continue ;; esac
+    run systemctl stop "bot-chrome@$i.service" "bot-vnc@$i.service" "bot-display@$i.service"
+  done
+}
+
+# Staging dirs back to the shared group (rollback), or left to bot-user ensure (migrate).
+regroup_staging() {
+  for k in uploads screens events mcp-output; do
+    [ -d "$HOSTOUT/$k" ] && [ ! -L "$HOSTOUT/$k" ] || continue
+    for d in "$HOSTOUT/$k"/*; do
+      [ -d "$d" ] && [ ! -L "$d" ] && [ "$(stat -c %U "$d")" = bothost ] || continue
+      run find -P "$d" -xdev ! -type l -exec chgrp -h bots {} +
+      run chmod 2750 "$d"
+    done
+  done
+}
+
+migrate() {
+  [ -x "$BOTUSER" ] || { echo "per-bot-uid-migrate: $BOTUSER is missing; run box/provision.sh (or deploy the box files) first" >&2; exit 3; }
+  grep -q BOT_UNIX_USER /usr/local/libexec/bot-claude-as-box || { echo "per-bot-uid-migrate: bot-claude-as-box is too old; provision first" >&2; exit 3; }
+  install -d -m 0700 "$STATE"
+  if [ -z "$PLAN" ]; then
+    PLAN="$STATE/plan.tsv"
+    say "plan: asking the host (as bothost) which files belong to which Bot"
+    runuser -u bothost -- /usr/local/bin/node /opt/bothost/app/host.mjs walls-migration-plan > "$PLAN.new"
+    mv -f "$PLAN.new" "$PLAN"
+  fi
+  say "mode: $MODE   plan: $PLAN ($(grep -c . "$PLAN" || true) steps)"
+  [ "$MODE" = apply ] && stop_everything
+  while IFS=$'\t' read -r op a b c d e; do
+    case "$op" in
+      account)
+        id="$a"; acct="$b"
+        case "$id" in ''|*[!A-Za-z0-9_-]*) say "SKIP bad Bot id"; n_skipped=$((n_skipped + 1)); continue ;; esac
+        [ "$("$BOTUSER" name "$id")" = "$acct" ] || { say "SKIP $id: account name mismatch"; n_skipped=$((n_skipped + 1)); continue; }
+        say "account $acct for Bot $id"
+        run "$BOTUSER" ensure "$id" ;;
+      move)
+        what="$a"; id="$b"; acct="$c"; from="$d"; to="$e"
+        { safe "$from" && safe "$to"; } || { say "SKIP unsafe path"; n_skipped=$((n_skipped + 1)); continue; }
+        case "$from" in "$LEGACY"*|"$SCREENS"*) ;; *) say "SKIP $from: not a legacy path"; n_skipped=$((n_skipped + 1)); continue ;; esac
+        case "$to" in "$HOMES$acct/"*) ;; *) say "SKIP $to: not in $acct's home"; n_skipped=$((n_skipped + 1)); continue ;; esac
+        if [ "$MODE" = apply ] && ! acct_ok "$acct"; then say "SKIP $acct: no such account"; n_skipped=$((n_skipped + 1)); continue; fi
+        if [ -L "$from" ] || [ -L "$to" ]; then say "SKIP $what $from: a link"; n_skipped=$((n_skipped + 1)); continue; fi
+        if [ ! -e "$from" ]; then
+          if [ -e "$to" ]; then
+            n_done=$((n_done + 1))
+            [ "$MODE" = apply ] && chown -R -P "$(ids_of "$acct")" -- "$to"
+          fi
+          continue
+        fi
+        if [ -e "$to" ]; then
+          if [ "$what" = chrome-profile ] && [ -d "$to" ] && [ -z "$(ls -A -- "$to")" ]; then run rmdir -- "$to"
+          else say "SKIP $what $from: $to already exists (left both in place)"; n_skipped=$((n_skipped + 1)); continue; fi
+        fi
+        say "move $what $from -> $to"
+        if [ "$MODE" = apply ]; then
+          owner="$(stat -c %u:%g -- "$from")"
+          ug="$(ids_of "$acct")"
+          setpriv --reuid="${ug%%:*}" --regid="${ug##*:}" --clear-groups -- mkdir -p -- "$(dirname -- "$to")"
+          printf 'move\t%s\t%s\t%s\n' "$from" "$to" "$owner" >> "$JOURNAL"
+          sync -f "$JOURNAL" 2>/dev/null || sync
+          mv -T -- "$from" "$to"
+          chown -R -P "$ug" -- "$to"
+        fi
+        n_moved=$((n_moved + 1)) ;;
+      '') ;;
+      *) say "SKIP unknown step $op"; n_skipped=$((n_skipped + 1)) ;;
+    esac
+  done < "$PLAN"
+  # The shared /workspace stays shared: what box made there becomes editable by the group (every Bot is in bots).
+  cnt="$(find -P /workspace -xdev -path "$HOSTOUT" -prune -o -user box ! -type l ! -perm -g+w -print 2>/dev/null | grep -c . || true)"
+  say "workspace: $cnt box-owned entries get group write (g+rwX), so teammates' accounts can keep editing them"
+  [ "$cnt" = 0 ] || run find -P /workspace -xdev -path "$HOSTOUT" -prune -o -user box ! -type l ! -perm -g+w -exec chmod g+rwX {} +
+  # Other uids' processes hidden (/proc hidepid=invisible; group procview = bothost, polkitd sees all), now and at boot.
+  say "processes: /proc hidepid=invisible (bots-hidepid.service)"
+  if [ "$MODE" = apply ]; then
+    if [ -x "$HIDEPID" ] && "$HIDEPID" on; then systemctl enable bots-hidepid.service
+    else say "WARNING: could not hide other uids' processes; the Bots are still walled by uid, but can see each other's process list"; fi
+  fi
+  say "host: SYNAPSE_PER_BOT_UID=1 ($DROPIN)"
+  if [ "$MODE" = apply ]; then
+    install -d -m 0755 "$(dirname "$DROPIN")"
+    # Bug 284: the old name too, so a host an app downgrade redeploys (it reads only BOTS_PER_BOT_UID) stays walled.
+    printf '[Service]\nEnvironment=SYNAPSE_PER_BOT_UID=1\nEnvironment=BOTS_PER_BOT_UID=1\n' > "$DROPIN"
+    systemctl daemon-reload
+    systemctl start bothost
+  fi
+  say "done: moved $n_moved, already done $n_done, skipped $n_skipped ($MODE)"
+}
+
+rollback() {
+  say "mode: rollback ($MODE)"
+  [ "$MODE" = apply ] && stop_everything
+  if [ -f "$JOURNAL" ]; then
+    # Newest first; a line whose target is gone and whose source is back is already undone.
+    tac "$JOURNAL" | while IFS=$'\t' read -r op from to owner; do
+      [ "$op" = move ] && safe "$from" && safe "$to" || continue
+      case "$from" in "$LEGACY"*|"$SCREENS"*) ;; *) continue ;; esac
+      case "$to" in "$HOMES"bot-*/*) ;; *) continue ;; esac
+      case "$owner" in *[!0-9:]*|'') owner=box:bots ;; esac
+      if [ -e "$to" ] && [ ! -L "$to" ] && [ ! -e "$from" ]; then
+        say "move back $to -> $from"
+        run mv -T -- "$to" "$from"
+        run chown -R -P "$owner" -- "$from"
+      fi
+    done
+  fi
+  # Sessions a Bot's CLI started after the migration live only in its home: they go back too (never overwriting).
+  for h in "$HOMES"bot-*; do
+    [ -d "$h/.claude/projects" ] && [ ! -L "$h" ] && [ ! -L "$h/.claude" ] && [ ! -L "$h/.claude/projects" ] || continue
+    while IFS= read -r f; do
+      rel="${f#"$h/.claude/projects/"}"
+      safe "$rel" || continue
+      dest="$LEGACY$rel"
+      [ -e "$dest" ] && continue
+      say "move back new session $f -> $dest"
+      run install -d -o box -g bots -m 2755 "$(dirname -- "$dest")"
+      run mv -T -- "$f" "$dest"
+      run chown -P box:bots -- "$dest"
+    done < <(find -P "$h/.claude/projects" -mindepth 2 -maxdepth 2 -type f -name '*.jsonl' 2>/dev/null)
+  done
+  regroup_staging
+  say "processes: /proc visible again (bots-hidepid.service disabled)"
+  run systemctl disable bots-hidepid.service
+  if [ -x "$HIDEPID" ]; then run "$HIDEPID" off; fi
+  say "host: back to uid box (removing $DROPIN)"
+  if [ "$MODE" = apply ]; then
+    rm -f "$DROPIN"
+    systemctl daemon-reload
+    systemctl start bothost
+  fi
+  say "rollback done ($MODE). The accounts and their homes are kept; nothing runs as them. To delete one: $BOTUSER remove <botId>"
+}
+
+if [ "$ROLLBACK" = 1 ]; then rollback; else migrate; fi

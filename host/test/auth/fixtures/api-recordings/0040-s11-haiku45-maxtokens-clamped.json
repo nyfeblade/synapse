@@ -1,0 +1,1061 @@
+{
+ "scenario": "s11-haiku45-maxtokens-clamped",
+ "seq": 40,
+ "request": {
+  "method": "POST",
+  "path": "/v1/messages?beta=true",
+  "auth": "oauth-access-token (authorization header)",
+  "headers": {
+   "accept": "application/json",
+   "content-type": "application/json",
+   "user-agent": "claude-cli/2.1.283 (external, sdk-cli)",
+   "x-claude-code-session-id": "<redacted>",
+   "x-stainless-arch": "arm64",
+   "x-stainless-lang": "js",
+   "x-stainless-os": "MacOS",
+   "x-stainless-package-version": "0.112.1",
+   "x-stainless-retry-count": "0",
+   "x-stainless-runtime": "node",
+   "x-stainless-runtime-version": "v26.3.0",
+   "x-stainless-timeout": "600",
+   "anthropic-beta": "oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,claude-code-20250219,extended-cache-ttl-2025-04-11",
+   "anthropic-dangerous-direct-browser-access": "true",
+   "anthropic-version": "2023-06-01",
+   "x-app": "cli",
+   "connection": "keep-alive",
+   "host": "127.0.0.1:8787",
+   "accept-encoding": "gzip, deflate, br, zstd",
+   "content-length": "5870"
+  },
+  "dropped_headers": [
+   "authorization"
+  ],
+  "body_bytes_original": 5870,
+  "body_kind": "json",
+  "body": {
+   "model": "claude-haiku-4-5-20251001",
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolo\n\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsu\n\nm d\nolor sit amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\nlor\n\n sit amet lorem\n ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem i\npsum dolor sit a\n\nmet lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l\n\norem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \n\namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lore\n\nm ipsum dol\n\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \n\ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\n\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\n\nt amet lorem ipsu\n\nm dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor\n\nem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n\n lorem ipsum\n\n dolor sit amet lorem ipsum dolor sit amet lor\n\nem ipsum dolor sit am\net lorem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo\n\nr sit amet lorem ipsum\n\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\n\num dolor sit amet lorem ipsum dolor sit amet lor\nem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dol\nor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem \n\nipsum dolor sit amet\n\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\nt amet lorem ipsum dol\nor sit amet lorem "
+      },
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor\n sit amet lor\nem ipsum dolor sit amet lorem ipsum dolor sit amet l\norem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet\n lorem ipsum dolor \nsit amet lore\nm ipsum dolor sit amet lorem\n ipsum dolor sit a"
+      },
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit\n amet lorem ipsum "
+      },
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lor"
+      },
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \nipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\n\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor"
+      },
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor\n sit amet lorem ipsum dolor\n sit amet lorem ip\n"
+      },
+      {
+       "type": "text",
+       "text": "lorem",
+       "cache_control": {
+        "type": "ephemeral",
+        "ttl": "1h"
+       }
+      }
+     ]
+    }
+   ],
+   "system": [
+    {
+     "type": "text",
+     "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si"
+    },
+    {
+     "type": "text",
+     "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip",
+     "cache_control": {
+      "type": "ephemeral",
+      "ttl": "1h"
+     }
+    },
+    {
+     "type": "text",
+     "text": "lorem ips",
+     "cache_control": {
+      "type": "ephemeral",
+      "ttl": "1h"
+     }
+    }
+   ],
+   "tools": [],
+   "metadata": {
+    "user_id": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am"
+   },
+   "max_tokens": 64000,
+   "thinking": {
+    "budget_tokens": 63999,
+    "type": "enabled",
+    "display": "omitted"
+   },
+   "context_management": {
+    "edits": [
+     {
+      "type": "clear_thinking_20251015",
+      "keep": "all"
+     }
+    ]
+   },
+   "stream": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "headers": {
+   "date": "Sat, 26 Sep 2026 01:50:23 GMT",
+   "content-type": "text/event-stream; charset=utf-8",
+   "transfer-encoding": "chunked",
+   "connection": "keep-alive",
+   "cache-control": "no-cache",
+   "anthropic-ratelimit-unified-5h-status": "<redacted>",
+   "anthropic-ratelimit-unified-representative-claim": "<redacted>",
+   "anthropic-ratelimit-unified-overage-status": "<redacted>",
+   "anthropic-ratelimit-unified-reset": "<redacted>",
+   "anthropic-ratelimit-unified-5h-utilization": "<redacted>",
+   "anthropic-ratelimit-unified-7d-reset": "<redacted>",
+   "anthropic-ratelimit-unified-5h-reset": "<redacted>",
+   "anthropic-ratelimit-unified-7d-status": "<redacted>",
+   "anthropic-ratelimit-unified-7d-surpassed-threshold": "<redacted>",
+   "anthropic-ratelimit-unified-fallback-percentage": "<redacted>",
+   "anthropic-ratelimit-unified-overage-disabled-reason": "<redacted>",
+   "anthropic-ratelimit-unified-7d-utilization": "<redacted>",
+   "anthropic-ratelimit-unified-status": "<redacted>",
+   "server": "cloudflare",
+   "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+   "anthropic-workspace-id": "<redacted>",
+   "traceresponse": "<redacted>",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "cf-cache-status": "<redacted>",
+   "x-robots-tag": "none",
+   "content-security-policy": "default-src 'none'; frame-ancestors 'none'"
+  },
+  "dropped_headers": [
+   "request-id",
+   "anthropic-organization-id",
+   "cf-ray"
+  ],
+  "ttfb_ms": 442,
+  "total_ms": 12258.5,
+  "chunk_timing": [
+   {
+    "t_ms": 442.4,
+    "bytes": 460
+   },
+   {
+    "t_ms": 960.8,
+    "bytes": 74
+   },
+   {
+    "t_ms": 2191.6,
+    "bytes": 14
+   },
+   {
+    "t_ms": 3614.4,
+    "bytes": 16
+   },
+   {
+    "t_ms": 4821.8,
+    "bytes": 16
+   },
+   {
+    "t_ms": 5925.2,
+    "bytes": 12
+   },
+   {
+    "t_ms": 7355.3,
+    "bytes": 12
+   },
+   {
+    "t_ms": 8274.7,
+    "bytes": 12
+   },
+   {
+    "t_ms": 9513.6,
+    "bytes": 9
+   },
+   {
+    "t_ms": 9673.2,
+    "bytes": 1363
+   },
+   {
+    "t_ms": 9674.1,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 9674.2,
+    "bytes": 1369
+   },
+   {
+    "t_ms": 9674.2,
+    "bytes": 923
+   },
+   {
+    "t_ms": 9696.6,
+    "bytes": 24
+   },
+   {
+    "t_ms": 9722.6,
+    "bytes": 15
+   },
+   {
+    "t_ms": 9750.6,
+    "bytes": 27
+   },
+   {
+    "t_ms": 9790.3,
+    "bytes": 33
+   },
+   {
+    "t_ms": 9803.5,
+    "bytes": 22
+   },
+   {
+    "t_ms": 9827.7,
+    "bytes": 33
+   },
+   {
+    "t_ms": 9852.1,
+    "bytes": 19
+   },
+   {
+    "t_ms": 9880.6,
+    "bytes": 15
+   },
+   {
+    "t_ms": 9913.1,
+    "bytes": 19
+   },
+   {
+    "t_ms": 9955.2,
+    "bytes": 14
+   },
+   {
+    "t_ms": 9960.5,
+    "bytes": 24
+   },
+   {
+    "t_ms": 9988.1,
+    "bytes": 28
+   },
+   {
+    "t_ms": 10011.1,
+    "bytes": 17
+   },
+   {
+    "t_ms": 10040.9,
+    "bytes": 30
+   },
+   {
+    "t_ms": 10063,
+    "bytes": 34
+   },
+   {
+    "t_ms": 10098.6,
+    "bytes": 22
+   },
+   {
+    "t_ms": 10116,
+    "bytes": 27
+   },
+   {
+    "t_ms": 10148.7,
+    "bytes": 18
+   },
+   {
+    "t_ms": 10343,
+    "bytes": 24
+   },
+   {
+    "t_ms": 10400.6,
+    "bytes": 23
+   },
+   {
+    "t_ms": 10401.3,
+    "bytes": 19
+   },
+   {
+    "t_ms": 10406.7,
+    "bytes": 17
+   },
+   {
+    "t_ms": 10406.9,
+    "bytes": 97
+   },
+   {
+    "t_ms": 10407.1,
+    "bytes": 26
+   },
+   {
+    "t_ms": 10407.5,
+    "bytes": 33
+   },
+   {
+    "t_ms": 10440.3,
+    "bytes": 18
+   },
+   {
+    "t_ms": 10463.1,
+    "bytes": 15
+   },
+   {
+    "t_ms": 10485.1,
+    "bytes": 18
+   },
+   {
+    "t_ms": 10510.5,
+    "bytes": 18
+   },
+   {
+    "t_ms": 10536.8,
+    "bytes": 21
+   },
+   {
+    "t_ms": 10563.2,
+    "bytes": 18
+   },
+   {
+    "t_ms": 10598.1,
+    "bytes": 18
+   },
+   {
+    "t_ms": 10617.4,
+    "bytes": 16
+   },
+   {
+    "t_ms": 10645,
+    "bytes": 23
+   },
+   {
+    "t_ms": 10672.2,
+    "bytes": 18
+   },
+   {
+    "t_ms": 10695.5,
+    "bytes": 19
+   },
+   {
+    "t_ms": 10723.7,
+    "bytes": 27
+   },
+   {
+    "t_ms": 10748.5,
+    "bytes": 19
+   },
+   {
+    "t_ms": 10771.9,
+    "bytes": 21
+   },
+   {
+    "t_ms": 10800.4,
+    "bytes": 28
+   },
+   {
+    "t_ms": 10855.3,
+    "bytes": 16
+   },
+   {
+    "t_ms": 10855.5,
+    "bytes": 25
+   },
+   {
+    "t_ms": 10886.1,
+    "bytes": 19
+   },
+   {
+    "t_ms": 10907.5,
+    "bytes": 23
+   },
+   {
+    "t_ms": 10933.9,
+    "bytes": 13
+   },
+   {
+    "t_ms": 10957,
+    "bytes": 14
+   },
+   {
+    "t_ms": 10983.3,
+    "bytes": 16
+   },
+   {
+    "t_ms": 11018.1,
+    "bytes": 21
+   },
+   {
+    "t_ms": 11038.5,
+    "bytes": 23
+   },
+   {
+    "t_ms": 11065.1,
+    "bytes": 25
+   },
+   {
+    "t_ms": 11091,
+    "bytes": 17
+   },
+   {
+    "t_ms": 11117.6,
+    "bytes": 16
+   },
+   {
+    "t_ms": 11154.1,
+    "bytes": 19
+   },
+   {
+    "t_ms": 11169.8,
+    "bytes": 27
+   },
+   {
+    "t_ms": 11193.7,
+    "bytes": 16
+   },
+   {
+    "t_ms": 11228.8,
+    "bytes": 21
+   },
+   {
+    "t_ms": 11254.5,
+    "bytes": 17
+   },
+   {
+    "t_ms": 11299.8,
+    "bytes": 17
+   },
+   {
+    "t_ms": 11333.1,
+    "bytes": 20
+   },
+   {
+    "t_ms": 11354.7,
+    "bytes": 14
+   },
+   {
+    "t_ms": 11384.4,
+    "bytes": 17
+   },
+   {
+    "t_ms": 11431.7,
+    "bytes": 26
+   },
+   {
+    "t_ms": 11431.9,
+    "bytes": 15
+   },
+   {
+    "t_ms": 11462.5,
+    "bytes": 21
+   },
+   {
+    "t_ms": 11487.2,
+    "bytes": 26
+   },
+   {
+    "t_ms": 11509.3,
+    "bytes": 19
+   },
+   {
+    "t_ms": 11536.4,
+    "bytes": 19
+   },
+   {
+    "t_ms": 11562.9,
+    "bytes": 20
+   },
+   {
+    "t_ms": 11592.2,
+    "bytes": 24
+   },
+   {
+    "t_ms": 11616.6,
+    "bytes": 20
+   },
+   {
+    "t_ms": 11649,
+    "bytes": 21
+   },
+   {
+    "t_ms": 11668.9,
+    "bytes": 22
+   },
+   {
+    "t_ms": 11694.4,
+    "bytes": 21
+   },
+   {
+    "t_ms": 11731.2,
+    "bytes": 18
+   },
+   {
+    "t_ms": 11755.3,
+    "bytes": 22
+   },
+   {
+    "t_ms": 11774,
+    "bytes": 18
+   },
+   {
+    "t_ms": 11800.1,
+    "bytes": 26
+   },
+   {
+    "t_ms": 11829.8,
+    "bytes": 18
+   },
+   {
+    "t_ms": 11850.3,
+    "bytes": 15
+   },
+   {
+    "t_ms": 11879.4,
+    "bytes": 24
+   },
+   {
+    "t_ms": 11904,
+    "bytes": 15
+   },
+   {
+    "t_ms": 11933.9,
+    "bytes": 17
+   },
+   {
+    "t_ms": 11973.4,
+    "bytes": 18
+   },
+   {
+    "t_ms": 11986.5,
+    "bytes": 27
+   },
+   {
+    "t_ms": 12010.2,
+    "bytes": 26
+   },
+   {
+    "t_ms": 12039.2,
+    "bytes": 15
+   },
+   {
+    "t_ms": 12091.3,
+    "bytes": 24
+   },
+   {
+    "t_ms": 12091.5,
+    "bytes": 19
+   },
+   {
+    "t_ms": 12115.6,
+    "bytes": 17
+   },
+   {
+    "t_ms": 12141.7,
+    "bytes": 15
+   },
+   {
+    "t_ms": 12168.3,
+    "bytes": 22
+   },
+   {
+    "t_ms": 12192.8,
+    "bytes": 25
+   },
+   {
+    "t_ms": 12247.4,
+    "bytes": 19
+   },
+   {
+    "t_ms": 12252.2,
+    "bytes": 18
+   },
+   {
+    "t_ms": 12258.1,
+    "bytes": 135
+   },
+   {
+    "t_ms": 12258.2,
+    "bytes": 10
+   }
+  ],
+  "note": "stream arrived gzip-encoded; chunk timing kept by incremental decode",
+  "kind": "sse",
+  "sse": [
+   {
+    "t_ms": 442.4,
+    "raw": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-haiku-4-5-20251001\",\"id\":\"msg_0000000000000000000fake1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":1344,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":3,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"diagnostics\":null,\"context_management\":null}}\n\n"
+   },
+   {
+    "t_ms": 442.4,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 960.8,
+    "raw": "event: ping\ndata: {\"type\":\"ping\"}\n\n"
+   },
+   {
+    "t_ms": 960.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"\",\"estimated_tokens\":50}}\n\n"
+   },
+   {
+    "t_ms": 2191.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"\",\"estimated_tokens\":50}}\n\n"
+   },
+   {
+    "t_ms": 3614.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"\",\"estimated_tokens\":150}}\n\n"
+   },
+   {
+    "t_ms": 4821.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"\",\"estimated_tokens\":100}}\n\n"
+   },
+   {
+    "t_ms": 5925.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"\",\"estimated_tokens\":100}}\n\n"
+   },
+   {
+    "t_ms": 7355.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"\",\"estimated_tokens\":100}}\n\n"
+   },
+   {
+    "t_ms": 8274.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"\",\"estimated_tokens\":100}}\n\n"
+   },
+   {
+    "t_ms": 9513.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"\",\"estimated_tokens\":100}}\n\n"
+   },
+   {
+    "t_ms": 9673.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"\",\"estimated_tokens\":null}}\n\n"
+   },
+   {
+    "t_ms": 9674.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\"}}\n\n"
+   },
+   {
+    "t_ms": 9674.2,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+   },
+   {
+    "t_ms": 9674.2,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 9674.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"l\"}}\n\n"
+   },
+   {
+    "t_ms": 9696.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem \"}}\n\n"
+   },
+   {
+    "t_ms": 9722.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo\"}}\n\n"
+   },
+   {
+    "t_ms": 9750.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum \"}}\n\n"
+   },
+   {
+    "t_ms": 9790.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor s\"}}\n\n"
+   },
+   {
+    "t_ms": 9803.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem \"}}\n\n"
+   },
+   {
+    "t_ms": 9827.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\\n\\nm dolo\"}}\n\n"
+   },
+   {
+    "t_ms": 9852.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem \"}}\n\n"
+   },
+   {
+    "t_ms": 9880.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem i\"}}\n\n"
+   },
+   {
+    "t_ms": 9913.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem \"}}\n\n"
+   },
+   {
+    "t_ms": 9955.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem\"}}\n\n"
+   },
+   {
+    "t_ms": 9960.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem i\"}}\n\n"
+   },
+   {
+    "t_ms": 9988.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dol\"}}\n\n"
+   },
+   {
+    "t_ms": 10011.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem i\"}}\n\n"
+   },
+   {
+    "t_ms": 10040.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor \"}}\n\n"
+   },
+   {
+    "t_ms": 10063,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor\"}}\n\n"
+   },
+   {
+    "t_ms": 10098.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 10116,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum\"}}\n\n"
+   },
+   {
+    "t_ms": 10148.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem \"}}\n\n"
+   },
+   {
+    "t_ms": 10343,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum\"}}\n\n"
+   },
+   {
+    "t_ms": 10400.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem i\\n\\nps\"}}\n\n"
+   },
+   {
+    "t_ms": 10401.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem \"}}\n\n"
+   },
+   {
+    "t_ms": 10406.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem i\"}}\n\n"
+   },
+   {
+    "t_ms": 10406.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor\"}}\n\n"
+   },
+   {
+    "t_ms": 10406.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\nlorem\"}}\n\n"
+   },
+   {
+    "t_ms": 10406.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum do\"}}\n\n"
+   },
+   {
+    "t_ms": 10406.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ips\"}}\n\n"
+   },
+   {
+    "t_ms": 10407.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\nlorem ipsum \"}}\n\n"
+   },
+   {
+    "t_ms": 10407.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\\nm dolor sit amet\"}}\n\n"
+   },
+   {
+    "t_ms": 10440.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem \"}}\n\n"
+   },
+   {
+    "t_ms": 10463.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\nlorem\"}}\n\n"
+   },
+   {
+    "t_ms": 10485.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem\"}}\n\n"
+   },
+   {
+    "t_ms": 10510.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem i\"}}\n\n"
+   },
+   {
+    "t_ms": 10536.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolo\"}}\n\n"
+   },
+   {
+    "t_ms": 10563.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\n\\nlorem \"}}\n\n"
+   },
+   {
+    "t_ms": 10598.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lore\"}}\n\n"
+   },
+   {
+    "t_ms": 10617.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem\"}}\n\n"
+   },
+   {
+    "t_ms": 10645,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum\"}}\n\n"
+   },
+   {
+    "t_ms": 10672.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 10695.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\nlor\"}}\n\n"
+   },
+   {
+    "t_ms": 10723.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem i\"}}\n\n"
+   },
+   {
+    "t_ms": 10748.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem\"}}\n\n"
+   },
+   {
+    "t_ms": 10771.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ips\"}}\n\n"
+   },
+   {
+    "t_ms": 10800.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum do\\nl\"}}\n\n"
+   },
+   {
+    "t_ms": 10855.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo\"}}\n\n"
+   },
+   {
+    "t_ms": 10855.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 10886.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 10907.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum\"}}\n\n"
+   },
+   {
+    "t_ms": 10933.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo\"}}\n\n"
+   },
+   {
+    "t_ms": 10957,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 10983.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 11018.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem \"}}\n\n"
+   },
+   {
+    "t_ms": 11038.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum d\"}}\n\n"
+   },
+   {
+    "t_ms": 11065.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum d\"}}\n\n"
+   },
+   {
+    "t_ms": 11091,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo\"}}\n\n"
+   },
+   {
+    "t_ms": 11117.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\nlor\"}}\n\n"
+   },
+   {
+    "t_ms": 11154.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"l\"}}\n\n"
+   },
+   {
+    "t_ms": 11169.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dol\"}}\n\n"
+   },
+   {
+    "t_ms": 11193.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 11228.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum \"}}\n\n"
+   },
+   {
+    "t_ms": 11254.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 11299.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\nlor\"}}\n\n"
+   },
+   {
+    "t_ms": 11333.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem \"}}\n\n"
+   },
+   {
+    "t_ms": 11354.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem\"}}\n\n"
+   },
+   {
+    "t_ms": 11384.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lore\"}}\n\n"
+   },
+   {
+    "t_ms": 11431.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\n\\nlorem ipsum \"}}\n\n"
+   },
+   {
+    "t_ms": 11431.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 11462.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 11487.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum do\"}}\n\n"
+   },
+   {
+    "t_ms": 11509.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem \"}}\n\n"
+   },
+   {
+    "t_ms": 11536.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\"}}\n\n"
+   },
+   {
+    "t_ms": 11562.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem i\"}}\n\n"
+   },
+   {
+    "t_ms": 11592.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\"}}\n\n"
+   },
+   {
+    "t_ms": 11616.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ips\"}}\n\n"
+   },
+   {
+    "t_ms": 11649,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 11668.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\"}}\n\n"
+   },
+   {
+    "t_ms": 11694.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum\"}}\n\n"
+   },
+   {
+    "t_ms": 11731.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem i\"}}\n\n"
+   },
+   {
+    "t_ms": 11755.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\"}}\n\n"
+   },
+   {
+    "t_ms": 11774,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 11800.1,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dol\"}}\n\n"
+   },
+   {
+    "t_ms": 11829.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"l\"}}\n\n"
+   },
+   {
+    "t_ms": 11850.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo\"}}\n\n"
+   },
+   {
+    "t_ms": 11879.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 11904,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 11933.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem\"}}\n\n"
+   },
+   {
+    "t_ms": 11973.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ips\"}}\n\n"
+   },
+   {
+    "t_ms": 11986.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum d\"}}\n\n"
+   },
+   {
+    "t_ms": 12010.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\"}}\n\n"
+   },
+   {
+    "t_ms": 12039.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo\"}}\n\n"
+   },
+   {
+    "t_ms": 12091.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsu\"}}\n\n"
+   },
+   {
+    "t_ms": 12091.5,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\n\\nlor\"}}\n\n"
+   },
+   {
+    "t_ms": 12115.6,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\n\\nlore\"}}\n\n"
+   },
+   {
+    "t_ms": 12141.7,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lore\"}}\n\n"
+   },
+   {
+    "t_ms": 12168.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolo\"}}\n\n"
+   },
+   {
+    "t_ms": 12192.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 12247.4,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"l\"}}\n\n"
+   },
+   {
+    "t_ms": 12252.2,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n"
+   },
+   {
+    "t_ms": 12258.1,
+    "raw": "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":1344,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1016,\"output_tokens_details\":{\"thinking_tokens\":794}},\"context_management\":{\"applied_edits\":[]}}\n\n"
+   },
+   {
+    "t_ms": 12258.1,
+    "raw": "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   }
+  ]
+ },
+ "error": null
+}

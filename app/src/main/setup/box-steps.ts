@@ -1,0 +1,138 @@
+import { spawn } from "node:child_process";
+import readline from "node:readline";
+import type { Exec } from "../box-provider";
+import type { BoxStep, StepContext } from "./provisioner";
+import { adoptable, CREATED_MARKER, listMachines, machineMarks, machineSize, type MachineInfo, type MachineMarks } from "./orb";
+
+/** Runs a box script with its output streamed line by line; `::step n/N label` lines move the bar. */
+export type RunStreamed = (cmd: string, args: string[], o: { env: Record<string, string>; ctx: StepContext; timeoutMs: number }) => Promise<void>;
+
+export const runStreamed: RunStreamed = (cmd, args, o) => new Promise((resolve, reject) => {
+  const c = spawn(cmd, args, { env: { ...process.env, ...o.env }, stdio: ["ignore", "pipe", "pipe"] });
+  let tail = "";
+  const onLine = (l: string) => {
+    const m = /^::step (\d+)\/(\d+)\s*(.*)$/.exec(l.trim());
+    if (m) {
+      const n = Number(m[1]);
+      const total = Math.max(1, Number(m[2]));
+      o.ctx.progress((n - 1) / total);
+      o.ctx.line(`${m[3] || `step ${n}`} (${n}/${total})`);
+      return;
+    }
+    tail = `${tail}\n${l}`.slice(-4000);
+    o.ctx.line(l);
+  };
+  readline.createInterface({ input: c.stdout! }).on("line", onLine);
+  readline.createInterface({ input: c.stderr! }).on("line", onLine);
+  const kill = () => { try { c.kill("SIGTERM"); } catch { /* gone */ } };
+  const t = setTimeout(() => { kill(); }, o.timeoutMs);
+  o.ctx.signal.addEventListener("abort", kill, { once: true });
+  c.on("error", (e) => { clearTimeout(t); reject(e); });
+  c.on("close", (code, signal) => {
+    clearTimeout(t);
+    o.ctx.signal.removeEventListener("abort", kill);
+    if (code === 0) resolve();
+    else reject(new Error(`${signal ? `stopped (${signal})` : `exit ${code}`}${tail ? `:${tail.slice(-1500)}` : ""}`));
+  });
+});
+
+export interface BoxStepDeps {
+  exec: Exec;
+  orb(): string;
+  machine: string;
+  /** The bundled box/ folder (provision-from-mac.sh, deploy.sh, …). */
+  boxDir: string;
+  /** What the bundle provisions (bundledImageVersion) and deploys (the host build id); null = unknown. */
+  imageVersion(): string | null;
+  hostBuild(): string | null;
+  /** Reconnect the app to the host; resolves once it tried. `connected()` says whether it worked. */
+  reconnect(): Promise<void>;
+  connected(): boolean;
+  /** The app created (or recreated) the machine: its box key is new, so the old pin must go. */
+  forgetPin(): void;
+  /** This Mac, for sizing the machine. */
+  mac: { cpus: number; totalMemBytes: number };
+  run?: RunStreamed;
+}
+
+/** The five steps of "Set up the Bots' computer", each idempotent. */
+export function boxSteps(d: BoxStepDeps): BoxStep[] {
+  const run = d.run ?? runStreamed;
+  const env = () => ({ ORB: d.orb(), BOX_MACHINE: d.machine });
+  let listed: MachineInfo[] | null = null;
+  let marks: MachineMarks | null = null;
+  const machine = async (): Promise<MachineInfo | undefined> => {
+    listed = await listMachines(d.exec, d.orb());
+    return listed.find((m) => m.name === d.machine);
+  };
+  const readMarks = async (): Promise<MachineMarks> => (marks = await machineMarks(d.exec, d.orb(), d.machine));
+  const orb = async (args: string[], timeoutMs: number, what: string) => {
+    const r = await d.exec(d.orb(), args, { timeoutMs });
+    if (r.code !== 0) throw new Error(`${what}: ${(r.stderr || r.stdout).trim().slice(0, 600)}`);
+    return r;
+  };
+
+  return [
+    {
+      id: "create", label: "Creating the Bots' computer", weight: 6,
+      // Exists at all: whether it is OURS is checked before anything changes inside it (provision).
+      done: async () => !!(await machine()),
+      run: async (ctx) => {
+        if (await machine()) return;
+        const size = machineSize(d.mac);
+        ctx.line(`orb create ${d.machine} (Debian 12, ${size.cpus} CPUs, ${size.memoryMib} MiB, ${size.disk})`);
+        ctx.progress(0.1);
+        await orb(["create", "--isolated", "-a", "arm64", "--cpus", String(size.cpus), "--memory", String(size.memoryMib), "--disk", size.disk, "-u", "synapse-admin", "debian:bookworm", d.machine], 20 * 60_000, "OrbStack couldn't create the machine");
+        // Marked the moment it exists, so a retry after any later failure adopts it instead of refusing it.
+        await orb(["-m", d.machine, "-u", "root", "sh", "-c", `install -d -m 0755 /etc/bots && date -u +%FT%TZ > ${CREATED_MARKER}`], 60_000, "Couldn't mark the new machine");
+        d.forgetPin();
+        ctx.progress(1);
+      },
+    },
+    {
+      id: "start", label: "Starting the Bots' computer", weight: 2,
+      done: async () => (await machine())?.state === "running",
+      run: async () => { await orb(["start", d.machine], 5 * 60_000, "The machine didn't start"); },
+    },
+    {
+      id: "provision", label: "Installing the system software", weight: 70,
+      done: async () => {
+        const want = d.imageVersion();
+        const m = await readMarks();
+        if (!adoptable(await machine(), m)) return false;
+        return want !== null && (m.provisioned ?? m.image) === want;
+      },
+      run: async (ctx) => {
+        // A user's own machine that shares the name is never provisioned (or reset, or deleted).
+        if (!adoptable(await machine(), marks ?? (await readMarks()))) {
+          throw new Error(`A machine called "${d.machine}" already exists in OrbStack and wasn't made by Synapse. Synapse won't touch it. Rename or delete it in OrbStack, then retry.`);
+        }
+        await run("/bin/bash", [`${d.boxDir}/provision-from-mac.sh`], { env: env(), ctx, timeoutMs: 60 * 60_000 });
+        marks = null;
+      },
+    },
+    {
+      id: "deploy", label: "Installing the Bots' software", weight: 17,
+      done: async () => {
+        const want = d.hostBuild();
+        const m = marks ?? (await readMarks());
+        return want !== null && m.hostBuild === want && m.gateway;
+      },
+      run: async (ctx) => {
+        await run("/bin/bash", [`${d.boxDir}/deploy.sh`], { env: env(), ctx, timeoutMs: 20 * 60_000 });
+      },
+    },
+    {
+      id: "connect", label: "Connecting", weight: 5,
+      done: async () => d.connected(),
+      run: async (ctx) => {
+        for (let i = 0; i < 3 && !d.connected(); i++) {
+          ctx.progress(i / 3);
+          await d.reconnect();
+          if (!d.connected()) await new Promise((r) => setTimeout(r, 2_000));
+        }
+        if (!d.connected()) throw new Error("The host did not start (no gateway connection).");
+      },
+    },
+  ];
+}

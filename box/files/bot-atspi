@@ -1,0 +1,19 @@
+#!/bin/sh
+# Root-owned. Live perception (decisions.md 2026-09-21): dump display :N's accessibility tree (AT-SPI) as JSON.
+# Runs the read-only dump as box, who owns that display's accessibility bus (bothost cannot join it).
+# Usage: bot-atspi <display-number>
+set -eu
+[ "${SUDO_USER:-}" = "bothost" ] || { echo "bot-atspi: must be invoked by bothost via sudo" >&2; exit 126; }
+n="${1:-}"
+case "$n" in ''|*[!0-9]*) echo "bot-atspi: bad display" >&2; exit 2;; esac
+[ -r "/run/bot-x/$n.xauth" ] || { echo "bot-atspi: display :$n is not running" >&2; exit 3; }
+# DBUS_SESSION_BUS_ADDRESS=disabled: stops libdbus autolaunching a stray session bus; libatspi finds the
+# accessibility bus through the AT_SPI_BUS root-window property that at-spi-bus-launcher sets per display.
+# Bug #66: the display's owner (/run/bot-x/<N>.user, written by bot-display) owns its accessibility bus; else box.
+u=box; h=/home/box; uf=/run/bot-x/$n.user; X='[0-9a-f]'
+if [ -f "$uf" ] && [ ! -L "$uf" ]; then
+  a="$(cat "$uf")"
+  case "$a" in bot-$X$X$X$X$X$X$X$X$X$X$X$X) getent passwd "$a" >/dev/null && { u="$a"; h="/home/bots/$a"; } ;; esac
+fi
+exec runuser -u "$u" -- env -i DISPLAY=":$n" XAUTHORITY="/run/bot-x/$n.xauth" HOME="$h" PATH=/usr/bin:/bin \
+  DBUS_SESSION_BUS_ADDRESS=disabled: timeout 8 python3 /usr/local/lib/bots/atspi-dump.py

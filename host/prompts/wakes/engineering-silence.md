@@ -1,0 +1,1 @@
+<system_reminder>You have been working quietly for a while. Add one short progress line via SendMessage in the same response as your next tool call — never a response that only sends that update by itself.</system_reminder>

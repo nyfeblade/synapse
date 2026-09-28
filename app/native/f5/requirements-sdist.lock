@@ -1,0 +1,3 @@
+# The cloned-voices (F5) pack, pass 2 of 2: jieba ships no wheel, so it is built from its pinned source archive
+# with the setuptools pass 1 installed (--no-build-isolation: nothing else is fetched to build it).
+jieba==0.42.1 --hash=sha256:055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Embedded in the helper binary. Spawned by Synapse.app, the APP is the TCC responsible process and its
+     Info.plist (scripts/info-plist.mjs) supplies the prompts; these mirror them for a helper run on its own. -->
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>com.nyfeblade.synapse.dictation</string>
+  <key>CFBundleName</key><string>Synapse Dictation</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Synapse turns your speech into text on this Mac for dictation.</string>
+  <key>NSMicrophoneUsageDescription</key><string>Synapse uses the microphone for dictation and voice conversations with your Bots.</string>
+</dict></plist>

@@ -1,0 +1,40 @@
+{"text":"every weekday morning at 7:30","expected":"30 7 * * 1-5"}
+{"text":"at half past eight every day","expected":"30 8 * * *"}
+{"text":"quarter past nine on weekdays","expected":"15 9 * * 1-5"}
+{"text":"every sunday evening at 8","expected":"0 20 * * 0"}
+{"text":"on the 5th of each month at 10 in the morning","expected":"0 10 5 * *"}
+{"text":"every day at quarter to six in the evening","expected":"45 17 * * *"}
+{"text":"each workday at 9","expected":"0 9 * * 1-5"}
+{"text":"every two weeks on monday at 9am","expected":"RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO;BYHOUR=9;BYMINUTE=0"}
+{"text":"every three hours","expected":"0 */3 * * *"}
+{"text":"every twenty minutes","expected":"*/20 * * * *"}
+{"text":"hourly on weekdays","expected":"0 * * * 1-5"}
+{"text":"every hour between 9am and 5pm","expected":"0 9-17 * * *"}
+{"text":"first of the month at 8am","expected":"0 8 1 * *"}
+{"text":"every friday afternoon at 3","expected":"0 15 * * 5"}
+{"text":"every weekend morning at 9","expected":"0 9 * * 0,6"}
+{"text":"each night at 11","expected":"0 23 * * *"}
+{"text":"every evening at 6","expected":"0 18 * * *"}
+{"text":"on the last friday of each month at 5 in the afternoon","expected":"RRULE:FREQ=MONTHLY;BYDAY=-1FR;BYHOUR=17;BYMINUTE=0"}
+{"text":"every 2nd and 4th tuesday at noon","expected":"RRULE:FREQ=MONTHLY;BYDAY=2TU,4TU;BYHOUR=12;BYMINUTE=0"}
+{"text":"every thirty minutes","expected":"*/30 * * * *"}
+{"text":"every other monday at 8 in the morning","expected":"RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO;BYHOUR=8;BYMINUTE=0"}
+{"text":"mid-month on the 15th at noon","expected":"0 12 15 * *"}
+{"text":"each weekday at a quarter past 8","expected":"15 8 * * 1-5"}
+{"text":"every monday through friday at 6:45 am","expected":"45 6 * * 1-5"}
+{"text":"tuesdays through thursdays at 4pm","expected":"0 16 * * 2-4"}
+{"text":"every day at 7 in the morning and 7 in the evening","expected":"0 7,19 * * *"}
+{"text":"every four hours starting at midnight","expected":"0 */4 * * *"}
+{"text":"every twelve hours","expected":"0 */12 * * *"}
+{"text":"every weekday at five thirty pm","expected":"30 17 * * 1-5"}
+{"text":"on the first business day of each month at 9","expected":"RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=1;BYHOUR=9;BYMINUTE=0"}
+{"text":"on new year's day at noon","expected":"0 12 1 1 *"}
+{"text":"every day except weekends at 8","expected":"0 8 * * 1-5"}
+{"text":"every morning and evening at 8","expected":"0 8,20 * * *"}
+{"text":"on weekdays at nine","expected":"0 9 * * 1-5"}
+{"text":"every thursday at half past two in the afternoon","expected":"30 14 * * 4"}
+{"text":"at the start of every hour","expected":"0 * * * *"}
+{"text":"every hour on the half hour","expected":"30 * * * *"}
+{"text":"sunday lunchtime at 12:30","expected":"30 12 * * 0"}
+{"text":"every 3rd of the month at 7am","expected":"0 7 3 * *"}
+{"text":"every day at 5 past 9","expected":"5 9 * * *"}

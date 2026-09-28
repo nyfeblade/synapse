@@ -1,0 +1,11 @@
+[Unit]
+Description=Bots: hide other uids' processes (/proc hidepid=invisible, procview sees all) -- bug #66
+DefaultDependencies=no
+After=local-fs.target
+Before=bothost.service bot-display@.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/lib/bots/proc-hidepid on
+[Install]
+WantedBy=multi-user.target

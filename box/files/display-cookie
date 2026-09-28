@@ -1,0 +1,23 @@
+#!/bin/sh
+# Root-owned. Fresh MIT cookie for display :N, readable by box (Xvfb, Chromium) and group bots (bothost's xdotool/ffmpeg/x11vnc).
+# Spike fix (phase3-spike-findings.md S3-02/xauth): `xauth add`, run as box, atomically rewrites the cookie file and
+# resets it to box:box 0600 -- clobbering the group-read bit. Re-apply chown/chmod AFTER xauth add, not only before.
+set -eu
+n="$1"; case "$n" in ''|*[!0-9]*) exit 2;; esac
+f=/run/bot-x/$n.xauth
+install -d -o root -g bots -m 0750 /run/bot-x   # secfix round 3 (ruling 1): root-owned, box can't plant a link here
+[ ! -L "$f" ] || { echo "display-cookie: cookie file is a symlink" >&2; exit 2; }
+rm -f "$f" "$f-c" "$f-l"
+# `xauth add` creates its working copy and lock link next to the cookie ("$f-c", "$f-l"), so it needs write
+# permission on /run/bot-x -- which box lost in secfix round 3 (ruling 1): as box it now fails with "timeout in
+# locking authority file" and the display never starts. Mint it as root instead: the directory is root-owned 0750
+# and "$f" is checked not to be a symlink just above, so nothing box-controlled is followed. Hand it to box after.
+xauth -q -f "$f" add ":$n" . "$(mcookie)"
+# Bug #66: a display bot-display started for a Bot account belongs to that account, and only bothost (its group)
+# may read the cookie besides it -- never another Bot through the bots group. Otherwise box:bots, as before.
+own=box:bots; uf=/run/bot-x/$n.user; X='[0-9a-f]'
+if [ -f "$uf" ] && [ ! -L "$uf" ]; then
+  a="$(cat "$uf")"
+  case "$a" in bot-$X$X$X$X$X$X$X$X$X$X$X$X) getent passwd "$a" >/dev/null && own="$a:bothost" ;; esac
+fi
+chown "$own" "$f"; chmod 0640 "$f"

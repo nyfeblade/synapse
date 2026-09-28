@@ -1,0 +1,3 @@
+#!/bin/sh
+# pathToClaudeCodeExecutable for every Bot session (ORIG-13 §13.6 step 1). Runs as bothost.
+exec sudo -n /usr/local/libexec/bot-claude-as-box "$@"

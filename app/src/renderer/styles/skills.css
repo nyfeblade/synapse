@@ -1,0 +1,35 @@
+/* Marketplace frame (board frame Marketplace.dc.html) and Private skills rows (SKL-05, UI-10). */
+/* .modal-head is already defined identically in app.css; .tabs/.tab/.mono/.clamp2 are scoped under
+   .modal.market below so this feature's sizing doesn't leak into other .tab/.mono/.clamp2 users
+   (e.g. AvatarEditor's tabs) — app.css's base rules for those classes stay untouched. */
+.modal.market {width:800px;height:820px;max-height:calc(100vh - 40px);border-radius: var(--radius-surface);display:flex;flex-direction:column}
+.modal.market .tabs{display:flex;align-items:center;gap:8px;padding:0 16px 12px 28px}
+/* 6px 6px 0 0, not a 15px pill: `box-shadow: inset 0 -2px 0` follows the radius, so a pill radius
+   painted the selected underline as a curved arc under the label instead of a rule. */
+.modal.market .tab{height:30px;padding:0 12px;border-radius:var(--radius-xs) var(--radius-xs) 0 0;border:none;background:transparent;color:var(--ink-muted)}
+/* No fill: app.css's `.tabs [aria-selected="true"]` already draws the underline on this very
+   element, and a filled pill under that underline is the same two-designs-at-once the avatar
+   editor had. Colour only; the underline is the selected marker. */
+.modal.market .tab.selected{color:var(--ink)}
+.plain-list{list-style:none;margin:0;padding:0}
+.skills{overflow:auto;padding:0 16px 16px 28px}
+.skill-row{display:grid;grid-template-columns:1fr auto auto;gap:6px 10px;padding:12px 0;border-bottom:var(--hairline) solid var(--line-row)}
+.skill-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.skill-name{font-size:14px}
+.modal.market .clamp2{font-size:13px}
+.skill-bots{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 14px}
+.skill-bot{display:flex;align-items:center;gap:6px;font-size:12px}
+.skill-editor{display:flex;flex-direction:column;gap:10px;padding:0 28px 16px;flex-grow:1;overflow:auto}
+.modal.market .mono{font-family:var(--mono);font-size:13px}
+.pad{padding:8px 28px}
+.file-btn{display:inline-flex;align-items:center}
+
+/* Interaction states for the Marketplace tabs and the import-folder label-button. */
+.modal.market .tab, .file-btn { transition: background-color var(--motion-tap), border-color var(--motion-tap), color var(--motion-tap); }
+.modal.market .tab:not(:disabled):hover { background-color: var(--fill-hover); color: var(--ink); }
+.modal.market .tab:not(:disabled):active { background-color: var(--fill-press); color: var(--ink); }
+.modal.market .tab.selected:not(:disabled):hover { background-color: var(--fill-selected-hover); }
+.modal.market .tab.selected:not(:disabled):active { background-color: var(--fill-selected-press); }
+.file-btn:hover { background-color: var(--fill-hover); border-color: var(--line-button-hover); }
+.file-btn:active { background-color: var(--fill-press); }
+.modal.market .tab:focus-visible, .file-btn:focus-within, .file-btn:focus-visible { outline: 3px solid var(--focus-ring-soft); outline-offset: 2px; }

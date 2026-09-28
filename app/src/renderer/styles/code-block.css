@@ -1,0 +1,82 @@
+/* Code cards (CodeBlock.tsx) — the reference design's fenced-block card and inline chip, in this app's
+   neutral grey/white/black look: soft fills, no outlines, SF Mono via --mono.
+   bug 198: the card itself (`.code-card` and friends) is no longer scoped to `.bubble.bot` — a Bot's
+   markdown is still the only place `.inline-code` and the markdown-specific rules further down apply,
+   but the CARD is reused verbatim inside `.activity .steps` (ActivityGroup.tsx / StepBody.tsx) for a
+   Read/Write/Edit/Bash step's own content, which lives outside any bubble. */
+
+.bubble.bot .inline-code { font-family: var(--mono); font-size: 0.92em; padding: 1px 5px; border-radius: var(--radius-xs); background: var(--fill-soft); color: var(--ink); }
+
+.code-card { margin: 8px 0 0; border-radius: var(--radius-card); background: var(--fill-group); overflow: hidden; }
+.code-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 14px; }
+.code-card-lang { font-size: var(--type-small); color: var(--ink-faint); }
+.code-card-head .icon-btn { width: 24px; height: 24px; border-radius: var(--radius-xs); }
+.code-card-body { position: relative; }
+.code-card-pre { margin: 0; padding: 0 14px 10px; overflow-x: auto; white-space: pre; tab-size: 2; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); }
+.code-card-pre code { font-family: inherit; }
+/* The "there's more" hint on a collapsed card: a soft fade over the last two lines, not a hard cut. */
+.code-card-body.is-collapsed::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 32px; border-radius: 0 0 var(--radius-card) var(--radius-card); background: linear-gradient(to bottom, transparent, var(--fill-group)); pointer-events: none; }
+.code-card .code-card-toggle.card-link { display: block; width: 100%; padding: 6px 14px 10px; font-size: var(--type-small); font-weight: 400; color: var(--ink-faint); text-align: left; }
+/* A newly-revealed tail (Show all N lines) pops in like any other transcript entrance — never a
+   height/max-height transition, which `interaction-states.test.ts` bans as a layout property. The
+   universal `@media (prefers-reduced-motion: reduce)` block (app.css) already collapses this to an
+   instant, opacity-only appearance, the same way it already does for `.steps .step`. */
+.code-card-more { animation: step-in var(--motion-enter) backwards; }
+
+.code-file-card { margin-top: 8px; }
+.code-file-card .code-card { margin-top: 8px; border-top: var(--hairline) solid var(--line-card); border-radius: 0 0 var(--radius-card) var(--radius-card); }
+
+/* bug 198: a step's own cards — Read/Write get the plain `.code-card` above; Bash gets a compact
+   one-line command card plus an output card underneath; Edit gets the diff card below. All of them
+   sit inside `.step-body`, which only exists in the DOM once that specific step row is expanded
+   (ActivityGroup.tsx) — never pre-rendered for a closed step, however long its body is. */
+/* bug 198 fix round 1 (finding 4): `.step` is a flex row (app.css) so the icon and the summary sit
+   side by side; `.step-body` is a second item in that SAME row, so without an explicit full-width
+   claim of its own it sat beside the summary rather than below it. `flex-basis: 100%` on a
+   `flex-wrap: wrap` container (app.css's `.step`) is the standard way to force a flex item onto its
+   own line; `box-sizing: border-box` + `padding-left` (not a LEFT MARGIN, which sits outside a
+   percentage width and would push the card past the container's own right edge) gives it the same
+   ~20px indent under the icon+summary without ever overflowing. */
+.step-body { flex: 1 0 100%; width: 100%; box-sizing: border-box; padding-left: 20px; margin: 6px 0 2px; animation: step-in var(--motion-enter) backwards; }
+.step-body .step-body-note { margin-top: 4px; }
+.step-body .code-card + .code-card { margin-top: 6px; }
+/* bug 198 fix round 2 (re-check of 9bb055e6), finding 3: nested one level inside `.activity`'s own
+   `--fill-group` backdrop (app.css), a step's card used that SAME token for its own surface — two
+   identical fills stacked read as no box at all, exactly the "code not in a box" complaint this whole
+   bug is about. `--fill-inset` is already this app's token for "a card that has to read as a card
+   sitting on a --fill-group backdrop" (code-file-card's own nested code-card already leans on a
+   hairline the same way); a hairline all the way round is what actually carries the "box" reading in
+   both themes, since fill-group/fill-inset alone are close enough in light mode to read as flat. Only
+   the DIRECT children of `.step-body` get this — a `.code-card` nested a level deeper inside a
+   `.code-file-card` (a long body's expanded content) keeps reading as part of that one unit, same as
+   it already does in a Bot's own reply. Minimal, no shadow, no glow. */
+.step-body > .code-card, .step-body > .file-card {
+  background: var(--fill-inset);
+  border: var(--hairline) solid var(--line-card);
+}
+.step-body > .code-card .code-card-body.is-collapsed::after { background: linear-gradient(to bottom, transparent, var(--fill-inset)); }
+.step-toggle { display: flex; align-items: center; gap: 6px; width: 100%; border: none; background: transparent; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; }
+.step-toggle .step-text { flex: 1; min-width: 0; }
+
+/* Diff lines: neutral greys only (no red/green) — an addition is full --ink, a removal is --ink-faint
+   with a strikethrough, context sits at the code card's ordinary --ink. Each line keeps its own
+   leading +/-/space marker in `--ink-faint` so the shape of the diff reads even without colour. */
+.diff-lines { margin: 0; padding: 0 14px 10px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.55; }
+.diff-line { display: flex; gap: 8px; white-space: pre; }
+.diff-line .diff-marker { flex-shrink: 0; width: 1ch; color: var(--ink-faint); user-select: none; }
+.diff-line.diff-ctx { color: var(--ink-muted); }
+.diff-line.diff-add { color: var(--ink); }
+.diff-line.diff-del { color: var(--ink-faint); text-decoration: line-through; }
+
+/* GFM tables: a scroll container of their own, never the page — Transcript.tsx's `table` override. */
+.bubble.bot .table-scroll { max-width: 100%; overflow-x: auto; }
+
+/* Headings and quotes inside a reply read as part of the message, not a separate document: scaled
+   down from the browser default, spaced like the paragraphs/lists around them (app.css's existing
+   `.bubble.bot p + p, .bubble.bot ul, .bubble.bot ol, .bubble.bot table { margin-top: 6px }`). */
+.bubble.bot h1, .bubble.bot h2 { margin: 10px 0 0; font-size: var(--type-title); font-weight: 600; line-height: 1.3; }
+.bubble.bot h3, .bubble.bot h4, .bubble.bot h5, .bubble.bot h6 { margin: 8px 0 0; font-size: var(--type-body); font-weight: 600; line-height: 1.3; }
+.bubble.bot h1 + *, .bubble.bot h2 + *, .bubble.bot h3 + *, .bubble.bot h4 + *, .bubble.bot h5 + *, .bubble.bot h6 + * { margin-top: 4px; }
+.bubble.bot ul, .bubble.bot ol { padding-left: 22px; }
+.bubble.bot li + li { margin-top: 2px; }
+.bubble.bot blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 2px solid var(--line-card); color: var(--ink-2); }

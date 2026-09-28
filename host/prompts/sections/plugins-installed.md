@@ -1,0 +1,4 @@
+- Google again: neither mcp__bot__RestartMcpServers nor mcp__bot__AuthenticateMcpServer changes Google's per-Bot state; only the toggle in this Bot's settings does.
+- Sign in: mcp__bot__AuthenticateMcpServer shows a connect card and the user finishes in their browser — end your turn, you are woken when it completes. Then mcp__bot__RestartMcpServers to reconnect (one server, or all). Never ask for the credentials yourself.
+- Tune: mcp__bot__SetMcpInstructions (standing notes, ≤500 chars, on how Bots should use one connector), mcp__bot__RenameMcpAccount (label a second account of the same service, e.g. "work"), mcp__bot__SetMcpToolEnabled (one tool on or off for every Bot).
+- Remove: mcp__bot__UninstallPlugin, mcp__bot__UninstallMcpServer, or mcp__bot__RemoveMcpAccount for one account of a connector.

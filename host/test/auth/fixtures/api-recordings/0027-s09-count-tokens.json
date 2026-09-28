@@ -1,0 +1,454 @@
+{
+ "scenario": "s09-count-tokens",
+ "seq": 27,
+ "request": {
+  "method": "POST",
+  "path": "/v1/messages/count_tokens?beta=true",
+  "auth": "oauth-access-token (authorization header)",
+  "headers": {
+   "accept": "application/json",
+   "content-type": "application/json",
+   "user-agent": "claude-cli/2.1.283 (external, sdk-cli)",
+   "x-claude-code-session-id": "<redacted>",
+   "x-stainless-arch": "arm64",
+   "x-stainless-lang": "js",
+   "x-stainless-os": "MacOS",
+   "x-stainless-package-version": "0.112.1",
+   "x-stainless-retry-count": "0",
+   "x-stainless-runtime": "node",
+   "x-stainless-runtime-version": "v26.3.0",
+   "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,token-counting-2024-11-01",
+   "anthropic-dangerous-direct-browser-access": "true",
+   "anthropic-version": "2023-06-01",
+   "x-app": "cli",
+   "connection": "keep-alive",
+   "host": "127.0.0.1:8787",
+   "accept-encoding": "gzip, deflate, br, zstd",
+   "content-length": "40839"
+  },
+  "dropped_headers": [
+   "authorization"
+  ],
+  "body_bytes_original": 40839,
+  "body_kind": "json",
+  "body": {
+   "model": "claude-sonnet-5",
+   "messages": [
+    {
+     "role": "user",
+     "content": "lor"
+    }
+   ],
+   "tools": [
+    {
+     "name": "Agent",
+     "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo\n\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \n\nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\n\nt lorem ipsum dolo\n\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \n\nsit amet lorem\n\n ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \nipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\nt amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dol\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsu\nm dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lore\nm ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\n\nt lorem ipsum dolor s\n\nit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\nsum dolor sit amet lorem ipsum dolor sit amet lorem\n ipsum dolor sit amet lorem ipsum dolor sit amet lor\nem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem i\npsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor\n\nem ipsum dolor sit amet lorem ipsum dolor sit amet lorem i\n\npsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\n\nolor sit amet \n\nlorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l\norem ip\nsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\nit\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsu\nm dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit a\nmet lorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem \nipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem\n\n ipsum do\nlor sit amet lorem ipsum dolor sit ame\nt lorem ipsu\nm dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor\nem ipsum dolo\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\nsum dolor \n\nsit amet \nlorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsu\nm dolor\n sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lorem ipsum dol\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndo\nlor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsu\nm dolor si\n",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "description": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dol",
+        "type": "string"
+       },
+       "prompt": {
+        "description": "lorem ipsum dolor sit amet lorem ",
+        "type": "string"
+       },
+       "subagent_type": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit a",
+        "type": "string"
+       },
+       "model": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem i",
+        "type": "string",
+        "enum": [
+         "sonnet",
+         "opus",
+         "haiku",
+         "fable"
+        ]
+       },
+       "run_in_background": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo",
+        "type": "boolean"
+       },
+       "isolation": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem",
+        "type": "string",
+        "enum": [
+         "worktree",
+         "remote"
+        ]
+       }
+      },
+      "required": [
+       "description",
+       "prompt"
+      ],
+      "additionalProperties": false
+     }
+    },
+    {
+     "name": "Bash",
+     "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\n\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\n\net lorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit a\nmet lorem ipsum dolor sit amet lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \n\ndolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lore\nm ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lore\nm ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\nt amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lo\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet \nlorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\nsum dolor sit amet lorem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\nsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor\nem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit a\nmet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l\norem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit a\n\n\nmet lorem ipsum dolor sit ame\n\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\n\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\n\num dolor sit amet lo\nrem ipsum dolor sit amet lore\nm ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lore\nm ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit a\nmet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \n\nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsu\nm dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \nipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit a\nmet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\n dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo\n\nrem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem \nipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\nsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem\n ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem\n ipsum do\nlor sit amet lorem ipsum dol\nor sit amet lorem ipsum\n dolor\n sit \namet lorem\n\n ipsum dolor sit amet lo\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \n\nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \nipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem i\npsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem ipsum dol\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem\n ipsum dolor sit amet lorem ipsu\nm dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem\n ipsum do\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor\n sit amet \nlorem ipsum dolor s\n\nit amet lore\nm ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\nt a\nme\nt lorem ip\n\nsum dolor \nsit amet lorem ipsum dolor sit amet lorem \nipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \n\ndolor sit amet lorem ipsu\nm dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet ",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "command": {
+        "description": "lorem ipsum dolor sit ",
+        "type": "string"
+       },
+       "timeout": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor ",
+        "type": "number"
+       },
+       "description": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\n\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo\n\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet \nlorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit amet \nlorem ipsum dolor sit amet lorem ipsum dolor s\n\nit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\nt amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit a",
+        "type": "string"
+       },
+       "run_in_background": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit a",
+        "type": "boolean"
+       },
+       "dangerouslyDisableSandbox": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips",
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "command"
+      ],
+      "additionalProperties": false
+     }
+    },
+    {
+     "name": "Edit",
+     "description": "lorem ipsum dolor sit amet lorem ipsum dolor\n\n sit a\nmet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "file_path": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum ",
+        "type": "string"
+       },
+       "old_string": {
+        "description": "lorem ipsum dolor s",
+        "type": "string"
+       },
+       "new_string": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips",
+        "type": "string"
+       },
+       "replace_all": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet",
+        "default": false,
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "file_path",
+       "old_string",
+       "new_string"
+      ],
+      "additionalProperties": false
+     }
+    },
+    {
+     "name": "ListAgents",
+     "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "channel": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum do",
+        "type": "string",
+        "maxLength": 256
+       },
+       "q": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum do",
+        "type": "string",
+        "maxLength": 256
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "name": "Read",
+     "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\n\nit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dol\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet \nlorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lore\nm ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "file_path": {
+        "description": "lorem ipsum dolor sit amet lorem ipsu",
+        "type": "string"
+       },
+       "offset": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum",
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+       },
+       "limit": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo",
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991
+       },
+       "pages": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem",
+        "type": "string"
+       }
+      },
+      "required": [
+       "file_path"
+      ],
+      "additionalProperties": false
+     }
+    },
+    {
+     "name": "ReportFindings",
+     "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem i",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "level": {
+        "description": "lorem ipsum dolor sit amet lor",
+        "type": "string",
+        "enum": [
+         "low",
+         "medium",
+         "high",
+         "xhigh",
+         "max"
+        ]
+       },
+       "findings": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ",
+        "maxItems": 32,
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "file": {
+           "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit",
+           "type": "string"
+          },
+          "line": {
+           "description": "lorem ipsum dolor sit amet lorem ipsu",
+           "type": "integer",
+           "minimum": -9007199254740991,
+           "maximum": 9007199254740991
+          },
+          "summary": {
+           "description": "lorem ipsum dolor sit amet lorem ips",
+           "type": "string"
+          },
+          "short_summary": {
+           "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dol",
+           "type": "string",
+           "maxLength": 60
+          },
+          "failure_scenario": {
+           "description": "lorem ipsum dolor sit amet lorem ipsum dol",
+           "type": "string"
+          },
+          "category": {
+           "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo",
+           "type": "string",
+           "maxLength": 40
+          },
+          "verdict": {
+           "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor",
+           "type": "string",
+           "enum": [
+            "CONFIRMED",
+            "PLAUSIBLE"
+           ]
+          },
+          "outcome": {
+           "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am",
+           "type": "string",
+           "enum": [
+            "fixed",
+            "skipped",
+            "no_change_needed"
+           ]
+          }
+         },
+         "required": [
+          "file",
+          "summary",
+          "failure_scenario"
+         ],
+         "additionalProperties": false
+        }
+       }
+      },
+      "required": [
+       "findings"
+      ],
+      "additionalProperties": false
+     }
+    },
+    {
+     "name": "ScheduleWakeup",
+     "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo\n\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit\n\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo\n\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \n\nsit amet lorem ipsum do\n\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\n\nolor sit amet lorem ipsum dolor sit amet lorem ipsum\n\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet \nlorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\n\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\n\nt amet lorem ipsum \n\ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\n",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "delaySeconds": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor",
+        "type": "number"
+       },
+       "reason": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l",
+        "type": "string"
+       },
+       "prompt": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lore",
+        "type": "string"
+       },
+       "stop": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s",
+        "type": "boolean"
+       },
+       "noop": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsu",
+        "type": "boolean"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "name": "Skill",
+     "description": "lorem ipsum dol\n\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \n\nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dol\n\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem\n",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "skill": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor",
+        "type": "string"
+       },
+       "args": {
+        "description": "lorem ipsum dolor sit amet lorem",
+        "type": "string"
+       }
+      },
+      "required": [
+       "skill"
+      ],
+      "additionalProperties": false
+     }
+    },
+    {
+     "name": "Workflow",
+     "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\n\nt amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip\nsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lore\nm ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit\n\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \n\nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \n\ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor\n sit amet lorem ipsum d\nolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndol\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dol\nor sit amet lorem ipsum dolor sit\n amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit a\nmet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lore\nm ipsum dolor sit amet lorem ipsum dolor\n sit a\nmet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit\n amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dol\n\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo\n\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "script": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor ",
+        "type": "string",
+        "maxLength": 524288
+       },
+       "name": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am",
+        "type": "string"
+       },
+       "description": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do",
+        "type": "string"
+       },
+       "title": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip",
+        "type": "string"
+       },
+       "args": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsu"
+       },
+       "scriptPath": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem",
+        "type": "string"
+       },
+       "resumeFromRunId": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip",
+        "type": "string",
+        "pattern": "^wf_[a-z0-9-]{6,}$"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "name": "Write",
+     "description": "lorem ipsum dolor sit amet lorem ipsum\n\n dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lore\nm ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l\norem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "file_path": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor",
+        "type": "string"
+       },
+       "content": {
+        "description": "lorem ipsum dolor sit amet lorem",
+        "type": "string"
+       }
+      },
+      "required": [
+       "file_path",
+       "content"
+      ],
+      "additionalProperties": false
+     }
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "headers": {
+   "date": "Sat, 26 Sep 2026 01:48:14 GMT",
+   "content-type": "application/json",
+   "transfer-encoding": "chunked",
+   "connection": "keep-alive",
+   "anthropic-workspace-id": "<redacted>",
+   "vary": "Accept-Encoding",
+   "content-encoding": "br",
+   "server": "cloudflare",
+   "server-timing": "x-originResponse;dur=64",
+   "cf-cache-status": "<redacted>",
+   "x-robots-tag": "none",
+   "content-security-policy": "default-src 'none'; frame-ancestors 'none'"
+  },
+  "dropped_headers": [
+   "request-id",
+   "anthropic-organization-id",
+   "cf-ray"
+  ],
+  "ttfb_ms": 531.5,
+  "total_ms": 531.7,
+  "chunk_timing": [
+   {
+    "t_ms": 531.5,
+    "bytes": 26
+   }
+  ],
+  "kind": "json",
+  "body": {
+   "input_tokens": 14617
+  }
+ },
+ "error": null
+}

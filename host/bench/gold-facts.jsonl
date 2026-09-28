@@ -1,0 +1,412 @@
+{"subject":"Fesatis","relation":"indemnity cap","object":"$7,000,000","valid_from":"2021-09-26","cardinality":"one","evidence":"doc:d004#p102"}
+{"subject":"Vefeworth","relation":"termination notice period","object":"120 days","valid_from":"2021-10-01","cardinality":"one","evidence":"doc:d026#p24"}
+{"subject":"Sanoworth","relation":"ticket number","object":"RM-5553","valid_from":"2021-10-06","cardinality":"one","evidence":"turn:2021-10-06#t3"}
+{"subject":"Haravex","relation":"indemnity cap","object":"$7,000,000","valid_from":"2021-10-13","cardinality":"one","evidence":"doc:d036#p4"}
+{"subject":"Hafebry","relation":"offsite city","object":"Bergen","valid_from":"2021-10-28","cardinality":"many","evidence":"turn:2021-10-28#t1"}
+{"subject":"Sararik","relation":"account owner","object":"Julia Brandt","valid_from":"2021-10-31","cardinality":"one","evidence":"turn:2021-10-31#t1"}
+{"subject":"Tolubry","relation":"new hire","object":"Julia Brandt","valid_from":"2021-11-01","cardinality":"many","evidence":"turn:2021-11-01#t3"}
+{"subject":"Kadevar","relation":"offsite city","object":"Hobart","valid_from":"2021-11-03","cardinality":"many","evidence":"turn:2021-11-03#t3"}
+{"subject":"Vetosor","relation":"offsite city","object":"Tallinn","valid_from":"2021-11-03","cardinality":"many","evidence":"turn:2021-11-03#t9"}
+{"subject":"Bahasor","relation":"new hire","object":"Leo Martins","valid_from":"2021-11-09","cardinality":"many","evidence":"turn:2021-11-09#t5"}
+{"subject":"Geyolek","relation":"supplier","object":"Bluefin","valid_from":"2021-11-14","cardinality":"many","evidence":"turn:2021-11-14#t15"}
+{"subject":"Qulugar","relation":"supplier","object":"Northwind","valid_from":"2021-11-21","cardinality":"many","evidence":"turn:2021-11-21#t5"}
+{"subject":"Saquvex","relation":"headcount","object":"23 people","valid_from":"2021-11-24","cardinality":"one","evidence":"turn:2021-11-24#t1"}
+{"subject":"Rafelor","relation":"budget","object":"$25,000","valid_from":"2021-11-25","cardinality":"one","evidence":"turn:2021-11-25#t1"}
+{"subject":"Tozipel","relation":"point of contact","object":"Julia Brandt","valid_from":"2021-11-29","cardinality":"one","evidence":"turn:2021-11-29#t3"}
+{"subject":"Vequpel","relation":"termination notice period","object":"90 days","valid_from":"2021-12-12","cardinality":"one","evidence":"doc:d015#p149"}
+{"subject":"Bafenix","relation":"point of contact","object":"Priya Shah","valid_from":"2021-12-12","cardinality":"one","evidence":"turn:2021-12-12#t17"}
+{"subject":"Halumund","relation":"offsite city","object":"Montreal","valid_from":"2021-12-18","cardinality":"many","evidence":"turn:2021-12-18#t19"}
+{"subject":"Denomund","relation":"headcount","object":"51 people","valid_from":"2021-12-19","cardinality":"one","evidence":"turn:2021-12-19#t3"}
+{"subject":"Basarik","relation":"liability ceiling","object":"$8,750,000","valid_from":"2021-12-19","cardinality":"one","evidence":"doc:d024#p26"}
+{"subject":"Febalek","relation":"supplier","object":"Stonebridge","valid_from":"2021-12-20","cardinality":"many","evidence":"turn:2021-12-20#t5"}
+{"subject":"Qulugar","relation":"supplier","object":"Westbrook","valid_from":"2021-12-26","cardinality":"many","evidence":"turn:2021-12-26#t9"}
+{"subject":"Karavar","relation":"headcount","object":"39 people","valid_from":"2021-12-28","cardinality":"one","evidence":"turn:2021-12-28#t5"}
+{"subject":"Gehavex","relation":"account owner","object":"Rafael Ortiz","valid_from":"2021-12-30","cardinality":"one","evidence":"turn:2021-12-30#t7"}
+{"subject":"Kaluton","relation":"account owner","object":"Leo Martins","valid_from":"2022-01-04","cardinality":"one","evidence":"turn:2022-01-04#t1"}
+{"subject":"Lulupel","relation":"supplier","object":"Brightpath","valid_from":"2022-01-07","cardinality":"many","evidence":"turn:2022-01-07#t5"}
+{"subject":"Gemizen","relation":"renewal date","object":"11 October","valid_from":"2022-01-13","cardinality":"one","evidence":"turn:2022-01-13#t15"}
+{"subject":"Rasaworth","relation":"liability ceiling","object":"$5,000,000","valid_from":"2022-01-13","cardinality":"one","evidence":"doc:d013#p152"}
+{"subject":"Tozirik","relation":"retainer","object":"$8,000 a month","valid_from":"2022-01-16","cardinality":"one","evidence":"turn:2022-01-16#t9"}
+{"subject":"Tohazen","relation":"room booking","object":"FIN-9047","valid_from":"2022-01-17","cardinality":"one","evidence":"turn:2022-01-17#t5"}
+{"subject":"Miqulor","relation":"budget","object":"$23,500 a month","valid_from":"2022-01-24","cardinality":"one","evidence":"turn:2022-01-24#t1"}
+{"subject":"Tofeworth","relation":"retainer","object":"$30,000","valid_from":"2022-01-26","cardinality":"one","evidence":"turn:2022-01-26#t7"}
+{"subject":"Noratis","relation":"budget","object":"$30,000 a month","valid_from":"2022-01-26","cardinality":"one","evidence":"turn:2022-01-26#t19"}
+{"subject":"Misatis","relation":"late fee","object":"$30,500 a month","valid_from":"2022-01-30","cardinality":"one","evidence":"turn:2022-01-30#t5"}
+{"subject":"Fehabry","relation":"offsite city","object":"Montreal","valid_from":"2022-02-05","cardinality":"many","evidence":"turn:2022-02-05#t3"}
+{"subject":"Notomund","relation":"new hire","object":"Dana Ruiz","valid_from":"2022-02-06","cardinality":"many","evidence":"turn:2022-02-06#t1"}
+{"subject":"Bafemund","relation":"account owner","object":"Tom Becker","valid_from":"2022-02-14","cardinality":"one","evidence":"turn:2022-02-14#t7"}
+{"subject":"Kabavar","relation":"kickoff date","object":"26 August","valid_from":"2022-02-16","cardinality":"one","evidence":"turn:2022-02-16#t3"}
+{"subject":"Kamipel","relation":"new hire","object":"Rafael Ortiz","valid_from":"2022-02-25","cardinality":"many","evidence":"turn:2022-02-25#t3"}
+{"subject":"Mibasor","relation":"retainer","object":"$25,000","valid_from":"2022-02-28","cardinality":"one","evidence":"turn:2022-02-28#t1"}
+{"subject":"Feyopel","relation":"budget","object":"$22,000 a month","valid_from":"2022-02-28","cardinality":"one","evidence":"turn:2022-02-28#t15"}
+{"subject":"Derarik","relation":"retainer","object":"$6,500 a month","valid_from":"2022-03-01","cardinality":"one","evidence":"turn:2022-03-01#t1"}
+{"subject":"Vetosor","relation":"offsite city","object":"Bergen","valid_from":"2022-03-05","cardinality":"many","evidence":"turn:2022-03-05#t3"}
+{"subject":"Kafesor","relation":"new hire","object":"Grace Okafor","valid_from":"2022-03-14","cardinality":"many","evidence":"turn:2022-03-14#t13"}
+{"subject":"Sabamund","relation":"seat count","object":"50 people","valid_from":"2022-03-20","cardinality":"one","evidence":"turn:2022-03-20#t13"}
+{"subject":"Hafepel","relation":"late fee","object":"$27,000","valid_from":"2022-03-23","cardinality":"one","evidence":"turn:2022-03-23#t3"}
+{"subject":"Zihaton","relation":"offsite city","object":"Austin","valid_from":"2022-03-24","cardinality":"many","evidence":"turn:2022-03-24#t1"}
+{"subject":"Bahasor","relation":"new hire","object":"Ken Sato","valid_from":"2022-04-01","cardinality":"many","evidence":"turn:2022-04-01#t5"}
+{"subject":"Ratotis","relation":"late fee","object":"$13,500","valid_from":"2022-04-03","cardinality":"one","evidence":"turn:2022-04-03#t1"}
+{"subject":"Tovegar","relation":"supplier","object":"Lakeshore","valid_from":"2022-04-06","cardinality":"many","evidence":"turn:2022-04-06#t9"}
+{"subject":"Tovedal","relation":"account owner","object":"Ken Sato","valid_from":"2022-04-10","cardinality":"one","evidence":"turn:2022-04-10#t5"}
+{"subject":"Noyogar","relation":"late fee","object":"$41,000","valid_from":"2022-04-13","cardinality":"one","evidence":"turn:2022-04-13#t7"}
+{"subject":"Haveworth","relation":"supplier","object":"Kingsley","valid_from":"2022-04-20","cardinality":"many","evidence":"turn:2022-04-20#t13"}
+{"subject":"Degeton","relation":"account owner","object":"Leo Martins","valid_from":"2022-04-29","cardinality":"one","evidence":"turn:2022-04-29#t3"}
+{"subject":"Karavar","relation":"headcount","object":"10 people","valid_from":"2022-05-02","cardinality":"one","evidence":"turn:2022-05-02#t5"}
+{"subject":"Rayogar","relation":"new hire","object":"Dana Ruiz","valid_from":"2022-05-06","cardinality":"many","evidence":"turn:2022-05-06#t17"}
+{"subject":"Ravebry","relation":"new hire","object":"Nora Lindqvist","valid_from":"2022-05-15","cardinality":"many","evidence":"turn:2022-05-15#t13"}
+{"subject":"Hamilor","relation":"kickoff date","object":"15 February","valid_from":"2022-05-17","cardinality":"one","evidence":"turn:2022-05-17#t7"}
+{"subject":"Vegelor","relation":"supplier","object":"Oakridge","valid_from":"2022-05-23","cardinality":"many","evidence":"turn:2022-05-23#t9"}
+{"subject":"Tonovex","relation":"new hire","object":"Sam Whitfield","valid_from":"2022-05-25","cardinality":"many","evidence":"turn:2022-05-25#t15"}
+{"subject":"Tovegar","relation":"supplier","object":"Cedarline","valid_from":"2022-05-28","cardinality":"many","evidence":"turn:2022-05-28#t7"}
+{"subject":"Migenix","relation":"point of contact","object":"Marcus Lee","valid_from":"2022-06-20","cardinality":"one","evidence":"turn:2022-06-20#t3"}
+{"subject":"Lubabry","relation":"budget","object":"$46,000","valid_from":"2022-06-22","cardinality":"one","evidence":"turn:2022-06-22#t17"}
+{"subject":"Yovenix","relation":"offsite city","object":"Cape Town","valid_from":"2022-06-23","cardinality":"many","evidence":"turn:2022-06-23#t5"}
+{"subject":"Raveworth","relation":"retainer","object":"$35,000 a month","valid_from":"2022-06-26","cardinality":"one","evidence":"turn:2022-06-26#t13"}
+{"subject":"Vevesor","relation":"deposit","object":"$22,500 a month","valid_from":"2022-06-29","cardinality":"one","evidence":"turn:2022-06-29#t3"}
+{"subject":"Zihanix","relation":"retainer","object":"$23,000 a month","valid_from":"2022-07-11","cardinality":"one","evidence":"turn:2022-07-11#t19"}
+{"subject":"Ququlek","relation":"retainer","object":"$3,500 a month","valid_from":"2022-07-17","cardinality":"one","evidence":"turn:2022-07-17#t7"}
+{"subject":"Baqudal","relation":"retainer","object":"$37,500 a month","valid_from":"2022-07-24","cardinality":"one","evidence":"turn:2022-07-24#t9"}
+{"subject":"Rakamund","relation":"new hire","object":"Rafael Ortiz","valid_from":"2022-07-26","cardinality":"many","evidence":"turn:2022-07-26#t3"}
+{"subject":"Sararik","relation":"account owner","object":"Ken Sato","valid_from":"2022-07-27","cardinality":"one","evidence":"turn:2022-07-27#t5"}
+{"subject":"Gesavex","relation":"renewal term","object":"24 months","valid_from":"2022-08-01","cardinality":"one","evidence":"doc:d029#p40"}
+{"subject":"Fehabry","relation":"offsite city","object":"Cape Town","valid_from":"2022-08-02","cardinality":"many","evidence":"turn:2022-08-02#t1"}
+{"subject":"Miquvar","relation":"kickoff date","object":"11 November","valid_from":"2022-08-03","cardinality":"one","evidence":"turn:2022-08-03#t17"}
+{"subject":"Rahabry","relation":"deposit","object":"$27,500 a month","valid_from":"2022-08-05","cardinality":"one","evidence":"turn:2022-08-05#t11"}
+{"subject":"Ramipel","relation":"account owner","object":"Omar Haddad","valid_from":"2022-08-10","cardinality":"one","evidence":"turn:2022-08-10#t5"}
+{"subject":"Lunodal","relation":"liability ceiling","object":"$3,250,000","valid_from":"2022-08-11","cardinality":"one","evidence":"doc:d032#p172"}
+{"subject":"Kamipel","relation":"new hire","object":"Elena Novak","valid_from":"2022-08-14","cardinality":"many","evidence":"turn:2022-08-14#t1"}
+{"subject":"Sadesor","relation":"account owner","object":"Grace Okafor","valid_from":"2022-08-31","cardinality":"one","evidence":"turn:2022-08-31#t1"}
+{"subject":"Samilek","relation":"room booking","object":"FIN-3837","valid_from":"2022-09-05","cardinality":"one","evidence":"turn:2022-09-05#t1"}
+{"subject":"Raluworth","relation":"supplier","object":"Riverside","valid_from":"2022-09-11","cardinality":"many","evidence":"turn:2022-09-11#t7"}
+{"subject":"Febalek","relation":"supplier","object":"Brightpath","valid_from":"2022-09-17","cardinality":"many","evidence":"turn:2022-09-17#t1"}
+{"subject":"Lumiton","relation":"point of contact","object":"Rafael Ortiz","valid_from":"2022-09-18","cardinality":"one","evidence":"turn:2022-09-18#t7"}
+{"subject":"Haverik","relation":"renewal date","object":"1 December","valid_from":"2022-09-19","cardinality":"one","evidence":"turn:2022-09-19#t3"}
+{"subject":"Rayogar","relation":"new hire","object":"Julia Brandt","valid_from":"2022-09-24","cardinality":"many","evidence":"turn:2022-09-24#t5"}
+{"subject":"Tozirik","relation":"retainer","object":"$44,500","valid_from":"2022-09-25","cardinality":"one","evidence":"turn:2022-09-25#t1"}
+{"subject":"Tovegar","relation":"supplier","object":"Redstone","valid_from":"2022-09-26","cardinality":"many","evidence":"turn:2022-09-26#t3"}
+{"subject":"Yovenix","relation":"offsite city","object":"Bergen","valid_from":"2022-09-29","cardinality":"many","evidence":"turn:2022-09-29#t3"}
+{"subject":"Zinobry","relation":"seat count","object":"23 people","valid_from":"2022-10-03","cardinality":"one","evidence":"turn:2022-10-03#t17"}
+{"subject":"Luqutis","relation":"supplier","object":"Brightpath","valid_from":"2022-10-06","cardinality":"many","evidence":"turn:2022-10-06#t3"}
+{"subject":"Luzigar","relation":"offsite city","object":"Kyoto","valid_from":"2022-10-09","cardinality":"many","evidence":"turn:2022-10-09#t3"}
+{"subject":"Ravebry","relation":"new hire","object":"Elena Novak","valid_from":"2022-10-09","cardinality":"many","evidence":"turn:2022-10-09#t17"}
+{"subject":"Tolubry","relation":"new hire","object":"Nora Lindqvist","valid_from":"2022-10-11","cardinality":"many","evidence":"turn:2022-10-11#t11"}
+{"subject":"Vevelor","relation":"point of contact","object":"Grace Okafor","valid_from":"2022-10-20","cardinality":"one","evidence":"turn:2022-10-20#t5"}
+{"subject":"Getozen","relation":"liability ceiling","object":"$250,000","valid_from":"2022-11-02","cardinality":"one","evidence":"doc:d033#p28"}
+{"subject":"Raqurik","relation":"point of contact","object":"Tom Becker","valid_from":"2022-11-10","cardinality":"one","evidence":"turn:2022-11-10#t1"}
+{"subject":"Tolubry","relation":"new hire","object":"Aisha Karim","valid_from":"2022-11-13","cardinality":"many","evidence":"turn:2022-11-13#t9"}
+{"subject":"Zihaton","relation":"offsite city","object":"Seville","valid_from":"2022-11-24","cardinality":"many","evidence":"turn:2022-11-24#t7"}
+{"subject":"Gefelek","relation":"retainer","object":"$39,500","valid_from":"2022-11-29","cardinality":"one","evidence":"turn:2022-11-29#t1"}
+{"subject":"Sahalek","relation":"late fee","object":"$36,000 a month","valid_from":"2022-11-30","cardinality":"one","evidence":"turn:2022-11-30#t1"}
+{"subject":"Qugezen","relation":"retainer","object":"$26,500","valid_from":"2022-12-04","cardinality":"one","evidence":"turn:2022-12-04#t1"}
+{"subject":"Bahasor","relation":"new hire","object":"Rafael Ortiz","valid_from":"2022-12-06","cardinality":"many","evidence":"turn:2022-12-06#t11"}
+{"subject":"Feyoton","relation":"new hire","object":"Priya Shah","valid_from":"2022-12-15","cardinality":"many","evidence":"turn:2022-12-15#t9"}
+{"subject":"Tovepel","relation":"supplier","object":"Greenfield","valid_from":"2022-12-17","cardinality":"many","evidence":"turn:2022-12-17#t7"}
+{"subject":"Kavemund","relation":"supplier","object":"Westbrook","valid_from":"2022-12-17","cardinality":"many","evidence":"turn:2022-12-17#t9"}
+{"subject":"Razivar","relation":"seat count","object":"14 people","valid_from":"2022-12-19","cardinality":"one","evidence":"turn:2022-12-19#t11"}
+{"subject":"Sayonix","relation":"budget","object":"$47,000","valid_from":"2022-12-22","cardinality":"one","evidence":"turn:2022-12-22#t9"}
+{"subject":"Sasaworth","relation":"new hire","object":"Priya Shah","valid_from":"2022-12-27","cardinality":"many","evidence":"turn:2022-12-27#t1"}
+{"subject":"Kafesor","relation":"new hire","object":"Julia Brandt","valid_from":"2023-01-03","cardinality":"many","evidence":"turn:2023-01-03#t9"}
+{"subject":"Mimiton","relation":"budget","object":"$36,000","valid_from":"2023-01-06","cardinality":"one","evidence":"turn:2023-01-06#t1"}
+{"subject":"Tovegar","relation":"supplier","object":"Brightpath","valid_from":"2023-01-07","cardinality":"many","evidence":"turn:2023-01-07#t7"}
+{"subject":"Rakamund","relation":"new hire","object":"Marcus Lee","valid_from":"2023-01-08","cardinality":"many","evidence":"turn:2023-01-08#t7"}
+{"subject":"Fehadal","relation":"retainer","object":"$42,500","valid_from":"2023-01-13","cardinality":"one","evidence":"turn:2023-01-13#t9"}
+{"subject":"Kamipel","relation":"new hire","object":"Julia Brandt","valid_from":"2023-01-15","cardinality":"many","evidence":"turn:2023-01-15#t7"}
+{"subject":"Hamidal","relation":"retainer","object":"$19,500","valid_from":"2023-01-19","cardinality":"one","evidence":"turn:2023-01-19#t7"}
+{"subject":"Notomund","relation":"new hire","object":"Julia Brandt","valid_from":"2023-01-22","cardinality":"many","evidence":"turn:2023-01-22#t3"}
+{"subject":"Radepel","relation":"indemnity cap","object":"$4,500,000","valid_from":"2023-01-27","cardinality":"one","evidence":"doc:d002#p51"}
+{"subject":"Vegelor","relation":"supplier","object":"Maplewood","valid_from":"2023-01-29","cardinality":"many","evidence":"turn:2023-01-29#t15"}
+{"subject":"Devevar","relation":"late fee","object":"$47,500","valid_from":"2023-02-08","cardinality":"one","evidence":"turn:2023-02-08#t11"}
+{"subject":"Lulurik","relation":"indemnity cap","object":"$4,250,000","valid_from":"2023-02-10","cardinality":"one","evidence":"doc:d012#p110"}
+{"subject":"Bahasor","relation":"new hire","object":"Grace Okafor","valid_from":"2023-02-12","cardinality":"many","evidence":"turn:2023-02-12#t9"}
+{"subject":"Halumund","relation":"offsite city","object":"Denver","valid_from":"2023-02-15","cardinality":"many","evidence":"turn:2023-02-15#t9"}
+{"subject":"Vegelor","relation":"supplier","object":"Silverleaf","valid_from":"2023-02-23","cardinality":"many","evidence":"turn:2023-02-23#t3"}
+{"subject":"Detonix","relation":"headcount","object":"59 people","valid_from":"2023-02-25","cardinality":"one","evidence":"turn:2023-02-25#t9"}
+{"subject":"Hamibry","relation":"deposit","object":"$11,000 a month","valid_from":"2023-03-02","cardinality":"one","evidence":"turn:2023-03-02#t3"}
+{"subject":"Novepel","relation":"offsite city","object":"Austin","valid_from":"2023-03-08","cardinality":"many","evidence":"turn:2023-03-08#t1"}
+{"subject":"Fedesor","relation":"account owner","object":"Maya Chen","valid_from":"2023-03-09","cardinality":"one","evidence":"turn:2023-03-09#t1"}
+{"subject":"Bayolek","relation":"kickoff date","object":"16 April","valid_from":"2023-03-09","cardinality":"one","evidence":"turn:2023-03-09#t5"}
+{"subject":"Ramitis","relation":"termination notice period","object":"90 days","valid_from":"2023-03-11","cardinality":"one","evidence":"doc:d016#p283"}
+{"subject":"Vetosor","relation":"offsite city","object":"Kyoto","valid_from":"2023-03-13","cardinality":"many","evidence":"turn:2023-03-13#t9"}
+{"subject":"Fehapel","relation":"room booking","object":"OPS-9337","valid_from":"2023-03-20","cardinality":"one","evidence":"turn:2023-03-20#t1"}
+{"subject":"Miveworth","relation":"headcount","object":"19 people","valid_from":"2023-03-25","cardinality":"one","evidence":"turn:2023-03-25#t3"}
+{"subject":"Sadesor","relation":"account owner","object":"Ken Sato","valid_from":"2023-03-25","cardinality":"one","evidence":"turn:2023-03-25#t7"}
+{"subject":"Todevar","relation":"renewal date","object":"24 June","valid_from":"2023-03-26","cardinality":"one","evidence":"turn:2023-03-26#t7"}
+{"subject":"Sabanix","relation":"budget","object":"$3,000 a month","valid_from":"2023-03-31","cardinality":"one","evidence":"turn:2023-03-31#t5"}
+{"subject":"Gehaton","relation":"seat count","object":"35 people","valid_from":"2023-04-02","cardinality":"one","evidence":"turn:2023-04-02#t3"}
+{"subject":"Yovenix","relation":"offsite city","object":"Denver","valid_from":"2023-04-22","cardinality":"many","evidence":"turn:2023-04-22#t11"}
+{"subject":"Hamilor","relation":"kickoff date","object":"15 January","valid_from":"2023-04-26","cardinality":"one","evidence":"turn:2023-04-26#t15"}
+{"subject":"Ludenix","relation":"deposit","object":"$29,000 a month","valid_from":"2023-05-01","cardinality":"one","evidence":"turn:2023-05-01#t15"}
+{"subject":"Dequsor","relation":"headcount","object":"24 people","valid_from":"2023-05-07","cardinality":"one","evidence":"turn:2023-05-07#t7"}
+{"subject":"Fequgar","relation":"headcount","object":"40 people","valid_from":"2023-05-08","cardinality":"one","evidence":"turn:2023-05-08#t5"}
+{"subject":"Tovepel","relation":"supplier","object":"Highgate","valid_from":"2023-05-09","cardinality":"many","evidence":"turn:2023-05-09#t7"}
+{"subject":"Deralor","relation":"account owner","object":"Sam Whitfield","valid_from":"2023-05-14","cardinality":"one","evidence":"turn:2023-05-14#t3"}
+{"subject":"Ramipel","relation":"account owner","object":"Aisha Karim","valid_from":"2023-05-24","cardinality":"one","evidence":"turn:2023-05-24#t5"}
+{"subject":"Velugar","relation":"late fee","object":"$29,500","valid_from":"2023-06-02","cardinality":"one","evidence":"turn:2023-06-02#t1"}
+{"subject":"Qulugar","relation":"supplier","object":"Highgate","valid_from":"2023-06-04","cardinality":"many","evidence":"turn:2023-06-04#t9"}
+{"subject":"Mitovar","relation":"supplier","object":"Highgate","valid_from":"2023-06-06","cardinality":"many","evidence":"turn:2023-06-06#t11"}
+{"subject":"Saluworth","relation":"deposit","object":"$18,000 a month","valid_from":"2023-06-06","cardinality":"one","evidence":"turn:2023-06-06#t17"}
+{"subject":"Sabanix","relation":"budget","object":"$37,000 a month","valid_from":"2023-06-09","cardinality":"one","evidence":"turn:2023-06-09#t3"}
+{"subject":"Kafesor","relation":"new hire","object":"Elena Novak","valid_from":"2023-06-15","cardinality":"many","evidence":"turn:2023-06-15#t11"}
+{"subject":"Sasaworth","relation":"new hire","object":"Grace Okafor","valid_from":"2023-06-17","cardinality":"many","evidence":"turn:2023-06-17#t17"}
+{"subject":"Rayogar","relation":"new hire","object":"Ken Sato","valid_from":"2023-06-19","cardinality":"many","evidence":"turn:2023-06-19#t1"}
+{"subject":"Raveworth","relation":"retainer","object":"$42,000 a month","valid_from":"2023-06-21","cardinality":"one","evidence":"turn:2023-06-21#t9"}
+{"subject":"Tonovex","relation":"new hire","object":"Grace Okafor","valid_from":"2023-06-23","cardinality":"many","evidence":"turn:2023-06-23#t3"}
+{"subject":"Febalor","relation":"account owner","object":"Nora Lindqvist","valid_from":"2023-06-24","cardinality":"one","evidence":"turn:2023-06-24#t11"}
+{"subject":"Yobaton","relation":"retainer","object":"$5,000 a month","valid_from":"2023-06-24","cardinality":"one","evidence":"turn:2023-06-24#t19"}
+{"subject":"Luyodal","relation":"budget","object":"$4,500 a month","valid_from":"2023-06-29","cardinality":"one","evidence":"turn:2023-06-29#t1"}
+{"subject":"Rafelor","relation":"budget","object":"$27,000","valid_from":"2023-07-01","cardinality":"one","evidence":"turn:2023-07-01#t11"}
+{"subject":"Qulupel","relation":"late fee","object":"$25,500 a month","valid_from":"2023-07-01","cardinality":"one","evidence":"turn:2023-07-01#t19"}
+{"subject":"Fekaworth","relation":"deposit","object":"$16,000 a month","valid_from":"2023-07-02","cardinality":"one","evidence":"turn:2023-07-02#t5"}
+{"subject":"Zihaton","relation":"offsite city","object":"Ghent","valid_from":"2023-07-04","cardinality":"many","evidence":"turn:2023-07-04#t3"}
+{"subject":"Bafebry","relation":"account owner","object":"Sam Whitfield","valid_from":"2023-07-04","cardinality":"one","evidence":"turn:2023-07-04#t9"}
+{"subject":"Kafesor","relation":"new hire","object":"Aisha Karim","valid_from":"2023-07-10","cardinality":"many","evidence":"turn:2023-07-10#t5"}
+{"subject":"Nohapel","relation":"offsite city","object":"Bergen","valid_from":"2023-07-12","cardinality":"many","evidence":"turn:2023-07-12#t1"}
+{"subject":"Novepel","relation":"offsite city","object":"Montreal","valid_from":"2023-07-13","cardinality":"many","evidence":"turn:2023-07-13#t7"}
+{"subject":"Yovenix","relation":"offsite city","object":"Lisbon","valid_from":"2023-07-20","cardinality":"many","evidence":"turn:2023-07-20#t3"}
+{"subject":"Kavemund","relation":"supplier","object":"Northwind","valid_from":"2023-07-24","cardinality":"many","evidence":"turn:2023-07-24#t19"}
+{"subject":"Denomund","relation":"headcount","object":"26 people","valid_from":"2023-07-30","cardinality":"one","evidence":"turn:2023-07-30#t7"}
+{"subject":"Miveworth","relation":"headcount","object":"46 people","valid_from":"2023-07-31","cardinality":"one","evidence":"turn:2023-07-31#t1"}
+{"subject":"Halumund","relation":"offsite city","object":"Ghent","valid_from":"2023-08-06","cardinality":"many","evidence":"turn:2023-08-06#t1"}
+{"subject":"Mibasor","relation":"retainer","object":"$14,500 a month","valid_from":"2023-08-07","cardinality":"one","evidence":"turn:2023-08-07#t3"}
+{"subject":"Mizidal","relation":"liability ceiling","object":"$1,000,000","valid_from":"2023-08-09","cardinality":"one","evidence":"doc:d023#p216"}
+{"subject":"Dequton","relation":"retainer","object":"$3,000 a month","valid_from":"2023-08-13","cardinality":"one","evidence":"turn:2023-08-13#t7"}
+{"subject":"Mitovar","relation":"supplier","object":"Brightpath","valid_from":"2023-08-17","cardinality":"many","evidence":"turn:2023-08-17#t7"}
+{"subject":"Febavar","relation":"deposit","object":"$19,500 a month","valid_from":"2023-08-21","cardinality":"one","evidence":"turn:2023-08-21#t1"}
+{"subject":"Qubapel","relation":"new hire","object":"Sam Whitfield","valid_from":"2023-08-23","cardinality":"many","evidence":"turn:2023-08-23#t5"}
+{"subject":"Hafebry","relation":"offsite city","object":"Porto","valid_from":"2023-08-26","cardinality":"many","evidence":"turn:2023-08-26#t13"}
+{"subject":"Feyoton","relation":"new hire","object":"Ken Sato","valid_from":"2023-08-29","cardinality":"many","evidence":"turn:2023-08-29#t19"}
+{"subject":"Nodedal","relation":"room booking","object":"FIN-6492","valid_from":"2023-09-13","cardinality":"one","evidence":"turn:2023-09-13#t1"}
+{"subject":"Ludepel","relation":"account owner","object":"Ken Sato","valid_from":"2023-09-14","cardinality":"one","evidence":"turn:2023-09-14#t11"}
+{"subject":"Rafelor","relation":"budget","object":"$14,500 a month","valid_from":"2023-09-26","cardinality":"one","evidence":"turn:2023-09-26#t17"}
+{"subject":"Dequton","relation":"retainer","object":"$20,000","valid_from":"2023-10-13","cardinality":"one","evidence":"turn:2023-10-13#t3"}
+{"subject":"Tolubry","relation":"new hire","object":"Elena Novak","valid_from":"2023-10-13","cardinality":"many","evidence":"turn:2023-10-13#t5"}
+{"subject":"Luyorik","relation":"delivery window","object":"after 6pm","valid_from":"2023-10-14","cardinality":"one","evidence":"turn:2023-10-14#t3"}
+{"subject":"Qulurik","relation":"wifi network","object":"ORCHARD-5G","valid_from":"2023-10-15","cardinality":"one","evidence":"turn:2023-10-15#t15"}
+{"subject":"Sabanix","relation":"budget","object":"$17,000 a month","valid_from":"2023-10-22","cardinality":"one","evidence":"turn:2023-10-22#t1"}
+{"subject":"Detonix","relation":"headcount","object":"8 people","valid_from":"2023-10-25","cardinality":"one","evidence":"turn:2023-10-25#t3"}
+{"subject":"Nohapel","relation":"offsite city","object":"Vilnius","valid_from":"2023-10-29","cardinality":"many","evidence":"turn:2023-10-29#t1"}
+{"subject":"Haveworth","relation":"supplier","object":"Foxglove","valid_from":"2023-11-01","cardinality":"many","evidence":"turn:2023-11-01#t1"}
+{"subject":"Fedesor","relation":"account owner","object":"Leo Martins","valid_from":"2023-11-03","cardinality":"one","evidence":"turn:2023-11-03#t3"}
+{"subject":"Katoton","relation":"wifi network","object":"LANTERN-2G","valid_from":"2023-11-11","cardinality":"one","evidence":"turn:2023-11-11#t9"}
+{"subject":"Sakabry","relation":"offsite city","object":"Hobart","valid_from":"2023-11-13","cardinality":"many","evidence":"turn:2023-11-13#t1"}
+{"subject":"Yogegar","relation":"renewal term","object":"36 months","valid_from":"2023-11-13","cardinality":"one","evidence":"doc:d011#p77"}
+{"subject":"Nohapel","relation":"offsite city","object":"Denver","valid_from":"2023-11-17","cardinality":"many","evidence":"turn:2023-11-17#t7"}
+{"subject":"Kadevar","relation":"offsite city","object":"Austin","valid_from":"2023-11-20","cardinality":"many","evidence":"turn:2023-11-20#t17"}
+{"subject":"Qulunix","relation":"favourite bakery","object":"Crumb and Co","valid_from":"2023-11-21","cardinality":"one","evidence":"turn:2023-11-21#t1"}
+{"subject":"Dekalek","relation":"supplier","object":"Pinecrest","valid_from":"2023-11-23","cardinality":"many","evidence":"turn:2023-11-23#t3"}
+{"subject":"Qulugar","relation":"supplier","object":"Kingsley","valid_from":"2023-11-27","cardinality":"many","evidence":"turn:2023-11-27#t7"}
+{"subject":"Karagar","relation":"renewal term","object":"24 months","valid_from":"2023-12-01","cardinality":"one","evidence":"doc:d003#p145"}
+{"subject":"Vetosor","relation":"offsite city","object":"Austin","valid_from":"2023-12-06","cardinality":"many","evidence":"turn:2023-12-06#t7"}
+{"subject":"Toqunix","relation":"offsite city","object":"Osaka","valid_from":"2023-12-14","cardinality":"many","evidence":"turn:2023-12-14#t7"}
+{"subject":"Lulupel","relation":"supplier","object":"Lakeshore","valid_from":"2023-12-16","cardinality":"many","evidence":"turn:2023-12-16#t5"}
+{"subject":"Kafesor","relation":"new hire","object":"Leo Martins","valid_from":"2023-12-16","cardinality":"many","evidence":"turn:2023-12-16#t9"}
+{"subject":"Sadesor","relation":"account owner","object":"Ingrid Holm","valid_from":"2023-12-20","cardinality":"one","evidence":"turn:2023-12-20#t5"}
+{"subject":"Defezen","relation":"parking spot","object":"P3-309","valid_from":"2024-01-06","cardinality":"one","evidence":"turn:2024-01-06#t3"}
+{"subject":"Nohapel","relation":"offsite city","object":"Lisbon","valid_from":"2024-01-06","cardinality":"many","evidence":"turn:2024-01-06#t7"}
+{"subject":"Feyopel","relation":"budget","object":"$33,000","valid_from":"2024-01-09","cardinality":"one","evidence":"turn:2024-01-09#t3"}
+{"subject":"Denonix","relation":"liability ceiling","object":"$9,250,000","valid_from":"2024-01-13","cardinality":"one","evidence":"doc:d019#p3"}
+{"subject":"Deralor","relation":"account owner","object":"Elena Novak","valid_from":"2024-01-30","cardinality":"one","evidence":"turn:2024-01-30#t1"}
+{"subject":"Sakabry","relation":"offsite city","object":"Cape Town","valid_from":"2024-02-02","cardinality":"many","evidence":"turn:2024-02-02#t3"}
+{"subject":"Mitovar","relation":"supplier","object":"Northwind","valid_from":"2024-02-07","cardinality":"many","evidence":"turn:2024-02-07#t7"}
+{"subject":"Sasaworth","relation":"new hire","object":"Ken Sato","valid_from":"2024-02-11","cardinality":"many","evidence":"turn:2024-02-11#t13"}
+{"subject":"Lubabry","relation":"budget","object":"$35,500","valid_from":"2024-02-15","cardinality":"one","evidence":"turn:2024-02-15#t13"}
+{"subject":"Miqulor","relation":"budget","object":"$21,500 a month","valid_from":"2024-02-29","cardinality":"one","evidence":"turn:2024-02-29#t13"}
+{"subject":"Kadevar","relation":"offsite city","object":"Vilnius","valid_from":"2024-03-01","cardinality":"many","evidence":"turn:2024-03-01#t9"}
+{"subject":"Qugeton","relation":"parking spot","object":"P2-117","valid_from":"2024-03-04","cardinality":"one","evidence":"turn:2024-03-04#t3"}
+{"subject":"Bafebry","relation":"account owner","object":"Nora Lindqvist","valid_from":"2024-03-24","cardinality":"one","evidence":"turn:2024-03-24#t1"}
+{"subject":"Halumund","relation":"offsite city","object":"Oaxaca","valid_from":"2024-03-25","cardinality":"many","evidence":"turn:2024-03-25#t3"}
+{"subject":"Nohapel","relation":"offsite city","object":"Oaxaca","valid_from":"2024-03-26","cardinality":"many","evidence":"turn:2024-03-26#t1"}
+{"subject":"Derarik","relation":"retainer","object":"$42,500","valid_from":"2024-03-27","cardinality":"one","evidence":"turn:2024-03-27#t7"}
+{"subject":"Gehavex","relation":"account owner","object":"Marcus Lee","valid_from":"2024-04-01","cardinality":"one","evidence":"turn:2024-04-01#t11"}
+{"subject":"Geyolek","relation":"supplier","object":"Redstone","valid_from":"2024-04-01","cardinality":"many","evidence":"turn:2024-04-01#t19"}
+{"subject":"Kararik","relation":"liability ceiling","object":"$7,500,000","valid_from":"2024-04-04","cardinality":"one","evidence":"doc:d018#p218"}
+{"subject":"Ratopel","relation":"indemnity cap","object":"$5,000,000","valid_from":"2024-04-05","cardinality":"one","evidence":"doc:d010#p7"}
+{"subject":"Notomund","relation":"new hire","object":"Rafael Ortiz","valid_from":"2024-04-06","cardinality":"many","evidence":"turn:2024-04-06#t13"}
+{"subject":"Kadevex","relation":"new hire","object":"Grace Okafor","valid_from":"2024-04-10","cardinality":"many","evidence":"turn:2024-04-10#t13"}
+{"subject":"Luyodal","relation":"budget","object":"$39,000 a month","valid_from":"2024-04-12","cardinality":"one","evidence":"turn:2024-04-12#t1"}
+{"subject":"Qugezen","relation":"retainer","object":"$28,000","valid_from":"2024-04-12","cardinality":"one","evidence":"turn:2024-04-12#t11"}
+{"subject":"Dequsor","relation":"headcount","object":"17 people","valid_from":"2024-04-12","cardinality":"one","evidence":"turn:2024-04-12#t13"}
+{"subject":"Fehabry","relation":"offsite city","object":"Porto","valid_from":"2024-04-19","cardinality":"many","evidence":"turn:2024-04-19#t1"}
+{"subject":"Dequton","relation":"retainer","object":"$7,500","valid_from":"2024-04-19","cardinality":"one","evidence":"turn:2024-04-19#t3"}
+{"subject":"Vededal","relation":"indemnity cap","object":"$5,750,000","valid_from":"2024-04-20","cardinality":"one","evidence":"doc:d031#p27"}
+{"subject":"Zinobry","relation":"seat count","object":"18 people","valid_from":"2024-04-23","cardinality":"one","evidence":"turn:2024-04-23#t7"}
+{"subject":"Novepel","relation":"offsite city","object":"Denver","valid_from":"2024-04-24","cardinality":"many","evidence":"turn:2024-04-24#t9"}
+{"subject":"Dekalek","relation":"supplier","object":"Foxglove","valid_from":"2024-04-28","cardinality":"many","evidence":"turn:2024-04-28#t5"}
+{"subject":"Raveworth","relation":"retainer","object":"$45,000 a month","valid_from":"2024-05-06","cardinality":"one","evidence":"turn:2024-05-06#t3"}
+{"subject":"Quferik","relation":"indemnity cap","object":"$3,750,000","valid_from":"2024-05-12","cardinality":"one","evidence":"doc:d022#p110"}
+{"subject":"Dequsor","relation":"headcount","object":"54 people","valid_from":"2024-05-17","cardinality":"one","evidence":"turn:2024-05-17#t7"}
+{"subject":"Yonolor","relation":"delivery window","object":"noon to 2pm","valid_from":"2024-05-20","cardinality":"one","evidence":"turn:2024-05-20#t13"}
+{"subject":"Zivevex","relation":"wifi network","object":"HARBOR-GUEST","valid_from":"2024-05-24","cardinality":"one","evidence":"turn:2024-05-24#t17"}
+{"subject":"Yodesor","relation":"wifi network","object":"KESTREL-5G","valid_from":"2024-05-30","cardinality":"one","evidence":"turn:2024-05-30#t15"}
+{"subject":"Bahasor","relation":"new hire","object":"Dana Ruiz","valid_from":"2024-06-08","cardinality":"many","evidence":"turn:2024-06-08#t1"}
+{"subject":"Febalor","relation":"account owner","object":"Tom Becker","valid_from":"2024-06-12","cardinality":"one","evidence":"turn:2024-06-12#t3"}
+{"subject":"Derarik","relation":"retainer","object":"$29,000 a month","valid_from":"2024-06-27","cardinality":"one","evidence":"turn:2024-06-27#t17"}
+{"subject":"Hamilor","relation":"kickoff date","object":"7 January","valid_from":"2024-07-05","cardinality":"one","evidence":"turn:2024-07-05#t5"}
+{"subject":"Fehabry","relation":"offsite city","object":"Tallinn","valid_from":"2024-07-07","cardinality":"many","evidence":"turn:2024-07-07#t5"}
+{"subject":"Gedenix","relation":"favourite bakery","object":"Petit Four","valid_from":"2024-07-09","cardinality":"one","evidence":"turn:2024-07-09#t3"}
+{"subject":"Geyolek","relation":"supplier","object":"Ironbark","valid_from":"2024-07-10","cardinality":"many","evidence":"turn:2024-07-10#t3"}
+{"subject":"Tonovex","relation":"new hire","object":"Aisha Karim","valid_from":"2024-07-10","cardinality":"many","evidence":"turn:2024-07-10#t5"}
+{"subject":"Hafebry","relation":"offsite city","object":"Hobart","valid_from":"2024-07-16","cardinality":"many","evidence":"turn:2024-07-16#t3"}
+{"subject":"Mitovar","relation":"supplier","object":"Bluefin","valid_from":"2024-07-17","cardinality":"many","evidence":"turn:2024-07-17#t7"}
+{"subject":"Mibasor","relation":"retainer","object":"$47,500","valid_from":"2024-07-19","cardinality":"one","evidence":"turn:2024-07-19#t5"}
+{"subject":"Qubapel","relation":"new hire","object":"Maya Chen","valid_from":"2024-07-29","cardinality":"many","evidence":"turn:2024-07-29#t7"}
+{"subject":"Mitovar","relation":"supplier","object":"Kingsley","valid_from":"2024-08-03","cardinality":"many","evidence":"turn:2024-08-03#t19"}
+{"subject":"Gehaton","relation":"seat count","object":"20 people","valid_from":"2024-08-07","cardinality":"one","evidence":"turn:2024-08-07#t1"}
+{"subject":"Tokadal","relation":"liability ceiling","object":"$7,500,000","valid_from":"2024-08-07","cardinality":"one","evidence":"doc:d035#p52"}
+{"subject":"Vetosor","relation":"offsite city","object":"Ghent","valid_from":"2024-08-11","cardinality":"many","evidence":"turn:2024-08-11#t1"}
+{"subject":"Sakabry","relation":"offsite city","object":"Seville","valid_from":"2024-08-15","cardinality":"many","evidence":"turn:2024-08-15#t11"}
+{"subject":"Fegelek","relation":"favourite bakery","object":"Crumb and Co","valid_from":"2024-08-19","cardinality":"one","evidence":"turn:2024-08-19#t1"}
+{"subject":"Bafebry","relation":"account owner","object":"Leo Martins","valid_from":"2024-08-22","cardinality":"one","evidence":"turn:2024-08-22#t3"}
+{"subject":"Rakamund","relation":"new hire","object":"Grace Okafor","valid_from":"2024-08-26","cardinality":"many","evidence":"turn:2024-08-26#t9"}
+{"subject":"Tonovex","relation":"new hire","object":"Marcus Lee","valid_from":"2024-08-29","cardinality":"many","evidence":"turn:2024-08-29#t3"}
+{"subject":"Qulugar","relation":"supplier","object":"Cedarline","valid_from":"2024-09-06","cardinality":"many","evidence":"turn:2024-09-06#t1"}
+{"subject":"Sasaworth","relation":"new hire","object":"Nora Lindqvist","valid_from":"2024-09-12","cardinality":"many","evidence":"turn:2024-09-12#t9"}
+{"subject":"Vemirik","relation":"wifi network","object":"HARBOR-GUEST","valid_from":"2024-09-23","cardinality":"one","evidence":"turn:2024-09-23#t1"}
+{"subject":"Rakamund","relation":"new hire","object":"Ken Sato","valid_from":"2024-09-24","cardinality":"many","evidence":"turn:2024-09-24#t17"}
+{"subject":"Fehabry","relation":"offsite city","object":"Kyoto","valid_from":"2024-09-27","cardinality":"many","evidence":"turn:2024-09-27#t5"}
+{"subject":"Vegelor","relation":"supplier","object":"Pinecrest","valid_from":"2024-09-27","cardinality":"many","evidence":"turn:2024-09-27#t17"}
+{"subject":"Lubabry","relation":"budget","object":"$36,000 a month","valid_from":"2024-10-02","cardinality":"one","evidence":"turn:2024-10-02#t5"}
+{"subject":"Luqutis","relation":"supplier","object":"Riverside","valid_from":"2024-10-08","cardinality":"many","evidence":"turn:2024-10-08#t1"}
+{"subject":"Saquvex","relation":"headcount","object":"10 people","valid_from":"2024-10-13","cardinality":"one","evidence":"turn:2024-10-13#t7"}
+{"subject":"Qugezen","relation":"retainer","object":"$11,500","valid_from":"2024-10-22","cardinality":"one","evidence":"turn:2024-10-22#t9"}
+{"subject":"Raluworth","relation":"supplier","object":"Ironbark","valid_from":"2024-10-24","cardinality":"many","evidence":"turn:2024-10-24#t3"}
+{"subject":"Noluvex","relation":"liability ceiling","object":"$4,000,000","valid_from":"2024-10-27","cardinality":"one","evidence":"doc:d037#p4"}
+{"subject":"Noratis","relation":"budget","object":"$2,500 a month","valid_from":"2024-11-03","cardinality":"one","evidence":"turn:2024-11-03#t17"}
+{"subject":"Yobaton","relation":"retainer","object":"$29,500","valid_from":"2024-11-09","cardinality":"one","evidence":"turn:2024-11-09#t3"}
+{"subject":"Kadevar","relation":"offsite city","object":"Ghent","valid_from":"2024-11-16","cardinality":"many","evidence":"turn:2024-11-16#t19"}
+{"subject":"Kamipel","relation":"new hire","object":"Maya Chen","valid_from":"2024-11-19","cardinality":"many","evidence":"turn:2024-11-19#t7"}
+{"subject":"Razivar","relation":"seat count","object":"34 people","valid_from":"2024-11-24","cardinality":"one","evidence":"turn:2024-11-24#t3"}
+{"subject":"Dekalek","relation":"supplier","object":"Westbrook","valid_from":"2024-11-28","cardinality":"many","evidence":"turn:2024-11-28#t1"}
+{"subject":"Nohavex","relation":"renewal term","object":"12 months","valid_from":"2024-12-03","cardinality":"one","evidence":"doc:d030#p59"}
+{"subject":"Luyodal","relation":"budget","object":"$20,000","valid_from":"2024-12-03","cardinality":"one","evidence":"turn:2024-12-03#t9"}
+{"subject":"Qubapel","relation":"new hire","object":"Omar Haddad","valid_from":"2024-12-10","cardinality":"many","evidence":"turn:2024-12-10#t1"}
+{"subject":"Gegepel","relation":"indemnity cap","object":"$4,750,000","valid_from":"2024-12-10","cardinality":"one","evidence":"doc:d005#p4"}
+{"subject":"Bayolek","relation":"kickoff date","object":"10 October","valid_from":"2024-12-10","cardinality":"one","evidence":"turn:2024-12-10#t7"}
+{"subject":"Tovepel","relation":"supplier","object":"Northwind","valid_from":"2024-12-16","cardinality":"many","evidence":"turn:2024-12-16#t9"}
+{"subject":"Mimiton","relation":"budget","object":"$39,000","valid_from":"2024-12-21","cardinality":"one","evidence":"turn:2024-12-21#t3"}
+{"subject":"Rakamund","relation":"new hire","object":"Elena Novak","valid_from":"2024-12-27","cardinality":"many","evidence":"turn:2024-12-27#t9"}
+{"subject":"Kabavar","relation":"kickoff date","object":"28 December","valid_from":"2024-12-27","cardinality":"one","evidence":"turn:2024-12-27#t13"}
+{"subject":"Raluworth","relation":"supplier","object":"Bluefin","valid_from":"2024-12-31","cardinality":"many","evidence":"turn:2024-12-31#t9"}
+{"subject":"Venonix","relation":"parking spot","object":"L1-015","valid_from":"2025-01-08","cardinality":"one","evidence":"turn:2025-01-08#t1"}
+{"subject":"Yogetis","relation":"offsite city","object":"Hobart","valid_from":"2025-01-10","cardinality":"many","evidence":"turn:2025-01-10#t15"}
+{"subject":"Bageton","relation":"delivery window","object":"noon to 2pm","valid_from":"2025-01-12","cardinality":"one","evidence":"turn:2025-01-12#t9"}
+{"subject":"Haveworth","relation":"supplier","object":"Greenfield","valid_from":"2025-01-14","cardinality":"many","evidence":"turn:2025-01-14#t13"}
+{"subject":"Yoqudal","relation":"offsite city","object":"Ghent","valid_from":"2025-01-22","cardinality":"many","evidence":"turn:2025-01-22#t7"}
+{"subject":"Habadal","relation":"renewal term","object":"24 months","valid_from":"2025-01-27","cardinality":"one","evidence":"doc:d006#p48"}
+{"subject":"Nogemund","relation":"coffee order","object":"an oat flat white","valid_from":"2025-02-08","cardinality":"one","evidence":"turn:2025-02-08#t9"}
+{"subject":"Notosor","relation":"termination notice period","object":"30 days","valid_from":"2025-02-12","cardinality":"one","evidence":"doc:d001#p312"}
+{"subject":"Miquvar","relation":"kickoff date","object":"16 June","valid_from":"2025-02-13","cardinality":"one","evidence":"turn:2025-02-13#t9"}
+{"subject":"Nohapel","relation":"offsite city","object":"Tallinn","valid_from":"2025-02-17","cardinality":"many","evidence":"turn:2025-02-17#t5"}
+{"subject":"Kanonix","relation":"wifi network","object":"HARBOR-GUEST","valid_from":"2025-02-21","cardinality":"one","evidence":"turn:2025-02-21#t1"}
+{"subject":"Zinobry","relation":"seat count","object":"56 people","valid_from":"2025-02-21","cardinality":"one","evidence":"turn:2025-02-21#t15"}
+{"subject":"Toqunix","relation":"offsite city","object":"Reykjavik","valid_from":"2025-02-21","cardinality":"many","evidence":"turn:2025-02-21#t19"}
+{"subject":"Nodegar","relation":"termination notice period","object":"60 days","valid_from":"2025-03-01","cardinality":"one","evidence":"doc:d014#p69"}
+{"subject":"Hakaton","relation":"liability ceiling","object":"$9,250,000","valid_from":"2025-03-09","cardinality":"one","evidence":"doc:d017#p7"}
+{"subject":"Yodeworth","relation":"coffee order","object":"a double espresso","valid_from":"2025-03-21","cardinality":"one","evidence":"turn:2025-03-21#t9"}
+{"subject":"Zideton","relation":"renewal term","object":"12 months","valid_from":"2025-04-05","cardinality":"one","evidence":"doc:d027#p22"}
+{"subject":"Raluworth","relation":"supplier","object":"Highgate","valid_from":"2025-04-17","cardinality":"many","evidence":"turn:2025-04-17#t9"}
+{"subject":"Ludepel","relation":"account owner","object":"Nora Lindqvist","valid_from":"2025-04-18","cardinality":"one","evidence":"turn:2025-04-18#t19"}
+{"subject":"Kamipel","relation":"new hire","object":"Ken Sato","valid_from":"2025-04-21","cardinality":"many","evidence":"turn:2025-04-21#t5"}
+{"subject":"Halumund","relation":"offsite city","object":"Austin","valid_from":"2025-04-21","cardinality":"many","evidence":"turn:2025-04-21#t17"}
+{"subject":"Sayonix","relation":"budget","object":"$18,000 a month","valid_from":"2025-04-24","cardinality":"one","evidence":"turn:2025-04-24#t1"}
+{"subject":"Dekalek","relation":"supplier","object":"Lakeshore","valid_from":"2025-04-27","cardinality":"many","evidence":"turn:2025-04-27#t7"}
+{"subject":"Kasalor","relation":"parking spot","object":"B1-042","valid_from":"2025-04-28","cardinality":"one","evidence":"turn:2025-04-28#t7"}
+{"subject":"Fedesor","relation":"account owner","object":"Dana Ruiz","valid_from":"2025-04-29","cardinality":"one","evidence":"turn:2025-04-29#t9"}
+{"subject":"Kadevar","relation":"offsite city","object":"Oaxaca","valid_from":"2025-05-12","cardinality":"many","evidence":"turn:2025-05-12#t9"}
+{"subject":"Tolubry","relation":"new hire","object":"Rafael Ortiz","valid_from":"2025-05-13","cardinality":"many","evidence":"turn:2025-05-13#t1"}
+{"subject":"Rayogar","relation":"new hire","object":"Aisha Karim","valid_from":"2025-05-18","cardinality":"many","evidence":"turn:2025-05-18#t1"}
+{"subject":"Tovezen","relation":"coffee order","object":"an oat flat white","valid_from":"2025-05-18","cardinality":"one","evidence":"turn:2025-05-18#t7"}
+{"subject":"Tovegar","relation":"supplier","object":"Pinecrest","valid_from":"2025-05-19","cardinality":"many","evidence":"turn:2025-05-19#t1"}
+{"subject":"Yoqudal","relation":"offsite city","object":"Denver","valid_from":"2025-05-21","cardinality":"many","evidence":"turn:2025-05-21#t1"}
+{"subject":"Raluworth","relation":"supplier","object":"Pinecrest","valid_from":"2025-05-29","cardinality":"many","evidence":"turn:2025-05-29#t3"}
+{"subject":"Dekaworth","relation":"coffee order","object":"an iced americano","valid_from":"2025-06-03","cardinality":"one","evidence":"turn:2025-06-03#t1"}
+{"subject":"Febalor","relation":"account owner","object":"Leo Martins","valid_from":"2025-06-03","cardinality":"one","evidence":"turn:2025-06-03#t15"}
+{"subject":"Fequgar","relation":"headcount","object":"28 people","valid_from":"2025-06-06","cardinality":"one","evidence":"turn:2025-06-06#t9"}
+{"subject":"Yogetis","relation":"offsite city","object":"Seville","valid_from":"2025-06-06","cardinality":"many","evidence":"turn:2025-06-06#t13"}
+{"subject":"Batonix","relation":"coffee order","object":"an oat flat white","valid_from":"2025-06-11","cardinality":"one","evidence":"turn:2025-06-11#t7"}
+{"subject":"Luqutis","relation":"supplier","object":"Oakridge","valid_from":"2025-06-14","cardinality":"many","evidence":"turn:2025-06-14#t17"}
+{"subject":"Rakamund","relation":"new hire","object":"Maya Chen","valid_from":"2025-06-21","cardinality":"many","evidence":"turn:2025-06-21#t3"}
+{"subject":"Sabamund","relation":"seat count","object":"23 people","valid_from":"2025-06-23","cardinality":"one","evidence":"turn:2025-06-23#t3"}
+{"subject":"Nomilek","relation":"indemnity cap","object":"$7,000,000","valid_from":"2025-06-26","cardinality":"one","evidence":"doc:d020#p127"}
+{"subject":"Raluworth","relation":"supplier","object":"Cedarline","valid_from":"2025-06-29","cardinality":"many","evidence":"turn:2025-06-29#t9"}
+{"subject":"Feyopel","relation":"budget","object":"$39,000 a month","valid_from":"2025-07-01","cardinality":"one","evidence":"turn:2025-07-01#t3"}
+{"subject":"Qulugar","relation":"supplier","object":"Lakeshore","valid_from":"2025-07-02","cardinality":"many","evidence":"turn:2025-07-02#t13"}
+{"subject":"Fesavar","relation":"parking spot","object":"B1-042","valid_from":"2025-07-19","cardinality":"one","evidence":"turn:2025-07-19#t7"}
+{"subject":"Yogetis","relation":"offsite city","object":"Oaxaca","valid_from":"2025-07-22","cardinality":"many","evidence":"turn:2025-07-22#t7"}
+{"subject":"Ragelek","relation":"delivery window","object":"noon to 2pm","valid_from":"2025-07-28","cardinality":"one","evidence":"turn:2025-07-28#t5"}
+{"subject":"Razivar","relation":"seat count","object":"24 people","valid_from":"2025-07-31","cardinality":"one","evidence":"turn:2025-07-31#t3"}
+{"subject":"Ravebry","relation":"new hire","object":"Dana Ruiz","valid_from":"2025-08-02","cardinality":"many","evidence":"turn:2025-08-02#t1"}
+{"subject":"Fesaworth","relation":"indemnity cap","object":"$4,000,000","valid_from":"2025-08-08","cardinality":"one","evidence":"doc:d021#p66"}
+{"subject":"Zihaton","relation":"offsite city","object":"Hobart","valid_from":"2025-08-14","cardinality":"many","evidence":"turn:2025-08-14#t3"}
+{"subject":"Lurapel","relation":"termination notice period","object":"60 days","valid_from":"2025-08-25","cardinality":"one","evidence":"doc:d038#p40"}
+{"subject":"Tolubry","relation":"new hire","object":"Dana Ruiz","valid_from":"2025-08-28","cardinality":"many","evidence":"turn:2025-08-28#t7"}
+{"subject":"Febalek","relation":"supplier","object":"Bluefin","valid_from":"2025-08-30","cardinality":"many","evidence":"turn:2025-08-30#t9"}
+{"subject":"Noratis","relation":"budget","object":"$45,500 a month","valid_from":"2025-09-05","cardinality":"one","evidence":"turn:2025-09-05#t9"}
+{"subject":"Getopel","relation":"favourite bakery","object":"Rise Bakehouse","valid_from":"2025-09-06","cardinality":"one","evidence":"turn:2025-09-06#t7"}
+{"subject":"Vetosor","relation":"offsite city","object":"Osaka","valid_from":"2025-09-09","cardinality":"many","evidence":"turn:2025-09-09#t9"}
+{"subject":"Febalek","relation":"supplier","object":"Greenfield","valid_from":"2025-09-10","cardinality":"many","evidence":"turn:2025-09-10#t5"}
+{"subject":"Bazimund","relation":"termination notice period","object":"60 days","valid_from":"2025-09-14","cardinality":"one","evidence":"doc:d040#p89"}
+{"subject":"Haveworth","relation":"supplier","object":"Cedarline","valid_from":"2025-09-22","cardinality":"many","evidence":"turn:2025-09-22#t1"}
+{"subject":"Toqunix","relation":"offsite city","object":"Bergen","valid_from":"2025-09-27","cardinality":"many","evidence":"turn:2025-09-27#t15"}
+{"subject":"Toralek","relation":"renewal term","object":"36 months","valid_from":"2025-09-28","cardinality":"one","evidence":"doc:d039#p225"}
+{"subject":"Sasaworth","relation":"new hire","object":"Tom Becker","valid_from":"2025-10-01","cardinality":"many","evidence":"turn:2025-10-01#t5"}
+{"subject":"Yofezen","relation":"coffee order","object":"an oat flat white","valid_from":"2025-10-01","cardinality":"one","evidence":"turn:2025-10-01#t13"}
+{"subject":"Zidevex","relation":"delivery window","object":"8 to 10am","valid_from":"2025-10-06","cardinality":"one","evidence":"turn:2025-10-06#t7"}
+{"subject":"Kabavar","relation":"kickoff date","object":"23 April","valid_from":"2025-10-10","cardinality":"one","evidence":"turn:2025-10-10#t3"}
+{"subject":"Kavemund","relation":"supplier","object":"Cedarline","valid_from":"2025-10-22","cardinality":"many","evidence":"turn:2025-10-22#t5"}
+{"subject":"Luzigar","relation":"offsite city","object":"Cape Town","valid_from":"2025-10-24","cardinality":"many","evidence":"turn:2025-10-24#t3"}
+{"subject":"Gehaton","relation":"seat count","object":"40 people","valid_from":"2025-10-24","cardinality":"one","evidence":"turn:2025-10-24#t9"}
+{"subject":"Kadevex","relation":"new hire","object":"Priya Shah","valid_from":"2025-11-10","cardinality":"many","evidence":"turn:2025-11-10#t1"}
+{"subject":"Bahasor","relation":"new hire","object":"Maya Chen","valid_from":"2025-11-11","cardinality":"many","evidence":"turn:2025-11-11#t9"}
+{"subject":"Fehabry","relation":"offsite city","object":"Reykjavik","valid_from":"2025-11-13","cardinality":"many","evidence":"turn:2025-11-13#t7"}
+{"subject":"Yoqudal","relation":"offsite city","object":"Vilnius","valid_from":"2025-11-16","cardinality":"many","evidence":"turn:2025-11-16#t1"}
+{"subject":"Kamipel","relation":"new hire","object":"Ingrid Holm","valid_from":"2025-11-27","cardinality":"many","evidence":"turn:2025-11-27#t5"}
+{"subject":"Lumidal","relation":"favourite bakery","object":"Crumb and Co","valid_from":"2025-12-06","cardinality":"one","evidence":"turn:2025-12-06#t7"}
+{"subject":"Sabamund","relation":"seat count","object":"10 people","valid_from":"2025-12-13","cardinality":"one","evidence":"turn:2025-12-13#t5"}
+{"subject":"Feyoton","relation":"new hire","object":"Tom Becker","valid_from":"2025-12-23","cardinality":"many","evidence":"turn:2025-12-23#t7"}
+{"subject":"Febalek","relation":"supplier","object":"Kingsley","valid_from":"2025-12-26","cardinality":"many","evidence":"turn:2025-12-26#t5"}
+{"subject":"Saverik","relation":"liability ceiling","object":"$4,000,000","valid_from":"2025-12-29","cardinality":"one","evidence":"doc:d008#p19"}
+{"subject":"Notomund","relation":"new hire","object":"Maya Chen","valid_from":"2026-01-06","cardinality":"many","evidence":"turn:2026-01-06#t9"}
+{"subject":"Verapel","relation":"delivery window","object":"noon to 2pm","valid_from":"2026-01-08","cardinality":"one","evidence":"turn:2026-01-08#t5"}
+{"subject":"Tonovex","relation":"new hire","object":"Nora Lindqvist","valid_from":"2026-01-16","cardinality":"many","evidence":"turn:2026-01-16#t1"}
+{"subject":"Tovegar","relation":"supplier","object":"Bluefin","valid_from":"2026-02-02","cardinality":"many","evidence":"turn:2026-02-02#t9"}
+{"subject":"Kavemund","relation":"supplier","object":"Harborview","valid_from":"2026-02-07","cardinality":"many","evidence":"turn:2026-02-07#t1"}
+{"subject":"Lulupel","relation":"supplier","object":"Oakridge","valid_from":"2026-02-08","cardinality":"many","evidence":"turn:2026-02-08#t7"}
+{"subject":"Fequgar","relation":"headcount","object":"53 people","valid_from":"2026-02-10","cardinality":"one","evidence":"turn:2026-02-10#t13"}
+{"subject":"Badelor","relation":"wifi network","object":"HARBOR-GUEST","valid_from":"2026-02-23","cardinality":"one","evidence":"turn:2026-02-23#t17"}
+{"subject":"Kadevex","relation":"new hire","object":"Tom Becker","valid_from":"2026-02-25","cardinality":"many","evidence":"turn:2026-02-25#t9"}
+{"subject":"Mitovar","relation":"supplier","object":"Silverleaf","valid_from":"2026-03-07","cardinality":"many","evidence":"turn:2026-03-07#t9"}
+{"subject":"Fegebry","relation":"favourite bakery","object":"Rise Bakehouse","valid_from":"2026-03-11","cardinality":"one","evidence":"turn:2026-03-11#t1"}
+{"subject":"Miquvar","relation":"kickoff date","object":"15 March","valid_from":"2026-03-14","cardinality":"one","evidence":"turn:2026-03-14#t7"}
+{"subject":"Sakabry","relation":"offsite city","object":"Denver","valid_from":"2026-03-15","cardinality":"many","evidence":"turn:2026-03-15#t7"}
+{"subject":"Sasalek","relation":"renewal term","object":"24 months","valid_from":"2026-03-15","cardinality":"one","evidence":"doc:d025#p64"}
+{"subject":"Ravebry","relation":"new hire","object":"Sam Whitfield","valid_from":"2026-04-11","cardinality":"many","evidence":"turn:2026-04-11#t7"}
+{"subject":"Miranix","relation":"termination notice period","object":"90 days","valid_from":"2026-04-19","cardinality":"one","evidence":"doc:d009#p1"}
+{"subject":"Rakarik","relation":"renewal term","object":"12 months","valid_from":"2026-04-22","cardinality":"one","evidence":"doc:d034#p275"}
+{"subject":"Kadevar","relation":"offsite city","object":"Porto","valid_from":"2026-04-24","cardinality":"many","evidence":"turn:2026-04-24#t7"}
+{"subject":"Sakabry","relation":"offsite city","object":"Oaxaca","valid_from":"2026-04-27","cardinality":"many","evidence":"turn:2026-04-27#t5"}
+{"subject":"Yoqudal","relation":"offsite city","object":"Oaxaca","valid_from":"2026-04-27","cardinality":"many","evidence":"turn:2026-04-27#t9"}
+{"subject":"Sayonix","relation":"budget","object":"$15,500 a month","valid_from":"2026-05-05","cardinality":"one","evidence":"turn:2026-05-05#t7"}
+{"subject":"Noyolek","relation":"delivery window","object":"8 to 10am","valid_from":"2026-05-21","cardinality":"one","evidence":"turn:2026-05-21#t1"}
+{"subject":"Notomund","relation":"new hire","object":"Nora Lindqvist","valid_from":"2026-05-28","cardinality":"many","evidence":"turn:2026-05-28#t17"}
+{"subject":"Derabry","relation":"parking spot","object":"P2-117","valid_from":"2026-06-04","cardinality":"one","evidence":"turn:2026-06-04#t7"}
+{"subject":"Lutovex","relation":"favourite bakery","object":"Crumb and Co","valid_from":"2026-06-09","cardinality":"one","evidence":"turn:2026-06-09#t17"}
+{"subject":"Kadevex","relation":"new hire","object":"Elena Novak","valid_from":"2026-06-11","cardinality":"many","evidence":"turn:2026-06-11#t1"}
+{"subject":"Feyoton","relation":"new hire","object":"Julia Brandt","valid_from":"2026-06-20","cardinality":"many","evidence":"turn:2026-06-20#t1"}
+{"subject":"Fefedal","relation":"coffee order","object":"a double espresso","valid_from":"2026-06-24","cardinality":"one","evidence":"turn:2026-06-24#t1"}
+{"subject":"Yogetis","relation":"offsite city","object":"Reykjavik","valid_from":"2026-06-28","cardinality":"many","evidence":"turn:2026-06-28#t1"}
+{"subject":"Velusor","relation":"wifi network","object":"ORCHARD-5G","valid_from":"2026-07-15","cardinality":"one","evidence":"turn:2026-07-15#t3"}
+{"subject":"Tonovex","relation":"new hire","object":"Ingrid Holm","valid_from":"2026-07-19","cardinality":"many","evidence":"turn:2026-07-19#t13"}
+{"subject":"Hafebry","relation":"offsite city","object":"Austin","valid_from":"2026-07-23","cardinality":"many","evidence":"turn:2026-07-23#t1"}
+{"subject":"Hadeworth","relation":"delivery window","object":"noon to 2pm","valid_from":"2026-08-02","cardinality":"one","evidence":"turn:2026-08-02#t7"}
+{"subject":"Kakadal","relation":"termination notice period","object":"120 days","valid_from":"2026-08-03","cardinality":"one","evidence":"doc:d007#p34"}
+{"subject":"Genozen","relation":"favourite bakery","object":"Petit Four","valid_from":"2026-08-07","cardinality":"one","evidence":"turn:2026-08-07#t7"}
+{"subject":"Notomund","relation":"new hire","object":"Omar Haddad","valid_from":"2026-08-08","cardinality":"many","evidence":"turn:2026-08-08#t1"}
+{"subject":"Hasadal","relation":"coffee order","object":"a cortado","valid_from":"2026-08-13","cardinality":"one","evidence":"turn:2026-08-13#t15"}
+{"subject":"Vehatis","relation":"indemnity cap","object":"$3,750,000","valid_from":"2026-08-16","cardinality":"one","evidence":"doc:d028#p1"}
+{"subject":"Luqutis","relation":"supplier","object":"Pinecrest","valid_from":"2026-08-19","cardinality":"many","evidence":"turn:2026-08-19#t3"}
+{"subject":"Fequdal","relation":"parking spot","object":"L1-015","valid_from":"2026-08-21","cardinality":"one","evidence":"turn:2026-08-21#t7"}
+{"subject":"Luzigar","relation":"offsite city","object":"Austin","valid_from":"2026-08-26","cardinality":"many","evidence":"turn:2026-08-26#t1"}
+{"subject":"Kadevex","relation":"new hire","object":"Rafael Ortiz","valid_from":"2026-09-02","cardinality":"many","evidence":"turn:2026-09-02#t3"}
+{"subject":"Gekavar","relation":"parking spot","object":"P3-309","valid_from":"2026-09-04","cardinality":"one","evidence":"turn:2026-09-04#t9"}

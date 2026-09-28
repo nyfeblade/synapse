@@ -1,0 +1,309 @@
+{
+ "scenario": "s08-websearch-sonnet5",
+ "seq": 21,
+ "request": {
+  "method": "POST",
+  "path": "/v1/messages?beta=true",
+  "auth": "oauth-access-token (authorization header)",
+  "headers": {
+   "accept": "application/json",
+   "content-type": "application/json",
+   "user-agent": "claude-cli/2.1.283 (external, sdk-cli)",
+   "x-claude-code-session-id": "<redacted>",
+   "x-stainless-arch": "arm64",
+   "x-stainless-lang": "js",
+   "x-stainless-os": "MacOS",
+   "x-stainless-package-version": "0.112.1",
+   "x-stainless-retry-count": "0",
+   "x-stainless-runtime": "node",
+   "x-stainless-runtime-version": "v26.3.0",
+   "x-stainless-timeout": "600",
+   "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,effort-2025-11-24,extended-cache-ttl-2025-04-11",
+   "anthropic-dangerous-direct-browser-access": "true",
+   "anthropic-version": "2023-06-01",
+   "x-app": "cli",
+   "connection": "keep-alive",
+   "host": "127.0.0.1:8787",
+   "accept-encoding": "gzip, deflate, br, zstd",
+   "content-length": "10522"
+  },
+  "dropped_headers": [
+   "authorization"
+  ],
+  "body_bytes_original": 10522,
+  "body_kind": "json",
+  "body": {
+   "model": "claude-sonnet-5",
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \nipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\n\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor\n"
+      },
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor"
+      }
+     ]
+    },
+    {
+     "role": "system",
+     "content": "lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \namet lorem ipsum dolo\n\nr sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsu\n\nm d\nolor sit amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\nlor\n\n sit amet lorem\n ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem i\npsum dolor sit a\n\nmet lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l\n\norem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit \n\namet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lore\n\nm ipsum dol\n\nor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \n\ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\n\num dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\n\nt amet lorem ipsu\n\nm dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor\n\nem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n\n lorem ipsum\n\n dolor sit amet lorem ipsum dolor sit amet lor\n\nem ipsum dolor sit am\net lorem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum d\nolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor \nsit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum do\nlor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolo\n\nr sit amet lorem ipsum\n\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\n\num dolor sit amet lorem ipsum dolor sit amet lor\nem ipsum dolor sit amet lorem ipsum \ndolor sit amet lorem ipsum dol\nor sit amet lorem ipsum dolor sit amet lorem ips\num dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem \n\nipsum dolor sit amet\n\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si\nt amet lorem ipsum dol\nor sit amet lorem \n\nipsum dolor sit a\nmet lorem ips\num dolor sit amet lorem ipsum dolor sit amet lorem i\npsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor\nem ipsum dolor sit amet lorem\n ipsum dolor sit am\net lorem ipsu\nm dolor sit amet lorem ipsum\n dolor sit amet lo\n\nrem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\n dolor sit amet lo\n\nrem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem ipsum do\nlor sit amet lorem\n\n ipsum dolor sit \namet lorem ipsum dolor sit \namet lorem ipsum d"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "toolu_0000000000000000000fake1",
+       "name": "WebSearch",
+       "input": {
+        "query": "lorem ipsum dolor si"
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "tool_use_id": "toolu_0000000000000000000fake1",
+       "type": "tool_result",
+       "content": "lorem ipsum dolor sit amet lorem ipsum dolor sit ame\n\nt lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lo\n\nrem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\n\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem\n\n\n ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am"
+      }
+     ]
+    },
+    {
+     "role": "system",
+     "content": [
+      {
+       "type": "text",
+       "text": "lorem ipsum dolor\n sit amet lorem ipsum dolor sit amet lorem ipsum \ndolor sit amet lor",
+       "cache_control": {
+        "type": "ephemeral",
+        "ttl": "1h"
+       }
+      }
+     ]
+    }
+   ],
+   "system": [
+    {
+     "type": "text",
+     "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor si"
+    },
+    {
+     "type": "text",
+     "text": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ip",
+     "cache_control": {
+      "type": "ephemeral",
+      "ttl": "1h"
+     }
+    },
+    {
+     "type": "text",
+     "text": "lorem ips",
+     "cache_control": {
+      "type": "ephemeral",
+      "ttl": "1h"
+     }
+    }
+   ],
+   "tools": [
+    {
+     "name": "WebSearch",
+     "description": "\nlorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor s\nit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem \nipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem i\npsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet \nlorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ips\n\num dolor sit amet lorem ipsum dolor sit amet\n lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am\net lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet \nlorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dol\nor sit amet lorem i\n\npsum dolor sit amet lo\n\nrem ipsum do\nlor sit amet lorem ipsum dolor sit amet lorem\n ipsum dolor sit amet lorem ipsum dolor sit a\n\nmet lorem ip\nsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit ame\nt lorem ipsum dolor sit amet lorem ipsum d\n\nolor sit amet lorem ipsum dolor sit amet lorem ipsu\nm dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum\n dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet \n",
+     "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+       "query": {
+        "description": "lorem ipsum dolor sit a",
+        "type": "string",
+        "minLength": 2
+       },
+       "allowed_domains": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor s",
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "blocked_domains": {
+        "description": "lorem ipsum dolor sit amet lorem ipsum dolor si",
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      },
+      "required": [
+       "query"
+      ],
+      "additionalProperties": false
+     }
+    }
+   ],
+   "metadata": {
+    "user_id": "lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit am"
+   },
+   "max_tokens": 64000,
+   "thinking": {
+    "type": "adaptive",
+    "display": "omitted"
+   },
+   "context_management": {
+    "edits": [
+     {
+      "type": "clear_thinking_20251015",
+      "keep": "all"
+     }
+    ]
+   },
+   "output_config": {
+    "effort": "high"
+   },
+   "stream": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "headers": {
+   "date": "Sat, 26 Sep 2026 01:48:02 GMT",
+   "content-type": "text/event-stream; charset=utf-8",
+   "transfer-encoding": "chunked",
+   "connection": "keep-alive",
+   "cache-control": "no-cache",
+   "anthropic-ratelimit-unified-5h-status": "<redacted>",
+   "anthropic-ratelimit-unified-representative-claim": "<redacted>",
+   "anthropic-ratelimit-unified-overage-status": "<redacted>",
+   "anthropic-ratelimit-unified-reset": "<redacted>",
+   "anthropic-ratelimit-unified-5h-utilization": "<redacted>",
+   "anthropic-ratelimit-unified-7d-reset": "<redacted>",
+   "anthropic-ratelimit-unified-5h-reset": "<redacted>",
+   "anthropic-ratelimit-unified-7d-status": "<redacted>",
+   "anthropic-ratelimit-unified-7d-surpassed-threshold": "<redacted>",
+   "anthropic-ratelimit-unified-fallback-percentage": "<redacted>",
+   "anthropic-ratelimit-unified-overage-disabled-reason": "<redacted>",
+   "anthropic-ratelimit-unified-7d-utilization": "<redacted>",
+   "anthropic-ratelimit-unified-status": "<redacted>",
+   "server": "cloudflare",
+   "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+   "anthropic-workspace-id": "<redacted>",
+   "traceresponse": "<redacted>",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "cf-cache-status": "<redacted>",
+   "x-robots-tag": "none",
+   "content-security-policy": "default-src 'none'; frame-ancestors 'none'"
+  },
+  "dropped_headers": [
+   "request-id",
+   "anthropic-organization-id",
+   "cf-ray"
+  ],
+  "ttfb_ms": 1394.4,
+  "total_ms": 1763.9,
+  "chunk_timing": [
+   {
+    "t_ms": 1394.9,
+    "bytes": 497
+   },
+   {
+    "t_ms": 1652.8,
+    "bytes": 76
+   },
+   {
+    "t_ms": 1653.2,
+    "bytes": 57
+   },
+   {
+    "t_ms": 1664.3,
+    "bytes": 35
+   },
+   {
+    "t_ms": 1710.8,
+    "bytes": 23
+   },
+   {
+    "t_ms": 1755.3,
+    "bytes": 17
+   },
+   {
+    "t_ms": 1755.6,
+    "bytes": 23
+   },
+   {
+    "t_ms": 1757.7,
+    "bytes": 122
+   },
+   {
+    "t_ms": 1763.6,
+    "bytes": 10
+   }
+  ],
+  "note": "stream arrived gzip-encoded; chunk timing kept by incremental decode",
+  "kind": "sse",
+  "sse": [
+   {
+    "t_ms": 1394.9,
+    "raw": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5\",\"id\":\"msg_0000000000000000000fake1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":962,\"cache_read_input_tokens\":2861,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":962},\"output_tokens\":6,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"diagnostics\":null,\"context_management\":null}}\n\n"
+   },
+   {
+    "t_ms": 1394.9,
+    "raw": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+   },
+   {
+    "t_ms": 1394.9,
+    "raw": "event: ping\ndata: {\"type\":\"ping\"}\n\n"
+   },
+   {
+    "t_ms": 1394.9,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ip\"}}\n\n"
+   },
+   {
+    "t_ms": 1652.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\n\\nlorem ip\\nsum dol\"}}\n\n"
+   },
+   {
+    "t_ms": 1652.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit amet l\"}}\n\n"
+   },
+   {
+    "t_ms": 1653.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit\"}}\n\n"
+   },
+   {
+    "t_ms": 1653.2,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit\"}}\n\n"
+   },
+   {
+    "t_ms": 1664.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor sit\"}}\n\n"
+   },
+   {
+    "t_ms": 1710.8,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lorem ipsum dolor s\"}}\n\n"
+   },
+   {
+    "t_ms": 1755.3,
+    "raw": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lor\"}}\n\n"
+   },
+   {
+    "t_ms": 1755.6,
+    "raw": "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+   },
+   {
+    "t_ms": 1757.7,
+    "raw": "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":962,\"cache_read_input_tokens\":2861,\"output_tokens\":57,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}}\n\n"
+   },
+   {
+    "t_ms": 1757.7,
+    "raw": "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   }
+  ]
+ },
+ "error": null
+}

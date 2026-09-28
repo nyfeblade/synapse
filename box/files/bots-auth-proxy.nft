@@ -1,0 +1,16 @@
+#!/usr/sbin/nft -f
+# Bug 117: the host's auth proxy (127.0.0.1:47802, host/auth/proxy.ts) holds the real Claude credential. Only
+# bothost (the proxy itself), box (host-internal Claude calls, and Bots before the per-Bot migration) and the
+# per-Bot accounts (uids 60200-61099, bug #66) may connect to it; any other local user is refused. A caller also
+# needs a live per-spawn proxy token.
+table inet bots_auth_proxy
+delete table inet bots_auth_proxy
+table inet bots_auth_proxy {
+  chain output {
+    type filter hook output priority 0; policy accept;
+    ip daddr 127.0.0.1 tcp dport 47802 meta skuid { "bothost", "box" } accept
+    ip daddr 127.0.0.1 tcp dport 47802 meta skuid 60200-61099 accept
+    ip daddr 127.0.0.1 tcp dport 47802 counter reject with tcp reset
+    ip6 daddr ::1 tcp dport 47802 counter reject with tcp reset
+  }
+}

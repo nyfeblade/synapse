@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; frame-src 'self' blob:; connect-src 'self' ws://127.0.0.1:*" />
+    <title>Synapse</title>
+  </head>
+  <body>
+    <!-- Covers the window from its first paint so the app never flashes in before the launch snap
+         (launch/LaunchOverlay.tsx lifts it; public/launch-cover.js fades it out 2 s after the first
+         frame whatever happens). -->
+    <div id="launch-cover" aria-hidden="true"></div>
+    <script src="./launch-cover.js"></script>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,66 @@
+#!/bin/sh
+# Root-owned. Deletes one box-owned Claude Code session transcript for bothost (BOT-11 delete, CT-14 cleanup): the CLI
+# writes these 0600 box:bots inside a directory bothost has no write bits on. Only bothost may invoke this through
+# sudo, and only for
+#   /home/box/.claude/projects/-workspace/<lowercase uuid>.jsonl
+# (one allowlisted directory, a uuid-validated file name, no traversal, no symlinked directory). It also removes the
+# session's sibling <uuid>/ directory if the CLI made one. A missing file is not an error (idempotent).
+#
+# Final secfix round 3 (ruling 1): root only validates the argument and re-execs this script as box (setpriv
+# --reuid=box --regid=bots --init-groups --reset-env); every check and every rm runs as box, so a directory swapped
+# for a link can only ever lead box's own rm somewhere box could already delete.
+set -eu
+N=bot-claude-delete-session
+DIR=/home/box/.claude/projects/-workspace
+H='[0-9a-f]'
+UUID="$H$H$H$H$H$H$H$H-$H$H$H$H-$H$H$H$H-$H$H$H$H-$H$H$H$H$H$H$H$H$H$H$H$H"
+
+# Bug #66: a per-Bot session lives under /home/bots/<account>/.claude/projects/ and is handled AS that account (a
+# bot-user account in the reserved range, homed there); anything else is the legacy shared tree, handled as box.
+X='[0-9a-f]'
+ACCT=""
+case "${1:-}" in
+  /home/bots/*)
+    ACCT="${1#/home/bots/}"; ACCT="${ACCT%%/*}"
+    # The unquoted pattern is a glob: bot- and exactly 12 lowercase hex characters.
+    case "$ACCT" in bot-$X$X$X$X$X$X$X$X$X$X$X$X) ;; *) echo "$N: not a Bot account's path" >&2; exit 126 ;; esac
+    ENT="$(getent passwd "$ACCT")" || { echo "$N: no such Bot account" >&2; exit 126; }
+    AUID="$(printf '%s' "$ENT" | cut -d: -f3)"; AGID="$(printf '%s' "$ENT" | cut -d: -f4)"
+    case "$AUID$AGID" in ''|*[!0-9]*) echo "$N: not a Bot account" >&2; exit 126 ;; esac
+    { [ "$AUID" -ge 60200 ] && [ "$AUID" -le 61099 ] && [ "$(printf '%s' "$ENT" | cut -d: -f6)" = "/home/bots/$ACCT" ]; } || { echo "$N: not a Bot account" >&2; exit 126; }
+    ROOT="/home/bots/$ACCT/.claude/projects/" ;;
+esac
+[ -z "$ACCT" ] || DIR="/home/bots/$ACCT/.claude/projects/-workspace"
+
+check_args() {
+  [ $# -eq 1 ] || { echo "$N: exactly one path argument required" >&2; exit 2; }
+  [ "${1%/*}" = "$DIR" ] || { echo "$N: directory must be $DIR" >&2; exit 126; }
+  # The unquoted $UUID is a glob pattern: 36 characters exactly, lowercase hex and dashes only.
+  case "${1##*/}" in
+    $UUID.jsonl) ;;
+    *) echo "$N: not a session file name (<uuid>.jsonl)" >&2; exit 126 ;;
+  esac
+}
+
+if [ "$(id -u)" = 0 ]; then
+  [ "${SUDO_USER:-}" = "bothost" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+  check_args "$@"
+  if [ -n "$ACCT" ]; then exec setpriv --reuid="$AUID" --regid="$AGID" --init-groups --reset-env -- "$0" "$@"; fi
+  exec setpriv --reuid=box --regid=bots --init-groups --reset-env -- "$0" "$@"
+fi
+if [ -n "$ACCT" ]; then
+  [ "$(id -u)" = "$AUID" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+else
+  [ "$(id -u)" = "$(id -u box 2>/dev/null || echo none)" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+fi
+check_args "$@"
+
+# ---- everything below runs as box ----
+NAME="${1##*/}"
+SID="${NAME%.jsonl}"
+[ -d "$DIR" ] || exit 0
+[ ! -L "$DIR" ] || { echo "$N: directory is a symlink" >&2; exit 126; }
+[ "$(readlink -f -- "$DIR")" = "$DIR" ] || { echo "$N: directory resolves outside $DIR" >&2; exit 126; }
+rm -f -- "$DIR/$NAME"
+if [ -e "$DIR/$SID" ] || [ -L "$DIR/$SID" ]; then rm -rf -- "$DIR/$SID"; fi
+exit 0

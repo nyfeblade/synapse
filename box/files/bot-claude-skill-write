@@ -1,0 +1,76 @@
+#!/bin/sh
+# Root-owned. Writes (or overwrites) one user-authored skill's SKILL.md under ~/.claude/skills for bothost
+# (SkillLibrary.write).
+#
+# CONTROLLER RULING (final secfix round 2, SkillLibrary follow-up): ~/.claude/skills is box:bots 2775 -- box-writable
+# by design, because Bot processes (running as box) edit skills too -- so bothost never touches this tree with its own
+# fs calls; it shells out, via `sudo -n`, to this helper.
+#
+# Final secfix round 3 (ruling 1): root does ONLY the argument validation and then re-execs this script as box
+# (setpriv --reuid=box --regid=bots --init-groups --reset-env). Every filesystem step below runs as box: a skills
+# directory swapped for a link to /, a SKILL.md that is (a link to) a directory, or a link planted at a temp name can
+# only ever redirect box's own rights. The temp file comes from mktemp (random name, O_EXCL); the publish is
+# `mv -fT` (a rename that replaces SKILL.md itself, never moves into a directory) or, with --no-clobber, `ln -T`
+# (fails if SKILL.md exists). Nothing is ever chowned.
+#
+# The skill id is validated against the host's slug pattern ^[a-z0-9][a-z0-9._-]*$ (no "..", no "/"). Content comes
+# from stdin (never a shell argument), capped at 8 MiB. templates/importer.ts passes --no-clobber for a brand-new skill.
+set -eu
+umask 002
+N=bot-claude-skill-write
+ROOT=/home/box/.claude/skills
+
+check_args() {
+  [ $# -eq 1 ] || [ $# -eq 2 ] || { echo "$N: one or two arguments required (skill id, optional --no-clobber)" >&2; exit 2; }
+  if [ $# -eq 2 ]; then [ "$2" = "--no-clobber" ] || { echo "$N: unknown second argument" >&2; exit 2; }; fi
+  case "$1" in *..*) echo "$N: invalid skill id" >&2; exit 126 ;; esac
+  case "$1" in [a-z0-9]*) ;; *) echo "$N: invalid skill id" >&2; exit 126 ;; esac
+  case "$1" in *[!a-z0-9._-]*) echo "$N: invalid skill id" >&2; exit 126 ;; esac
+}
+
+if [ "$(id -u)" = 0 ]; then
+  [ "${SUDO_USER:-}" = "bothost" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+  check_args "$@"
+  exec setpriv --reuid=box --regid=bots --init-groups --reset-env -- "$0" "$@"
+fi
+[ "$(id -u)" = "$(id -u box 2>/dev/null || echo none)" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+check_args "$@"
+
+# ---- everything below runs as box ----
+ID="$1"
+NOCLOBBER=0
+[ $# -eq 1 ] || NOCLOBBER=1
+[ ! -L "$ROOT" ] || { echo "$N: skills directory is a symlink" >&2; exit 126; }
+[ -e "$ROOT" ] || mkdir -m 2775 -- "$ROOT"
+[ -d "$ROOT" ] || { echo "$N: skills directory does not exist" >&2; exit 126; }
+[ "$(readlink -f -- "$ROOT")" = "$ROOT" ] || { echo "$N: skills directory resolves elsewhere (symlink?)" >&2; exit 126; }
+
+DIR="$ROOT/$ID"
+if [ -e "$DIR" ] || [ -L "$DIR" ]; then
+  [ ! -L "$DIR" ] || { echo "$N: skill directory is a symlink" >&2; exit 126; }
+  [ -d "$DIR" ] || { echo "$N: skill path is not a directory" >&2; exit 126; }
+else
+  mkdir -m 2775 -- "$DIR"
+fi
+[ "$(readlink -f -- "$DIR")" = "$DIR" ] || { echo "$N: skill directory resolves elsewhere (symlink?)" >&2; exit 126; }
+
+TARGET="$DIR/SKILL.md"
+if [ -d "$TARGET" ] && [ ! -L "$TARGET" ]; then echo "$N: SKILL.md is a directory" >&2; exit 126; fi
+LIMIT=$((8 * 1024 * 1024))
+TMP="$(mktemp "$DIR/.bot-claude-skill-write.XXXXXX")" || { echo "$N: cannot create a temp file" >&2; exit 126; }
+trap 'rm -f -- "$TMP"' EXIT
+head -c "$((LIMIT + 1))" > "$TMP"
+SIZE=$(wc -c < "$TMP" | tr -d ' ')
+if [ "$SIZE" -gt "$LIMIT" ]; then
+  echo "$N: input exceeds the $LIMIT byte size cap" >&2
+  exit 126
+fi
+chmod 0664 -- "$TMP"
+if [ "$NOCLOBBER" -eq 1 ]; then
+  if ! ln -T -- "$TMP" "$TARGET"; then
+    echo "$N: refusing to overwrite an existing file" >&2
+    exit 126
+  fi
+else
+  mv -fT -- "$TMP" "$TARGET"
+fi

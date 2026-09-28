@@ -1,0 +1,17 @@
+{
+ "about": "The twelve front-voice replies of the approved real-model run (Sonnet 5, low effort, 2026-09-23), kept as a fixture for voice-prosody.test.tsx.",
+ "replies": [
+  "Going fine on my end! Want me to check those retainer numbers now, or just keep watching in the background like planned?",
+  "Let me pull those up for you now.",
+  "On it — texting Sam now.",
+  "Yep, already sent it your way — I'll let you know once it's confirmed sent.",
+  "Anytime — I'll ping you once the retainer numbers and the text to Sam both come back.",
+  "Checking that now.",
+  "I don't have tomorrow's schedule back yet, so I can't confirm which one that is — give me a sec and I'll have the full rundown for you.",
+  "I need to know which event's deck you mean first — once I get tomorrow's calendar back I'll confirm the afternoon one is the lawyers meeting, then open its deck. Give me just a moment.",
+  "I'm still waiting on tomorrow's calendar to come back, so I don't actually know what the two meetings are yet — I'll sort out which is which and open the right deck as soon as it lands.",
+  "Of course — I'll follow up as soon as everything comes back in.",
+  "Got it, setting that reminder now.",
+  "Sounds good, talk later — I'll have all those updates waiting for you."
+ ]
+}

@@ -1,0 +1,1 @@
+[The user has given the box back to you. Pick the task up where you stopped. First look at your screen with the read-only mcp__bot__Screenshot tool, then keep going. The user only sees what you send with SendMessage.]

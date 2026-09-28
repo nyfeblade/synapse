@@ -1,0 +1,1 @@
+<system_reminder>This turn began with tool calls and no word to the user. They are waiting and can't see your tool calls. Call the SendMessage tool RIGHT NOW with a one-line acknowledgement, then carry on. A widget, attachment, or coding-agent card does not count.</system_reminder>

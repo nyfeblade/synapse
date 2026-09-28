@@ -1,0 +1,20 @@
+#!/bin/bash
+# TOOL-11: run the host-written script, append its output and the exit footer to the terminal file.
+# $2: the root-owned copy of the host's script (bot-shell, security re-review item 5).
+# $3 = --stdout (bug #66, a Bot's own account): stdout already IS the Bot's private terminal file (systemd opened it
+# with StandardOutput=append:), and the cwd note is a fresh mktemp file (random name, 0600) the script finds in
+# $BOT_SHELL_CWD_FILE -- not systemd's PrivateTmp, which is inert on OrbStack (live finding). Else the shared dir.
+id="$1"; script="$2"
+if [ "${3:-}" = --stdout ]; then
+  exec 3>&1; cwdf="$(mktemp)"; export BOT_SHELL_CWD_FILE="$cwdf"
+else
+  dir=/workspace/.bot/terminals; exec 3>>"$dir/$id.txt"; cwdf="$dir/$id.cwd"
+fi
+start=$(date +%s%3N)
+bash "$script" >&3 2>&3 </dev/null
+ec=$?
+end=$(date +%s%3N)
+cwd="$(cat "$cwdf" 2>/dev/null || pwd)"
+printf '\n---\nexit_code: %d\nelapsed_ms: %d\nended_at: %d\ncwd: %s\n---\n' "$ec" $((end - start)) "$end" "$cwd" >&3
+rm -f "$cwdf"
+exit 0

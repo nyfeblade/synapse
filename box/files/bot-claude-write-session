@@ -1,0 +1,83 @@
+#!/bin/sh
+# Root-owned. Writes a NEW box-owned Claude Code session transcript for bothost (CT-14 rollover): bothost has no
+# write bits under /home/box/.claude/projects/ to create one directly. Only bothost may invoke this through sudo, and
+# only for a single path strictly under /home/box/.claude/projects/, with no traversal and no symlink escape. The
+# content is read from stdin (never a shell argument). It never overwrites an existing file.
+#
+# Final secfix round 3 (ruling 1): root does ONLY the argument validation and then re-execs this script as box
+# (setpriv --reuid=box --regid=bots --init-groups --reset-env). Every filesystem step (the checks, the mktemp temp
+# file, the write, the no-clobber `ln -T` publish, the cleanup) runs as box, so a link box planted anywhere can only
+# redirect box's own rights -- never root's. The temp file comes from mktemp (random name, O_EXCL), so a link planted
+# at a predictable name is never written through.
+set -eu
+umask 077
+N=bot-claude-write-session
+ROOT=/home/box/.claude/projects/
+
+# Bug #66: a per-Bot session lives under /home/bots/<account>/.claude/projects/ and is handled AS that account (a
+# bot-user account in the reserved range, homed there); anything else is the legacy shared tree, handled as box.
+X='[0-9a-f]'
+ACCT=""
+case "${1:-}" in
+  /home/bots/*)
+    ACCT="${1#/home/bots/}"; ACCT="${ACCT%%/*}"
+    # The unquoted pattern is a glob: bot- and exactly 12 lowercase hex characters.
+    case "$ACCT" in bot-$X$X$X$X$X$X$X$X$X$X$X$X) ;; *) echo "$N: not a Bot account's path" >&2; exit 126 ;; esac
+    ENT="$(getent passwd "$ACCT")" || { echo "$N: no such Bot account" >&2; exit 126; }
+    AUID="$(printf '%s' "$ENT" | cut -d: -f3)"; AGID="$(printf '%s' "$ENT" | cut -d: -f4)"
+    case "$AUID$AGID" in ''|*[!0-9]*) echo "$N: not a Bot account" >&2; exit 126 ;; esac
+    { [ "$AUID" -ge 60200 ] && [ "$AUID" -le 61099 ] && [ "$(printf '%s' "$ENT" | cut -d: -f6)" = "/home/bots/$ACCT" ]; } || { echo "$N: not a Bot account" >&2; exit 126; }
+    ROOT="/home/bots/$ACCT/.claude/projects/" ;;
+esac
+
+check_args() {
+  [ -n "${1:-}" ] || { echo "$N: missing path argument" >&2; exit 2; }
+  [ $# -eq 1 ] || { echo "$N: exactly one path argument required" >&2; exit 2; }
+  case "$1" in "$ROOT"*) ;; *) echo "$N: path must be under $ROOT" >&2; exit 126 ;; esac
+  case "$1" in *..*) echo "$N: path traversal rejected" >&2; exit 126 ;; esac
+  case "$1" in *.jsonl) ;; *) echo "$N: only .jsonl session transcripts may be written" >&2; exit 126 ;; esac
+}
+
+if [ "$(id -u)" = 0 ]; then
+  [ "${SUDO_USER:-}" = "bothost" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+  check_args "$@"
+  if [ -n "$ACCT" ]; then exec setpriv --reuid="$AUID" --regid="$AGID" --init-groups --reset-env -- "$0" "$@"; fi
+  exec setpriv --reuid=box --regid=bots --init-groups --reset-env -- "$0" "$@"
+fi
+if [ -n "$ACCT" ]; then
+  [ "$(id -u)" = "$AUID" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+else
+  [ "$(id -u)" = "$(id -u box 2>/dev/null || echo none)" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+fi
+check_args "$@"
+
+# ---- everything below runs as box ----
+TARGET="$1"
+PARENT="$(dirname -- "$TARGET")"
+[ ! -L "$PARENT" ] || { echo "$N: parent directory is a symlink" >&2; exit 126; }
+REALPARENT="$(readlink -f -- "$PARENT")" || { echo "$N: cannot resolve parent directory" >&2; exit 126; }
+case "$REALPARENT/" in
+  "$ROOT"*) ;;
+  *) echo "$N: resolved parent directory escapes $ROOT (symlink?)" >&2; exit 126 ;;
+esac
+[ -d "$REALPARENT" ] || { echo "$N: parent directory does not exist" >&2; exit 126; }
+REAL="$REALPARENT/$(basename -- "$TARGET")"
+# Courtesy check only; the no-clobber guarantee is the atomic `ln -T` below.
+if [ -e "$REAL" ] || [ -L "$REAL" ]; then echo "$N: refusing to overwrite an existing file" >&2; exit 126; fi
+
+# Size cap (64 MiB): read at most LIMIT+1 bytes so oversized input is rejected without buffering more than that.
+LIMIT=$((64 * 1024 * 1024))
+TMP="$(mktemp "$REALPARENT/.bot-claude-write-session.XXXXXX")" || { echo "$N: cannot create a temp file" >&2; exit 126; }
+trap 'rm -f -- "$TMP"' EXIT
+head -c "$((LIMIT + 1))" > "$TMP"
+SIZE=$(wc -c < "$TMP" | tr -d ' ')
+if [ "$SIZE" -gt "$LIMIT" ]; then
+  echo "$N: input exceeds the $LIMIT byte size cap" >&2
+  exit 126
+fi
+chmod 0600 -- "$TMP"
+# Atomic, no-clobber publish: `ln -T` fails with EEXIST if anything (a file, a link, a directory) now has the name.
+if ! ln -T -- "$TMP" "$REAL"; then
+  echo "$N: refusing to overwrite an existing file" >&2
+  exit 126
+fi

@@ -1,0 +1,32 @@
+[
+  {
+    "file": "src/csv.ts",
+    "find": "export type Row = string[];",
+    "replace": "export type Row = string[];\n\nexport interface CsvOptions {\n  /** One character. Default \",\". */\n  delimiter?: string;\n}\n\nfunction delimiterOf(o: CsvOptions): string {\n  const d = o.delimiter ?? \",\";\n  if ([...d].length !== 1) throw new RangeError(`delimiter must be one character, got \"${d}\"`);\n  return d;\n}"
+  },
+  {
+    "file": "src/csv.ts",
+    "find": "export function parseCsv(text: string): Row[] {\n  const rows: Row[] = [];",
+    "replace": "export function parseCsv(text: string, options: CsvOptions = {}): Row[] {\n  const delimiter = delimiterOf(options);\n  const rows: Row[] = [];"
+  },
+  {
+    "file": "src/csv.ts",
+    "find": "} else if (ch === \",\" && !inQuotes) {",
+    "replace": "} else if (ch === delimiter && !inQuotes) {"
+  },
+  {
+    "file": "src/csv.ts",
+    "find": "function needsQuotes(field: string): boolean {\n  return /[\",\\r\\n]/.test(field) || field !== field.trim();\n}",
+    "replace": "function needsQuotes(field: string, delimiter: string): boolean {\n  return /[\",\\r\\n]/.test(field) || field.includes(delimiter) || field !== field.trim();\n}"
+  },
+  {
+    "file": "src/csv.ts",
+    "find": "export function quoteField(field: string): string {\n  return needsQuotes(field) ?",
+    "replace": "export function quoteField(field: string, delimiter = \",\"): string {\n  return needsQuotes(field, delimiter) ?"
+  },
+  {
+    "file": "src/csv.ts",
+    "find": "export function stringifyCsv(rows: readonly Row[]): string {\n  return rows.map((r) => r.map(quoteField).join(\",\")).join(\"\\n\")",
+    "replace": "export function stringifyCsv(rows: readonly Row[], options: CsvOptions = {}): string {\n  const d = delimiterOf(options);\n  return rows.map((r) => r.map((f) => quoteField(f, d)).join(d)).join(\"\\n\")"
+  }
+]

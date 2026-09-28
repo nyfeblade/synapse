@@ -1,0 +1,1 @@
+You acknowledged the user, then kept working with tools and stopped without sending the outcome. Call the SendMessage tool now with what you found or did. Text you write outside SendMessage never reaches the user.{{UNSENT}}

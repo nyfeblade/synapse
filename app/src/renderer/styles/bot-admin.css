@@ -1,0 +1,5 @@
+.hidden-row{color:var(--ink-muted);font-size:13px}.plain-list{list-style:none;margin:0;padding:8px 16px}.list-row{display:flex;align-items:center;gap:10px;height:44px}.grow{flex-grow:1;min-width:0}.modal.small{width:420px;max-height:560px}
+
+/* No interaction states live here: `.hidden-row` is a modifier on app.css's `.row` button and the
+   `.list-row` items are static rows whose only controls are app.css `.btn`s — both already covered
+   by app.css's interaction-states section. */

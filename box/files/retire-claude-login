@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# synapse-public (review round 2, S1): no Claude login may sit on the box's disk. Run as root by provision.sh (every
+# provision, idempotent). Every account here is the app's own (box, the per-Bot accounts), so their Claude config dirs
+# are app data:
+#   - .credentials.json (a stored claude.ai login) goes from /home/box/.claude and every /home/bots/<name>/.claude;
+#   - the old setup token file and any temp file of it go from /home/box/.host;
+#   - managed settings pin the CLI's login method to the Anthropic Console (API key), so a `claude` a Bot starts by
+#     hand can't sign in to claude.ai (forceLoginMethod, honoured from /etc/claude-code/managed-settings.json).
+# A link is unlinked, never followed; hostPrivate (bothost-only, not Bot-writable) is cleaned as root. ROOT (first argument, default /) is for tests.
+set -euo pipefail
+R="${1:-}"
+R="${R%/}"
+rm_plain() {
+  if [ -f "$1" ] && [ ! -L "$1" ]; then rm -f -- "$1"; echo "removed ${1#"$R"}"; fi
+  return 0
+}
+# Review round 3 (D1): a config dir box or a Bot owns is theirs to change under us, so a root rm there could be steered
+# (a swapped link or dir between check and rm). Each stored login is removed AS the dir's owner (runuser), who can only
+# ever reach what they could reach anyway; a planted link is unlinked (rm on a link removes the link, never its target).
+STAT="${RETIRE_STAT:-stat}"
+for d in "$R/home/box/.claude" "$R"/home/bots/*/.claude; do
+  [ -d "$d" ] && [ ! -L "$d" ] || continue
+  owner="$("$STAT" -c %U -- "$d" 2>/dev/null || true)"
+  [ -n "$owner" ] && [ "$owner" != root ] || continue
+  f="$d/.credentials.json"
+  if [ -L "$f" ] || [ -e "$f" ]; then
+    runuser -u "$owner" -- rm -f -- "$f" && echo "removed ${f#"$R"}"
+  fi
+done
+for f in "$R/home/box/.host/claude-oauth-token" "$R"/home/box/.host/claude-oauth-token*.tmp; do
+  rm_plain "$f"
+done
+mkdir -p "$R/etc/claude-code"
+chmod 0755 "$R/etc/claude-code"
+MS="$R/etc/claude-code/managed-settings.json"
+if [ -L "$MS" ]; then rm -f -- "$MS"; fi
+printf '{\n  "forceLoginMethod": "console"\n}\n' > "$MS.tmp.$$"
+chmod 0644 "$MS.tmp.$$"
+mv -f -- "$MS.tmp.$$" "$MS"

@@ -1,0 +1,20 @@
+Defaults!/usr/local/libexec/bot-claude-as-box !env_reset, !use_pty, secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
+# Bug 231 round 1: read-only queries as a Bot (the review fast path in ~/code). Fresh env, fixed PATH.
+Defaults!/usr/local/libexec/bot-fs-query env_reset, !use_pty, secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
+Defaults!/usr/local/libexec/bot-reap !use_pty
+Defaults!/usr/local/libexec/bot-git-as-box !use_pty
+Defaults!/usr/local/libexec/bot-mcp-as-box !use_pty
+Defaults!/usr/local/libexec/bot-claude-read-session !use_pty
+Defaults!/usr/local/libexec/bot-claude-write-session !use_pty
+Defaults!/usr/local/libexec/bot-claude-delete-session !use_pty
+Defaults!/usr/local/libexec/bot-claude-skill-write !use_pty
+Defaults!/usr/local/libexec/bot-claude-skill-delete !use_pty
+Defaults!/usr/local/libexec/bot-claude-skill-write-file !use_pty
+bothost ALL=(root) NOPASSWD: /usr/local/libexec/bot-claude-as-box, /usr/local/libexec/bot-claude-as-box *, /usr/local/libexec/bot-reap, /usr/local/libexec/bot-reap *, /usr/local/libexec/bot-claude-read-session, /usr/local/libexec/bot-claude-read-session *, /usr/local/libexec/bot-claude-write-session, /usr/local/libexec/bot-claude-write-session *, /usr/local/libexec/bot-claude-delete-session *, /usr/local/libexec/bot-claude-skill-write *, /usr/local/libexec/bot-claude-skill-delete *, /usr/local/libexec/bot-claude-skill-write-file *, /usr/local/libexec/bot-git-as-box *, /usr/local/libexec/bot-mcp-as-box *, /usr/local/libexec/bot-fs-query *
+Defaults!/usr/local/libexec/bot-display !use_pty
+Defaults!/usr/local/libexec/bot-shell !use_pty
+Defaults!/usr/local/libexec/bot-snapshot !use_pty
+Defaults!/usr/local/libexec/bot-atspi !use_pty
+bothost ALL=(root) NOPASSWD: /usr/local/libexec/bot-display *, /usr/local/libexec/bot-shell *, /usr/local/libexec/bot-snapshot *, /usr/local/libexec/bot-atspi *
+Defaults!/usr/local/libexec/bot-user !use_pty
+bothost ALL=(root) NOPASSWD: /usr/local/libexec/bot-user *

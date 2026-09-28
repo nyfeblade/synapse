@@ -1,0 +1,7 @@
+[
+  {
+    "file": "src/money.ts",
+    "find": "  return shares.map((s) => s * sign);",
+    "replace": "  let left = abs - shares.reduce((a, b) => a + b, 0);\n  for (let i = 0; left > 0; i = (i + 1) % shares.length, left--) shares[i]!++;\n  return shares.map((s) => s * sign);"
+  }
+]

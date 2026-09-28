@@ -1,0 +1,3 @@
+[
+  { "file": "src/index.ts", "find": "export * from \"./seed\";", "replace": "export * from \"./seed\";\nexport * from \"./import\";" }
+]

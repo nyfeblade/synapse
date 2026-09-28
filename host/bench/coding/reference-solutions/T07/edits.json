@@ -1,0 +1,13 @@
+[
+  { "file": "src/customers.ts", "find": "  /** The name printed on invoices and reports. */\n  name: string;", "replace": "  /** The name printed on invoices and reports. */\n  legalName: string;" },
+  { "file": "src/customers.ts", "find": "  if (!c.name.trim()) errors.push(\"name is empty\");", "replace": "  if (!c.legalName.trim()) errors.push(\"legalName is empty\");" },
+  { "file": "src/customers.ts", "find": "  rename(id: string, name: string): Customer {\n    const c = this.require(id);\n    const next = { ...c, name };", "replace": "  rename(id: string, legalName: string): Customer {\n    const c = this.require(id);\n    const next = { ...c, legalName };" },
+  { "file": "src/customers.ts", "find": "return this.get(id)?.name ?? id;", "replace": "return this.get(id)?.legalName ?? id;" },
+  { "file": "src/seed.ts", "find": "{ id: \"c-acme\", name: ", "replace": "{ id: \"c-acme\", legalName: " },
+  { "file": "src/seed.ts", "find": "{ id: \"c-birch\", name: ", "replace": "{ id: \"c-birch\", legalName: " },
+  { "file": "src/seed.ts", "find": "{ id: \"c-cedar\", name: ", "replace": "{ id: \"c-cedar\", legalName: " },
+  { "file": "src/seed.ts", "find": "{ id: \"c-delta\", name: ", "replace": "{ id: \"c-delta\", legalName: " },
+  { "file": "test/customers.test.ts", "find": "store.load(\"c-acme\")!.name", "replace": "store.load(\"c-acme\")!.legalName" },
+  { "file": "test/customers.test.ts", "find": "dir.add({ id: \"x\", name: \"X\",", "replace": "dir.add({ id: \"x\", legalName: \"X\"," },
+  { "file": "test/customers.test.ts", "find": "validateCustomer({ id: \"y\", name: \" \", email: \"a@b.co\", region: \"GB\" })).toEqual([\"name is empty\"]);", "replace": "validateCustomer({ id: \"y\", legalName: \" \", email: \"a@b.co\", region: \"GB\" })).toEqual([\"legalName is empty\"]);" }
+]

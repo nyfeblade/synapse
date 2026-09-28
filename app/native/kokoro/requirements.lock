@@ -1,0 +1,75 @@
+# The bundled Kokoro runtime's site-packages (scripts/kokoro-runtime.mjs installs these with
+# pip --no-deps --only-binary=:all:). Exactly the modules kokoro_server.py imports when it loads
+# the model and speaks, measured on the reference setup (mlx-audio 0.2.9 + misaki 0.9.4 + spaCy
+# 3.7.5 on MLX 0.29.3), and nothing else: mlx-audio's declared dependencies pull transformers,
+# torch-adjacent tokenizers and a web server the sidecar never touches.
+# Versions are the reference setup's, so the bundled voice sounds exactly like the one it replaces.
+addict==2.4.0 --hash=sha256:249bb56bbfd3cdc2a004ea0ff4c2b6ddc84d53bc2194761636eb314d5cfa5dfc
+annotated-doc==0.0.5 --hash=sha256:117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101
+annotated-types==0.7.0 --hash=sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53
+attrs==26.1.0 --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
+babel==2.18.0 --hash=sha256:e2b422b277c2b9a9630c1d7903c2a00d0830c409c59ac8cae9081c92f1aeba35
+blis==0.7.11 --hash=sha256:5bcdaf370f03adaf4171d6405a89fa66cb3c09399d75fc02e1230a78cd2759e4
+catalogue==2.0.10 --hash=sha256:58c2de0020aa90f4a2da7dfad161bf7b3b054c86a5f09fcedc0b2b740c109a9f
+certifi==2026.7.22 --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775
+charset-normalizer==3.5.1 --hash=sha256:5b6d1386bf0096d26d3a863dc0a487a5b4eb9aa93cf5ba69683d29dde6b9d60f
+click==8.1.8 --hash=sha256:63c132bbbed01578a06712a2d1f497bb62d9c1c0d329b7903a866228027263b2
+confection==0.1.5 --hash=sha256:e29d3c3f8eac06b3f77eb9dfb4bf2fc6bcc9622a98ca00a698e3d019c6430b14
+csvw==4.1.0 --hash=sha256:d432d4cccd8dcdf31ccb2272d6d7ad40a9ebde7de3c7d6ced9033afb23bb76dd
+cymem==2.0.13 --hash=sha256:c9251d889348fe79a75e9b3e4d1b5fa651fca8a64500820685d73a3acc21b6a8
+dlinfo==2.0.0 --hash=sha256:b32cc18e3ea67c0ca9ca409e5b41eed863bd1363dbc9dd3de90fedf11b61e7bc
+espeakng-loader==0.2.4 --hash=sha256:d27cdca31112226e7299d8562e889d3e38a1e48055c9ee381b45d669072ee59f
+filelock==3.19.1 --hash=sha256:d38e30481def20772f5baf097c122c3babc4fcdb7e14e57049eb9d88c6dc017d
+huggingface_hub==0.36.2 --hash=sha256:48f0c8eac16145dfce371e9d2d7772854a4f591bcb56c9cf548accf531d54270
+idna==3.19 --hash=sha256:815e7be7a7806d54abb586dc943addc79e8b2ee16915059658cbeff4b1b43bf4
+isodate==0.7.2 --hash=sha256:28009937d8031054830160fce6d409ed342816b543597cece116d966c6d99e15
+Jinja2==3.1.6 --hash=sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
+joblib==1.5.3 --hash=sha256:5fc3c5039fc5ca8c0276333a188bbd59d6b7ab37fe6632daa76bc7f9ec18e713
+jsonschema==4.25.1 --hash=sha256:3fba0169e345c7175110351d456342c364814cfcf3b964ba4587f22915230a63
+jsonschema-specifications==2025.9.1 --hash=sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe
+langcodes==3.5.1 --hash=sha256:b6a9c25c603804e2d169165091d0cdb23934610524a21d226e4f463e8e958a72
+language-tags==1.2.0 --hash=sha256:d815604622242fdfbbfd747b40c31213617fd03734a267f2e39ee4bd73c88722
+loguru==0.7.3 --hash=sha256:31a33c10c8e1e10422bfd431aeb5d351c7cf7fa671e3c4df004162264b28220c
+MarkupSafe==3.0.3 --hash=sha256:1872df69a4de6aead3491198eaf13810b565bdbeec3ae2dc8780f14458ec73ce
+misaki==0.9.4 --hash=sha256:90e2eeb169786c014c429e5058d2ea6bcd02d651f2a24450ba6c9ffc0f8da15a
+mlx==0.29.3 --hash=sha256:cddf6bcdc561094af6b3f0706f8768ecc5216a97eb6973e838c3ac2e2fca2cc8
+mlx-metal==0.29.3 --hash=sha256:f426d4b67f96b4d6f0ed50d5992933595aadb370dc3e9ed2410bafbc16229882
+mlx-audio==0.2.9 --hash=sha256:eae0dd8ea72c33a76d881e60aff85e500d8431a7688fbd3c790e857c2d334f06
+murmurhash==1.0.15 --hash=sha256:0861cb11039409eaf46878456b7d985ef17b6b484103a6fc367b2ecec846891d
+num2words==0.5.14 --hash=sha256:1c8e5b00142fc2966fd8d685001e36c4a9911e070d1b120e1beb721fa1edb33d
+numpy==1.26.4 --hash=sha256:03a8c78d01d9781b28a6989f6fa1bb2c4f2d51201cf99d3dd875df6fbd96b23b
+packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+phonemizer-fork==3.3.2 --hash=sha256:97305c76f4183b3825dae8f4c032265fe78c9946ce58c47d4b62161349264b74
+preshed==3.0.13 --hash=sha256:f05b08ce92399c0655b5e0eb5a1cc1f9e295703ed3aabdfaf6538dfa8ae23d57
+pydantic==2.13.5 --hash=sha256:346a034f080da3755d8e9cb5e00e8b07de1d39e4f6e2c87d8ab7cafa0b269a73
+pydantic_core==2.46.5 --hash=sha256:a39ac25a9a2fa4072efdb429833c4a4c8009a51ff9eea3eeae131713cd27991e
+pyparsing==3.3.2 --hash=sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d
+python-dateutil==2.9.0.post0 --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
+PyYAML==6.0.3 --hash=sha256:fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0
+rdflib==7.6.0 --hash=sha256:30c0a3ebf4c0e09215f066be7246794b6492e054e782d7ac2a34c9f70a15e0dd
+referencing==0.36.2 --hash=sha256:e8699adbbf8b5c7de96d8ffa0eb5c158b3beafce084968e2ea8bb08c6794dcd0
+regex==2026.1.15 --hash=sha256:9250d087bc92b7d4899ccd5539a1b2334e44eee85d848c4c1aef8e221d3f8c8f
+requests==2.32.5 --hash=sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6
+rfc3986==1.5.0 --hash=sha256:a86d6e1f5b1dc238b218b012df0aa79409667bb209e58da56d0b94704e712a97
+rpds-py==0.27.1 --hash=sha256:2643400120f55c8a96f7c9d858f7be0c88d383cd4653ae2cf0d0c88f668073e5
+segments==2.4.0 --hash=sha256:4021dc67f201cc03c864c74c618bdb163b1af629da3040babbaa37d8813f3db0
+shellingham==1.5.4 --hash=sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686
+six==1.17.0 --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
+spacy==3.7.5 --hash=sha256:4145cea7f9814fa7d86b2028c2dd83e02f13f80d5ac604a400b2f7d7b26a0e8c
+spacy-legacy==3.0.12 --hash=sha256:476e3bd0d05f8c339ed60f40986c07387c0a71479245d6d0f4298dbd52cda55f
+spacy-loggers==1.0.5 --hash=sha256:196284c9c446cc0cdb944005384270d775fdeaf4f494d8e269466cfa497ef645
+srsly==2.5.3 --hash=sha256:2f73c0db911552e94fe2016e1759d261d2f47926f68826664cada3723c87006a
+thinc==8.2.5 --hash=sha256:8e299d4dc41107385d6d14d8604a060825798a031cabe2b894b22f9d75d9eaad
+tqdm==4.70.0 --hash=sha256:7f585706bfddbdebf89daac705b2dfcc16890130727d3197ca62c732b4310953
+typer==0.23.2 --hash=sha256:e9c8dc380f82450b3c851a9b9d5a0edf95d1d6456ae70c517d8b06a50c7a9978
+typer-slim==0.23.2 --hash=sha256:2bc3f67ac58fe40763b414c3c65f6fcc92c6b81393d0d89339663aa69252c688
+typing-inspection==0.4.2 --hash=sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7
+typing_extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+uritemplate==4.2.0 --hash=sha256:962201ba1c4edcab02e60f9a0d3821e82dfc5d2d6662a21abd533879bdb8a686
+urllib3==2.6.3 --hash=sha256:bf272323e553dfb2e87d9bfd225ca7b0f467b919d7bbd355436d3fd37cb0acd4
+wasabi==1.1.3 --hash=sha256:f76e16e8f7e79f8c4c8be49b4024ac725713ab10cd7f19350ad18a8e3f71728c
+weasel==0.4.3 --hash=sha256:08f65b5d0dbded4879e08a64882de9b9514753d9eaa4c4e2a576e33666ac12cf
+cloudpathlib==0.25.0 --hash=sha256:8faef3ed3a0dd71d134e8617b4fdc5ce56a12a6b485c080cfe80106e5f1d1f5d
+smart-open==7.5.0 --hash=sha256:87e695c5148bbb988f15cec00971602765874163be85acb1c9fb8abc012e6599
+wrapt==2.4.0 --hash=sha256:6b9b32d5e4f0a179cef5075cc79b79d6d3482c44c434c12969e48c6719e06d95
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl#sha256=86cc141f63942d4b2c5fcee06630fd6f904788d2f0ab005cce45aadb8fb73889 --hash=sha256:86cc141f63942d4b2c5fcee06630fd6f904788d2f0ab005cce45aadb8fb73889

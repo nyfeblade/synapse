@@ -1,0 +1,12 @@
+[Unit]
+Description=Bots: only bothost, box and the Bot uids may reach the auth proxy port (bug 117)
+DefaultDependencies=no
+After=local-fs.target
+Before=bothost.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/bots/auth-proxy.nft
+ExecStop=/usr/sbin/nft delete table inet bots_auth_proxy
+[Install]
+WantedBy=multi-user.target

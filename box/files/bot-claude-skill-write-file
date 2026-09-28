@@ -1,0 +1,94 @@
+#!/bin/sh
+# Root-owned. Writes one non-SKILL.md helper file (a template, a script, a reference doc, ...) inside a user-authored
+# skill's own directory under ~/.claude/skills for bothost (SkillLibrary.writeHelper), confined to
+#   /home/box/.claude/skills/<validated id>/<validated relative path>
+# The relative path may include subdirectories but must match the shape SkillLibrary.writeHelper() enforces (no
+# leading "/", no "." or ".." segment, each segment word characters, space, ".", "@", "+" and "-") and may never be
+# "SKILL.md" (that file has its own helper, bot-claude-skill-write). Content comes from stdin, capped at 8 MiB.
+# Overwrite is the default (`mv -fT`); a third argument --no-clobber publishes with `ln -T` instead (never overwrites).
+#
+# Final secfix round 3 (ruling 1): root does ONLY the argument validation and then re-execs this script as box
+# (setpriv --reuid=box --regid=bots --init-groups --reset-env). Every mkdir, check, write and publish runs as box, so a
+# link anywhere in the chain (the skills directory, the skill, a subdirectory, the target itself, a temp name) can only
+# redirect box's own rights. The temp file comes from mktemp; nothing is ever chowned.
+set -eu
+umask 002
+N=bot-claude-skill-write-file
+ROOT=/home/box/.claude/skills
+
+check_args() {
+  [ $# -eq 2 ] || [ $# -eq 3 ] || { echo "$N: two or three arguments required (skill id, relative path, optional --no-clobber)" >&2; exit 2; }
+  if [ $# -eq 3 ]; then [ "$3" = "--no-clobber" ] || { echo "$N: unknown third argument" >&2; exit 2; }; fi
+  case "$1" in *..*) echo "$N: invalid skill id" >&2; exit 126 ;; esac
+  case "$1" in [a-z0-9]*) ;; *) echo "$N: invalid skill id" >&2; exit 126 ;; esac
+  case "$1" in *[!a-z0-9._-]*) echo "$N: invalid skill id" >&2; exit 126 ;; esac
+  [ -n "$2" ] || { echo "$N: empty relative path" >&2; exit 126; }
+  [ "$2" != "SKILL.md" ] || { echo "$N: SKILL.md must go through bot-claude-skill-write" >&2; exit 126; }
+  case "$2" in /*) echo "$N: invalid relative path (absolute)" >&2; exit 126 ;; esac
+  case "$2" in *[!A-Za-z0-9_.@+/\ -]*) echo "$N: invalid relative path (characters)" >&2; exit 126 ;; esac
+  case "$2" in */|*//*) echo "$N: invalid relative path (empty segment)" >&2; exit 126 ;; esac
+  case "/$2/" in */./*|*/../*) echo "$N: invalid relative path (a \".\" or \"..\" segment)" >&2; exit 126 ;; esac
+}
+
+if [ "$(id -u)" = 0 ]; then
+  [ "${SUDO_USER:-}" = "bothost" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+  check_args "$@"
+  exec setpriv --reuid=box --regid=bots --init-groups --reset-env -- "$0" "$@"
+fi
+[ "$(id -u)" = "$(id -u box 2>/dev/null || echo none)" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+check_args "$@"
+
+# ---- everything below runs as box ----
+ID="$1"
+REL="$2"
+NOCLOBBER=0
+[ $# -eq 2 ] || NOCLOBBER=1
+[ ! -L "$ROOT" ] || { echo "$N: skills directory is a symlink" >&2; exit 126; }
+[ -e "$ROOT" ] || mkdir -m 2775 -- "$ROOT"
+[ -d "$ROOT" ] || { echo "$N: skills directory does not exist" >&2; exit 126; }
+[ "$(readlink -f -- "$ROOT")" = "$ROOT" ] || { echo "$N: skills directory resolves elsewhere (symlink?)" >&2; exit 126; }
+DIR="$ROOT/$ID"
+if [ -e "$DIR" ] || [ -L "$DIR" ]; then
+  [ ! -L "$DIR" ] || { echo "$N: skill directory is a symlink" >&2; exit 126; }
+  [ -d "$DIR" ] || { echo "$N: skill path is not a directory" >&2; exit 126; }
+else
+  mkdir -m 2775 -- "$DIR"
+fi
+[ "$(readlink -f -- "$DIR")" = "$DIR" ] || { echo "$N: skill directory resolves elsewhere (symlink?)" >&2; exit 126; }
+
+# Each subdirectory of REL in turn: created if missing, refused if it is a link or resolves elsewhere.
+CUR="$DIR"
+REST="$REL"
+while :; do
+  case "$REST" in */*) SEG="${REST%%/*}"; REST="${REST#*/}" ;; *) break ;; esac
+  NEXT="$CUR/$SEG"
+  if [ -e "$NEXT" ] || [ -L "$NEXT" ]; then
+    [ ! -L "$NEXT" ] || { echo "$N: path component is a symlink" >&2; exit 126; }
+    [ -d "$NEXT" ] || { echo "$N: path component is not a directory" >&2; exit 126; }
+  else
+    mkdir -m 2775 -- "$NEXT"
+  fi
+  [ "$(readlink -f -- "$NEXT")" = "$NEXT" ] || { echo "$N: path component resolves elsewhere (symlink?)" >&2; exit 126; }
+  CUR="$NEXT"
+done
+
+TARGET="$CUR/$REST"
+if [ -d "$TARGET" ] && [ ! -L "$TARGET" ]; then echo "$N: target is a directory" >&2; exit 126; fi
+LIMIT=$((8 * 1024 * 1024))
+TMP="$(mktemp "$CUR/.bot-claude-skill-write-file.XXXXXX")" || { echo "$N: cannot create a temp file" >&2; exit 126; }
+trap 'rm -f -- "$TMP"' EXIT
+head -c "$((LIMIT + 1))" > "$TMP"
+SIZE=$(wc -c < "$TMP" | tr -d ' ')
+if [ "$SIZE" -gt "$LIMIT" ]; then
+  echo "$N: input exceeds the $LIMIT byte size cap" >&2
+  exit 126
+fi
+chmod 0664 -- "$TMP"
+if [ "$NOCLOBBER" -eq 1 ]; then
+  if ! ln -T -- "$TMP" "$TARGET"; then
+    echo "$N: refusing to overwrite an existing file" >&2
+    exit 126
+  fi
+else
+  mv -fT -- "$TMP" "$TARGET"
+fi

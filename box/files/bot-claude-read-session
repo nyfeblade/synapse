@@ -1,0 +1,60 @@
+#!/bin/sh
+# Root-owned. Reads a box-owned Claude Code session transcript for bothost (CT-15): the CLI writes these files 0600
+# box:bots, so bothost has no read bits on them. Only bothost may invoke this through sudo, and only for a single path
+# strictly under /home/box/.claude/projects/, with no traversal and no symlink escape. Read-only.
+#
+# Final secfix round 3 (ruling 1): root only validates the argument and re-execs this script as box (setpriv
+# --reuid=box --regid=bots --init-groups --reset-env); the resolution and the read run as box, so a link can only ever
+# show bothost what box itself could read.
+set -eu
+N=bot-claude-read-session
+ROOT=/home/box/.claude/projects/
+
+# Bug #66: a per-Bot session lives under /home/bots/<account>/.claude/projects/ and is handled AS that account (a
+# bot-user account in the reserved range, homed there); anything else is the legacy shared tree, handled as box.
+X='[0-9a-f]'
+ACCT=""
+case "${1:-}" in
+  /home/bots/*)
+    ACCT="${1#/home/bots/}"; ACCT="${ACCT%%/*}"
+    # The unquoted pattern is a glob: bot- and exactly 12 lowercase hex characters.
+    case "$ACCT" in bot-$X$X$X$X$X$X$X$X$X$X$X$X) ;; *) echo "$N: not a Bot account's path" >&2; exit 126 ;; esac
+    ENT="$(getent passwd "$ACCT")" || { echo "$N: no such Bot account" >&2; exit 126; }
+    AUID="$(printf '%s' "$ENT" | cut -d: -f3)"; AGID="$(printf '%s' "$ENT" | cut -d: -f4)"
+    case "$AUID$AGID" in ''|*[!0-9]*) echo "$N: not a Bot account" >&2; exit 126 ;; esac
+    { [ "$AUID" -ge 60200 ] && [ "$AUID" -le 61099 ] && [ "$(printf '%s' "$ENT" | cut -d: -f6)" = "/home/bots/$ACCT" ]; } || { echo "$N: not a Bot account" >&2; exit 126; }
+    ROOT="/home/bots/$ACCT/.claude/projects/" ;;
+esac
+
+check_args() {
+  [ -n "${1:-}" ] || { echo "$N: missing path argument" >&2; exit 2; }
+  [ $# -eq 1 ] || { echo "$N: exactly one path argument required" >&2; exit 2; }
+  case "$1" in "$ROOT"*) ;; *) echo "$N: path must be under $ROOT" >&2; exit 126 ;; esac
+  case "$1" in *..*) echo "$N: path traversal rejected" >&2; exit 126 ;; esac
+}
+
+if [ "$(id -u)" = 0 ]; then
+  [ "${SUDO_USER:-}" = "bothost" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+  check_args "$@"
+  if [ -n "$ACCT" ]; then exec setpriv --reuid="$AUID" --regid="$AGID" --init-groups --reset-env -- "$0" "$@"; fi
+  exec setpriv --reuid=box --regid=bots --init-groups --reset-env -- "$0" "$@"
+fi
+if [ -n "$ACCT" ]; then
+  [ "$(id -u)" = "$AUID" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+else
+  [ "$(id -u)" = "$(id -u box 2>/dev/null || echo none)" ] || { echo "$N: must be invoked by bothost via sudo" >&2; exit 126; }
+fi
+check_args "$@"
+
+# ---- everything below runs as box ----
+REAL="$(readlink -f -- "$1")" || { echo "$N: cannot resolve path" >&2; exit 126; }
+case "$REAL" in
+  "$ROOT"*) ;;
+  *) echo "$N: resolved path escapes $ROOT (symlink?)" >&2; exit 126 ;;
+esac
+case "$REAL" in
+  *.jsonl) ;;
+  *) echo "$N: only .jsonl session transcripts may be read" >&2; exit 126 ;;
+esac
+[ -f "$REAL" ] || { echo "$N: not a regular file" >&2; exit 126; }
+exec cat -- "$REAL"

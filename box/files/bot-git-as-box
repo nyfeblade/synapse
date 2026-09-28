@@ -1,0 +1,25 @@
+#!/bin/bash
+# Root-owned. P5 review C2: runs git for coding agents as user box, never as bothost, so a Bot-writable
+# repo's hooks, fsmonitor or config can't run code as the host. Only bothost may invoke it through sudo.
+# Usage: bot-git-as-box <cwd> [NAME=VALUE ...] -- <git args...>
+set -euo pipefail
+[ "${SUDO_USER:-}" = "bothost" ] || { echo "bot-git-as-box: must be invoked by bothost via sudo" >&2; exit 126; }
+cwd="$(realpath -m -- "${1:-}")"; shift || true
+case "$cwd" in /workspace|/workspace/*) ;; *) echo "bot-git-as-box: cwd must be inside /workspace" >&2; exit 2;; esac
+envs=()
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
+  case "$1" in
+    [A-Za-z_]*=*) name="${1%%=*}"; case "$name" in *[!A-Za-z0-9_]*) echo "bot-git-as-box: bad env name" >&2; exit 2;; esac
+      case "$name" in LD_*|BASH_ENV|ENV|GIT_EXEC_PATH|GIT_SSH|GIT_SSH_COMMAND|GIT_ASKPASS|SSH_ASKPASS|GIT_PROXY_COMMAND|GIT_EXTERNAL_DIFF|GIT_EDITOR|GIT_SEQUENCE_EDITOR) echo "bot-git-as-box: env $name not allowed" >&2; exit 2;; esac
+      envs+=("$1") ;;
+    *) echo "bot-git-as-box: bad env assignment" >&2; exit 2 ;;
+  esac
+  shift
+done
+[ "${1:-}" = "--" ] || { echo "bot-git-as-box: missing --" >&2; exit 2; }
+shift
+cd "$cwd"
+umask 002
+exec setpriv --reuid=box --regid=box --init-groups --pdeathsig=KILL -- \
+  /usr/bin/env -i "${envs[@]}" HOME=/home/box USER=box LOGNAME=box GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 \
+  /usr/bin/git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"

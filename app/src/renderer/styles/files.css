@@ -1,0 +1,20 @@
+.file-card {display:flex;align-items:center;gap:12px;max-width: var(--bot-col);padding:10px 12px;border:none;border-radius:var(--radius-card);background:var(--fill-group)}
+.file-ic{width:34px;height:40px;flex-shrink:0;box-sizing:border-box;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;border-radius:var(--radius-xs);border:var(--hairline) solid var(--line-card);background:var(--fill-soft);color:var(--ink-2);font-size:9px;font-weight:600;letter-spacing:.02em}
+.file-text{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.msg.bot > .file-card {margin-top:2px; width: 100%; box-sizing: border-box; }
+.file-main{display:flex;align-items:center;gap:8px;flex-grow:1;min-width:0;border:none;background:transparent;color:var(--ink);text-decoration:none;text-align:left}
+.file-name{font-size:var(--type-ui);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal.preview{width:min(1000px,90vw);height:min(760px,90vh);display:flex;flex-direction:column}
+.preview-body{flex-grow:1;overflow:auto;padding:0 20px 20px}
+.preview-frame{width:100%;height:100%;border:none;background:var(--preview-paper)}
+.preview-img{max-width:100%}
+.preview-too-large{margin:24px 0;text-align:center}
+.preview-table{border-collapse:collapse;font-size:13px}
+.preview-table th,.preview-table td{border:var(--hairline) solid var(--line-row);padding:4px 8px}
+
+/* Interaction states. `.file-card` itself is only a button in UserAttachment (`.file-card.user`); the
+   shared FileCard puts the click target on `.file-main`, so both get states. */
+.file-main { transition: background-color var(--motion-tap), color var(--motion-tap); }
+.file-main:not(:disabled):hover { background-color: var(--fill-hover); }
+.file-main:not(:disabled):active { background-color: var(--fill-press); }
+.file-main:focus-visible, .file-card:focus-visible { outline: 3px solid var(--focus-ring-soft); outline-offset: 2px; }

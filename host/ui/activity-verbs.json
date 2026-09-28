@@ -1,0 +1,24 @@
+{
+  "mail": {
+    "server": "gmail|mail|outlook",
+    "rules": [
+      { "tool": "send|reply|forward", "past": "Sent", "future": "send", "count": "calls" },
+      { "tool": "draft", "past": "Drafted", "future": "draft", "count": "calls" },
+      { "tool": "archive", "past": "Archived", "future": "archive", "count": "argIds" },
+      { "tool": "label|modify", "past": "Labeled", "future": "label", "count": "argIds" },
+      { "tool": "trash|delete", "past": "Deleted", "future": "delete", "count": "argIds" },
+      { "tool": "search|list|get|read", "past": "Read", "future": "read", "count": "resultIds" }
+    ],
+    "noun": "email", "nounPlural": "emails"
+  },
+  "calendar": {
+    "server": "calendar",
+    "rules": [
+      { "tool": "create", "past": "Created", "future": "create", "count": "calls" },
+      { "tool": "update|move", "past": "Moved", "future": "move", "count": "argIds" },
+      { "tool": "delete", "past": "Deleted", "future": "delete", "count": "argIds" },
+      { "tool": "list|search|get", "past": "Checked", "future": "check", "count": "resultIds" }
+    ],
+    "noun": "event", "nounPlural": "events"
+  }
+}

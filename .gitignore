@@ -1,0 +1,40 @@
+node_modules/
+node_modules
+dist/
+dist-release/
+out/
+*.log
+.DS_Store
+.env*
+research/
+test-reports/**/shots/
+playwright-report/
+test-results/
+.claude/scheduled_tasks.lock
+.claude/skills/*/node_modules/
+.claude/skills/*/.fixture-run/
+box/route.env.local
+.superpowers/
+.claude/skills/fuzzing-the-app/node_modules/
+.claude/skills/fuzzing-the-app/.fixture-run/
+.claude/worktrees/
+app/e2e/shots/
+test-reports/**/saves/
+box/host-dist.tgz
+# the tts-glitch bench writes ~460 MB of wavs; only listen/ is kept (regenerate: node app/look/tts-glitch.mjs)
+test-reports/tts-glitch/*.wav
+__pycache__/
+# bugs 180-183: the raw sidecar renders (re-score with --reuse) and the unprocessed/unchanged takes stay local
+test-reports/voice-sentence-tail/**/raw/
+test-reports/voice-sentence-tail/qwen-questions/model-*.wav
+test-reports/voice-sentence-tail/qwen-questions/*-live-*.wav
+test-reports/voice-sentence-tail/qwen-delivery/temp07-*.wav
+test-reports/voice-sentence-tail/qwen-delivery/instruct-temp07-*.wav
+test-reports/voice-sentence-tail/qwen-levels/*.wav
+test-reports/voice-sentence-tail/preview-gap/before-sentences.wav
+# portable install: downloaded Python, wheels, models and the built Kokoro runtime (app/scripts/kokoro-runtime.mjs)
+.build-cache/
+# release updates: the Ed25519 update-signing key lives OUTSIDE the repo (~/Library/Application Support/Synapse-release/); never commit it
+update-signing.key
+*.key
+Synapse-release/

@@ -1,0 +1,23 @@
+#!/bin/sh
+# BRW-02: `box-chrome '<url>'` opens <url> in this display's Chromium (as box). `--serve N` is the unit's entry point.
+set -eu
+[ -r /etc/bots/desktop.env ] && . /etc/bots/desktop.env
+if [ "${1:-}" = "--serve" ]; then
+  n="$2"; port=$((9222 + n))
+  if [ "$n" = 1 ]; then prof=/home/box/chrome-profile; else prof=/home/box/.chrome-screens/$n; fi
+  # Bug #66: a display run as a Bot's own account (bot-display's drop-in sets HOME) keeps that Bot's own profile.
+  case "${HOME:-}" in /home/bots/bot-*) prof="$HOME/chrome-profile" ;; esac
+  mkdir -p "$prof"
+  sb=""; [ "${CHROMIUM_SANDBOX:-on}" = off ] && sb="--no-sandbox"
+  rm -f "$prof/SingletonLock" "$prof/SingletonSocket" "$prof/SingletonCookie"
+  exec "${CHROMIUM_BIN:-/usr/bin/chromium}" $sb --user-data-dir="$prof" --password-store=basic \
+    --remote-debugging-address=127.0.0.1 --remote-debugging-port="$port" --no-first-run --no-default-browser-check \
+    --disable-features=Translate,MediaRouter --disable-session-crashed-bubble --window-position=0,0 --window-size=1280,800 \
+    --start-maximized about:blank
+fi
+url="${1:?usage: box-chrome <url>}"
+n="${DISPLAY#:}"; n="${n%%.*}"
+port=$((9222 + n))
+enc="$(printf '%s' "$url" | jq -sRr @uri)"
+curl -fsS -X PUT "http://127.0.0.1:$port/json/new?$enc" >/dev/null || { echo "box-chrome: Chromium on $DISPLAY is not running" >&2; exit 1; }
+echo "Opened $url on $DISPLAY"

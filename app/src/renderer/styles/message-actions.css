@@ -1,0 +1,53 @@
+/* Beside the bubble, in flow — NOT floating over it (bug 40).
+ *
+ * It used to be `position:absolute;top:-14px`, pinned to its own bubble's outer corner. Measured in
+ * Chromium, identically in light and dark, that cost two things:
+ *   - it reached 14px above its own `.msg` while `.transcript` separates messages by `gap: 8px`, so a
+ *     94 x 6px band of every message's toolbar lay on top of the PREVIOUS message. Armed by
+ *     `.msg:hover` (and the arming latches, because hovering the bar keeps `.msg:hover` true), that
+ *     band was a hit target belonging to the wrong message. 18 of 18 probed points on every adjacent
+ *     pair in the running app resolved to the next message's toolbar.
+ *   - the other 20px of it lay INSIDE its own message, over whatever the message's first child was.
+ *     For a text bubble that is cosmetic; for a 38.5px file card it swallowed the centre — the point
+ *     a pointer actually aims at. That is what timed the `file previews` journey out: `Open notes.md`
+ *     centred at y 711.86, its own bar's box y 678.61-712.61, x 1042-1136.
+ * No offset can fix both: the bar is 34px tall, so the less it overhangs the more of its own message
+ * it covers, and the gap it is allowed to overhang into is only 8px.
+ *
+ * So it is laid out beside the bubble instead: small grey icons to the right of the bubble. Out of flow
+ * it could overhang; in flow it cannot — it reserves its own space in the gutter the bubble's
+ * max-width already leaves empty, so no layout moved at 1408/1100/1024, and at 560 the bubble gives
+ * the 100px back instead of the toolbar overflowing.
+ *
+ * `position: relative` rather than `static`: it is still the containing block for `.emoji-pop`.
+ * Hidden by PAINT, not by layout — `display:none` took React / Reply / More out of the tab order,
+ * which made the `:focus-within` branch below a dead branch, so a keyboard user could not react to or
+ * reply to a message at all. Same shape as `.screen-hover-actions` in app.css: opacity 0 at rest,
+ * opacity 1 on hover or focus-within, with `pointer-events` keeping the invisible bar click-through
+ * so its reserved gutter never swallows a click either. */
+.msg-actions{position:relative;flex-shrink:0;display:flex;gap:2px;padding:2px;border:var(--hairline) solid var(--line-modal);border-radius:var(--radius-control);background:var(--surface-raised);box-shadow:var(--shadow-pop);opacity:0;pointer-events:none;transition:opacity var(--motion-tap)}
+.msg:hover .msg-actions,.msg:focus-within .msg-actions{opacity:1;pointer-events:auto}
+/* `z-index` because the picker hangs below its own message and the transcript's later messages are
+   positioned too, so without it they paint ON TOP of the popover and eat its emoji. It was already
+   half-buried when the bar floated above the bubble (the pop cleared the message's bottom edge by
+   14.71px and the next message by 6.71px); with the bar in flow at the bubble's top the whole button
+   row lands under the next message, and Playwright reports `.msg.user` intercepting. A popover is the
+   one overlay that IS supposed to be on top: it exists only while the user has it open, and it is
+   dismissed by the next press outside it. 3 is the app's popover step (`.picker`, `.skill-picker`). */
+.emoji-pop{position:absolute;top:28px;z-index:3;display:flex;gap:2px;padding:4px;border:var(--hairline) solid var(--line-modal);border-radius:var(--radius-control);background:var(--surface-raised);box-shadow:var(--shadow-pop)}
+.reactions{display:flex;gap:4px;margin-top:4px}
+.reaction {height:22px;padding:0 6px;border-radius: 999px;border:var(--hairline) solid var(--line-button);background:var(--bg);font-size:12px}
+.reaction.mine{background:var(--fill-selected)}
+.reply-header{border:none;background:transparent;color:var(--ink-muted);font-size:12px;display:flex;gap:4px;max-width:420px;padding:0 0 2px}
+.reply-chip{display:flex;align-items:center;gap:6px;padding:0 10px 6px;font-size:12px}
+.thread-list{margin:4px 0 0;padding-left:14px}
+
+/* Interaction states (tokens only; see app.css's interaction-states section for the ladder). */
+.reaction, .reply-header { transition: background-color var(--motion-tap), border-color var(--motion-tap), color var(--motion-tap); }
+.reaction:not(:disabled):hover { background-color: var(--fill-hover); border-color: var(--line-button-hover); }
+.reaction:not(:disabled):active { background-color: var(--fill-press); }
+.reaction.mine:not(:disabled):hover { background-color: var(--fill-selected-hover); }
+.reaction.mine:not(:disabled):active { background-color: var(--fill-selected-press); }
+.reply-header:not(:disabled):hover { color: var(--ink); }
+.reply-header:not(:disabled):active { color: var(--ink-3); }
+.reaction:focus-visible, .reply-header:focus-visible { outline: 3px solid var(--focus-ring-soft); outline-offset: 2px; }
