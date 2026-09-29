@@ -1,0 +1,7 @@
+{
+  "installCommand": "true",
+  "buildCommand": "node site/build.mjs",
+  "outputDirectory": "site/dist",
+  "cleanUrls": true,
+  "headers": [{ "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] }]
+}
