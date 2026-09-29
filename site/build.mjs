@@ -93,6 +93,8 @@ export function seoHead(key, version) {
     };
     tags.push(`<script type="application/ld+json">${JSON.stringify(app).replace(/</g, "\\u003c")}</script>`);
   }
+  // Vercel Web Analytics for the website only: cookie-free, no personal data; the app itself sends nothing.
+  tags.push(`<script defer src="/_vercel/insights/script.js"></script>`);
   return tags.join("\n");
 }
 

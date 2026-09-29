@@ -136,3 +136,10 @@ describe("asset cache-busting", () => {
     }
   });
 });
+
+describe("website analytics", () => {
+  it("every page loads Vercel Web Analytics, and the docs say what it is", () => {
+    for (const key of Object.keys(PAGES)) expect(seoHead(key, "0.1.3")).toContain('<script defer src="/_vercel/insights/script.js"></script>');
+    expect(fs.readFileSync(path.join(__dirname, "../../site/docs.html"), "utf8")).toMatch(/Vercel Web Analytics: no cookies/);
+  });
+});
