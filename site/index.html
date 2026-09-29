@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--THEME-->
 <!--SEO:home-->
 <link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="apple-touch-icon" href="/assets/icon.png">
@@ -11,18 +12,22 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/assets/site.css">
 </head>
-<body>
-<header class="site-header"><div class="wrap"><nav>
-    <a class="brand" href="/"><img src="/assets/icon.png" alt="">Synapse</a>
-    <div class="nav-right"><div class="navlinks"><a href="/#features" aria-current="page">Features</a><a href="/docs">Docs</a><a href="/changelog">Changelog</a><a href="https://github.com/nyfeblade/synapse">GitHub</a></div><a class="btn primary sm" href="https://github.com/nyfeblade/synapse/releases" data-dl>Download</a></div>
-  </nav></div></header>
-<div class="wrap">
+<body class="home">
+<!--BOTDEFS-->
+<!--HEADER:home-->
+<main>
 
-  <header class="hero">
-    <div>
-      <span class="chip"><i></i><span data-version>beta</span> · free and open source</span>
-      <h1>Your own team of AI Bots, on your Mac.</h1>
-      <p class="lede">Chat with them, hand them code, call them, and let them use your Mac, with your approval for anything risky. It runs on your own Anthropic API key.</p>
+  <section class="hero">
+    <div class="wrap">
+      <div class="crew" id="crew">
+        <span class="mate" style="--d:-1.1s;--bl:5.3s;--i:2"><!--BOT:orb:#3674d8--></span>
+        <span class="mate" style="--d:-2.7s;--bl:6.1s;--i:1"><!--BOT:dome:#7b53d7--></span>
+        <button class="mate lead" id="snapBot" type="button" aria-label="Snap again" style="--d:-.4s;--bl:4.6s;--i:0"><!--BOT:pebble:#ec7431--><canvas id="snap" aria-hidden="true"></canvas></button>
+        <span class="mate" style="--d:-3.3s;--bl:5.8s;--i:1"><!--BOT:capsule:#46995f--></span>
+        <span class="mate" style="--d:-1.9s;--bl:6.6s;--i:2"><!--BOT:tile:#d04088--></span>
+      </div>
+      <h1>Your own team of AI&nbsp;Bots, <br>on your Mac.</h1>
+      <p class="lede">Chat with them, hand them code, call them, and let them use your Mac. Anything risky waits for you.</p>
       <div class="cta">
         <a class="btn primary" href="https://github.com/nyfeblade/synapse/releases" data-dl>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.14-2.77.83-3.49.83-.72 0-1.83-.81-3-.79-1.55.02-2.97.9-3.77 2.28-1.6 2.78-.41 6.9 1.15 9.16.76 1.1 1.67 2.34 2.87 2.3 1.15-.05 1.59-.75 2.98-.75s1.78.75 3 .72c1.24-.02 2.03-1.12 2.78-2.23.88-1.28 1.24-2.52 1.26-2.59-.03-.01-2.41-.92-2.42-3.67zM14.1 5.86c.64-.77 1.07-1.84.95-2.91-.92.04-2.03.61-2.69 1.38-.59.68-1.11 1.77-.97 2.82 1.02.08 2.07-.52 2.71-1.29z"/></svg>
@@ -30,133 +35,229 @@
         </a>
         <a class="btn ghost" href="https://github.com/nyfeblade/synapse">View on GitHub</a>
       </div>
-      <p class="fine">Apple silicon · macOS 14+ · needs OrbStack and an API key</p>
+      <p class="fine"><span data-version>beta</span> · Apple silicon · macOS 14+ · needs OrbStack and an Anthropic API key</p>
     </div>
-    <div class="stage" id="stage" role="button" tabindex="0" aria-label="Replay the snap">
-      <canvas id="snap" aria-hidden="true"></canvas>
-      <span class="hint">click to snap again</span>
-    </div>
-  </header>
 
-  <div class="shot"><img src="/assets/screenshot-chat.png" alt="Synapse: a Bot at work, with its plan, your Mac and an approval card" width="1600" height="1000"></div>
-
-  <section id="features" class="first">
-    <div class="sec-head"><p class="eyebrow">What it does</p><h2>A small team that does real work, not just chat.</h2><p>Each Bot has its own memory, skills and a computer to work on, and asks before anything risky.</p></div>
-    <div class="features">
-      <div class="feature"><svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M3 19c.8-3 2.8-4.5 5-4.5s4.2 1.5 5 4.5M11 19c.8-3 2.8-4.5 5-4.5s4.2 1.5 5 4.5"/></svg><h3>A team</h3><p>Several Bots, each with its own name, memory, skills and computer. They hand work to each other as well as to you.</p></div>
-      <div class="feature"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 9l3 2.5L7 14M12 14h5"/></svg><h3>Real work</h3><p>Multi-step tasks on their own Linux computer: files, the shell, the web and the accounts you connect.</p></div>
-      <div class="feature"><svg viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg><h3>Code</h3><p>Point a Bot at a repository. It works on its own branch, runs the tests and hands back the branch or a pull request.</p></div>
-      <div class="feature"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg><h3>Voice calls</h3><p>Call a Bot and talk. Speech is transcribed and the voice is generated right on your Mac.</p></div>
-      <div class="feature"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><h3>Your Mac, with approval</h3><p>Bots can use your apps and screen and run commands in a sandbox. Anything risky waits for your OK.</p></div>
-      <div class="feature"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg><h3>Spend you can see</h3><p>Every model call is metered. See spend per Bot by day, week and month, and set budgets that pause or ask first.</p></div>
+    <div class="wrap wide">
+      <div class="demo" id="demo" role="img" aria-label="Synapse at work: a Bot fixes a test, asks before pushing, and opens a pull request">
+        <div class="win">
+          <aside class="win-side" aria-hidden="true">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="search">Search<kbd>⌘K</kbd></div>
+            <p class="grp">Bots</p>
+            <div class="row on"><!--BOT:dome:#d04088:sm--><div><b>Bug Fixer</b><span data-side>Working</span></div></div>
+            <div class="row"><!--BOT:gem:#3674d8:sm--><div><b>Chief of Staff</b><span>Drafted 3 replies</span></div></div>
+            <div class="row"><!--BOT:orb:#ec7431:sm--><div><b>Inbox Triage</b><span>Inbox at zero</span></div></div>
+            <div class="row"><!--BOT:bead:#7b53d7:sm--><div><b>Night Shift</b><span>4 PRs overnight</span></div></div>
+            <div class="row"><!--BOT:pill:#4ba495:sm--><div><b>Standup Writer</b><span>Standup ready</span></div></div>
+          </aside>
+          <div class="win-main" aria-hidden="true">
+            <div class="win-head"><!--BOT:dome:#d04088:sm--><div><b>Bug Fixer</b><span class="status" data-status>Working</span></div><span class="pill">acme/web</span></div>
+            <div class="thread">
+              <div class="msg user" data-step="0">Fix the flaky login test and open a PR.</div>
+              <ol class="worklog">
+                <li data-step="1"><i></i>Cloned acme/web on a new branch</li>
+                <li data-step="2"><i></i>Ran the tests: 1 of 214 failing</li>
+                <li data-step="3"><i></i>Found a race in <code>login.spec.ts</code></li>
+                <li data-step="4"><i></i>Fixed it: 214 of 214 passing</li>
+              </ol>
+              <div class="approve" data-step="5">
+                <b>Push and open a pull request?</b>
+                <span class="what">fix/flaky-login → acme/web</span>
+                <div class="acts"><span class="a1">Allow once</span><span>Always allow</span><span>Deny</span></div>
+              </div>
+              <div class="msg bot" data-step="6">
+                <p>Done. The test checked the page before the session was saved.</p>
+                <div class="pr"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="3.5" r="1.8"/><circle cx="4" cy="12.5" r="1.8"/><circle cx="12" cy="12.5" r="1.8"/><path d="M4 5.3v5.4M12 10.7V7a2.5 2.5 0 00-2.5-2.5H7"/></svg><b>#482</b><span>fix: wait for the session before redirecting</span><em><ins>+12</ins> <del>−3</del></em></div>
+              </div>
+            </div>
+            <div class="composer">Message Bug Fixer</div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="pair">
-      <figure><img src="/assets/screenshot-code.png" alt="A Bot's work steps and code" width="1600" height="1000" loading="lazy"><figcaption>Every step a Bot takes, and the code it writes</figcaption></figure>
-      <figure><img src="/assets/screenshot-call.png" alt="A voice call with a Bot" width="1600" height="1000" loading="lazy"><figcaption>Voice calls, with approvals right in the call</figcaption></figure>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>A small team that does real work.</h2>
+      <div class="features">
+        <article class="feature">
+          <div class="vig v-team" data-anim>
+            <span class="t1"><!--BOT:gem:#3674d8--></span><span class="t2"><!--BOT:orb:#ec7431--></span><span class="t3"><!--BOT:pill:#46995f--></span>
+            <i class="orb"></i>
+          </div>
+          <h3>A team</h3>
+          <p>Each Bot has its own name, memory and skills. They hand work to each other.</p>
+        </article>
+        <article class="feature">
+          <div class="vig v-term" data-anim>
+            <div class="term"><span class="tl">bots@computer ~</span>
+              <code class="l1"><b>$</b> git clone acme/web</code>
+              <code class="l2"><b>$</b> npm test</code>
+              <code class="l3 ok">✓ 214 passed</code>
+              <code class="l4"><b>$</b> <u></u></code>
+            </div>
+          </div>
+          <h3>Its own computer</h3>
+          <p>Multi-step work on a Linux computer: files, the shell, the web and your accounts.</p>
+        </article>
+        <article class="feature">
+          <div class="vig v-diff" data-anim>
+            <div class="diff">
+              <code class="del">− await page.goto("/home")</code>
+              <code class="add">+ await session.ready()</code>
+              <code class="add">+ await page.goto("/home")</code>
+            </div>
+            <div class="prc"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="3.5" r="1.8"/><circle cx="4" cy="12.5" r="1.8"/><circle cx="12" cy="12.5" r="1.8"/><path d="M4 5.3v5.4M12 10.7V7a2.5 2.5 0 00-2.5-2.5H7"/></svg><b>#482</b> Ready for review</div>
+          </div>
+          <h3>Code to pull request</h3>
+          <p>It works on its own branch, runs the tests and hands back a branch or a PR.</p>
+        </article>
+        <article class="feature">
+          <div class="vig v-call" data-anim>
+            <!--BOT:dome:#7b53d7:talk-->
+            <div class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="clock">02:14</span>
+          </div>
+          <h3>Voice calls</h3>
+          <p>Call a Bot and talk. Speech and voice are processed right on your Mac.</p>
+        </article>
+        <article class="feature">
+          <div class="vig v-ask" data-anim>
+            <div class="card"><b>Open Safari?</b><span>Read today's calendar invites</span>
+              <div class="acts"><span class="a1">Allow once</span><span>Always allow</span><span>Deny</span></div>
+            </div>
+          </div>
+          <h3>Your Mac, with approval</h3>
+          <p>Bots can use your apps and screen. Anything risky waits for your OK.</p>
+        </article>
+        <article class="feature">
+          <div class="vig v-spend" data-anim>
+            <div class="meter-top"><b>$6.40</b><span>of $10 this week</span></div>
+            <div class="meter"><i class="s1"></i><i class="s2"></i><i class="s3"></i></div>
+            <div class="keys"><span><i style="background:#3674d8"></i>Chief of Staff</span><span><i style="background:#ec7431"></i>Inbox Triage</span><span><i style="background:#7b53d7"></i>Night Shift</span></div>
+          </div>
+          <h3>Spend you can see</h3>
+          <p>Every model call is metered, per Bot. Budgets pause or ask before overspending.</p>
+        </article>
+      </div>
+      <div class="pair">
+        <figure><img src="/assets/screenshot-code.png" alt="Synapse: a Bot's work steps and the code it wrote" width="1600" height="1000" loading="lazy" decoding="async"><figcaption>Every step, and the code it wrote</figcaption></figure>
+        <figure><img src="/assets/screenshot-call.png" alt="Synapse: a voice call with a Bot, with an approval card in the call" width="1600" height="1000" loading="lazy" decoding="async"><figcaption>Approvals, right in a call</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="safe">
+    <div class="wrap">
+      <h2>Safe by design.</h2>
+      <div class="safe">
+        <div><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 9l3 2.5L7 14M12 14h5"/></svg><h3>A sandboxed computer</h3><p>Bots work in their own Linux computer, apart from your files.</p></div>
+        <div><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><h3>Approvals in code</h3><p>Risky actions stop until you answer. The app enforces it, not a prompt.</p></div>
+        <div><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><h3>Caps that pause</h3><p>At a budget, a Bot pauses or asks before it spends more.</p></div>
+        <div><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><h3>Secrets sealed</h3><p>Your key and every secret are encrypted on your Mac.</p></div>
+        <div><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6"/></svg><h3>No middleman</h3><p>Synapse talks straight to Anthropic. Nothing goes through our servers.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="schedules">
+    <div class="wrap">
+      <h2>Real work while you sleep.</h2>
+      <div class="jobs">
+        <div class="job"><time>Weekdays 8:00</time><p>Sort my inbox and draft the replies</p><span><!--BOT:orb:#ec7431:xs-->Inbox Triage</span></div>
+        <div class="job"><time>Weekdays 9:15</time><p>Write my standup from yesterday's commits</p><span><!--BOT:pill:#4ba495:xs-->Standup Writer</span></div>
+        <div class="job"><time>Friday 16:00</time><p>Summarise the week's pull requests</p><span><!--BOT:pill:#f0a13b:xs-->Release Notes Writer</span></div>
+        <div class="job"><time>Every night 1:00</time><p>Work through the bug queue, one PR each</p><span><!--BOT:bead:#7b53d7:xs-->Night Shift</span></div>
+        <div class="job"><time>Sunday 18:00</time><p>Plan the week's meals and write the grocery list</p><span><!--BOT:bead:#ec7431:xs-->Recipe Planner</span></div>
+        <div class="job"><time>1st of the month</time><p>Match Stripe payouts and flag anything odd</p><span><!--BOT:tile:#83603e:xs-->Bookkeeper</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="starters">
+    <div class="wrap">
+      <div class="head-row"><h2>Start with a Bot that knows the job.</h2><span class="count">20 starters in the app</span></div>
+      <div class="starters">
+        <div class="starter"><!--BOT:gem:#3674d8:md--><h3>Chief of Staff</h3><p>Runs your week: inbox, calendar and follow-ups.</p><span>Gmail · Google Calendar</span></div>
+        <div class="starter"><!--BOT:orb:#ec7431:md--><h3>Inbox Triage</h3><p>Sorts, archives and drafts replies.</p><span>Gmail</span></div>
+        <div class="starter"><!--BOT:dome:#d04088:md--><h3>Bug Fixer</h3><p>Fixes bugs, runs the tests and opens PRs.</p><span>GitHub · Sentry</span></div>
+        <div class="starter"><!--BOT:bead:#7b53d7:md--><h3>Night Shift</h3><p>Works through a queue while you sleep.</p><span>Linear · GitHub</span></div>
+        <div class="starter"><!--BOT:pill:#4ba495:md--><h3>Standup Writer</h3><p>Reads your commits and calendar, then writes your standup.</p><span>GitHub · Linear · Calendar</span></div>
+        <div class="starter"><!--BOT:tile:#3674d8:md--><h3>Meeting Prep</h3><p>Briefs you before every meeting.</p><span>Calendar · Gmail · Drive</span></div>
+        <div class="starter"><!--BOT:gem:#777777:md--><h3>Research Scout</h3><p>Researches anything and cites sources.</p><span>DeepWiki · Hugging Face</span></div>
+        <div class="starter"><!--BOT:tile:#83603e:md--><h3>Bookkeeper</h3><p>Tracks money in and out and flags anything odd.</p><span>Stripe · Gmail</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="open" class="tight">
+    <div class="wrap">
+      <div class="proof">
+        <h2>Built in the open.</h2>
+        <div class="stats">
+          <a href="https://github.com/nyfeblade/synapse/stargazers" data-stat="stars" hidden><b></b><span>GitHub stars</span></a>
+          <a href="https://github.com/nyfeblade/synapse/releases" data-stat="downloads" hidden><b></b><span>Downloads</span></a>
+          <a href="/changelog"><b data-version>beta</b><span>Latest</span></a>
+          <a href="https://github.com/nyfeblade/synapse/blob/main/LICENSE"><b>MIT</b><span>Licence</span></a>
+        </div>
+      </div>
     </div>
   </section>
 
   <section id="start">
-    <div class="sec-head"><p class="eyebrow">Get started</p><h2>Three steps, about ten minutes.</h2><p>Most of that is the Bots' computer setting itself up. <a href="/docs#install">Full install guide →</a></p></div>
-    <div class="steps">
-      <div class="step"><b>01</b><h3>Install</h3><p>Install <a href="https://orbstack.dev">OrbStack</a>, then download Synapse and drag it to Applications. The first time, open it with right-click → Open.</p></div>
-      <div class="step"><b>02</b><h3>Add your API key</h3><p>Synapse builds its Bots' computer, then asks for your key from the <a href="https://console.anthropic.com">Anthropic Console</a>. You can change it later in Settings.</p></div>
-      <div class="step"><b>03</b><h3>Meet your first Bot</h3><p>Start talking, or add more Bots from the sidebar. Updates arrive inside the app, signed and verified.</p></div>
-    </div>
-    <div class="req" aria-label="Requirements">
-      <div><b>Mac</b><span>Apple silicon</span></div>
-      <div><b>System</b><span>macOS 14 or later</span></div>
-      <div><b>Also needs</b><span><a href="https://orbstack.dev">OrbStack</a> · 8 GB free</span></div>
-      <div><b>Key</b><span><a href="https://console.anthropic.com">Anthropic API key</a></span></div>
-    </div>
-  </section>
-
-  <section id="privacy">
-    <div class="cols">
-      <div>
-        <p class="eyebrow">Privacy and security</p>
-        <h2>Local by default. Nothing goes through us.</h2>
+    <div class="wrap">
+      <div class="head-row"><h2>Three steps, about ten minutes.</h2><a class="count" href="/docs#install">Full install guide →</a></div>
+      <div class="steps">
+        <div class="step"><b>1</b><h3>Install</h3><p>Install <a href="https://orbstack.dev">OrbStack</a>, then drag Synapse to Applications. The first time, open it with right-click → Open.</p></div>
+        <div class="step"><b>2</b><h3>Add your API key</h3><p>Synapse sets up its Bots' computer, then asks for your key from the <a href="https://console.anthropic.com">Anthropic Console</a>.</p></div>
+        <div class="step"><b>3</b><h3>Meet your first Bot</h3><p>Start talking, or add Bots from the sidebar. Updates arrive in the app, signed and verified.</p></div>
       </div>
-      <ul class="plain">
-        <li><b>No account, no server.</b> Synapse talks straight to Anthropic with your key. There is no Synapse cloud.</li>
-        <li><b>Sandboxed Bots.</b> Bots work in their own Linux computer. On your Mac, commands run in a sandbox that can't read the app's own secrets.</li>
-        <li><b>Secrets sealed on your Mac.</b> Your key and every other secret are encrypted with a key that never leaves the app's data folder.</li>
-        <li><b>Budgets checked first.</b> A Bot pauses or asks you before spending past the limits you set.</li>
-      </ul>
+      <div class="req" aria-label="Requirements">
+        <div><b>Mac</b><span>Apple silicon</span></div>
+        <div><b>System</b><span>macOS 14 or later</span></div>
+        <div><b>Also needs</b><span><a href="https://orbstack.dev">OrbStack</a> · 8 GB free</span></div>
+        <div><b>Key</b><span><a href="https://console.anthropic.com">Anthropic API key</a></span></div>
+      </div>
     </div>
   </section>
 
   <section id="faq">
-    <div class="sec-head"><p class="eyebrow">Questions</p><h2>Before you download</h2><p>More in the <a href="/docs">docs</a>.</p></div>
-    <details><summary>What does it cost?</summary><p>Synapse is free and open source under the MIT licence. You pay Anthropic for what your Bots use on your API key, and you can set spending budgets inside the app.</p></details>
-    <details><summary>Why does macOS warn me the first time?</summary><p>Synapse is signed with its own certificate rather than an Apple Developer ID, and isn't notarized by Apple yet. Open it once with right-click → Open, or click Open Anyway in System Settings → Privacy &amp; Security. After that it opens normally.</p></details>
-    <details><summary>What do I need?</summary><p>A Mac with Apple silicon on macOS 14 or later, about 8 GB of free disk, <a href="https://orbstack.dev">OrbStack</a>, and an Anthropic API key.</p></details>
-    <details><summary>Can I use my Claude subscription instead of an API key?</summary><p>No. Synapse uses an Anthropic API key only; signing in with a Claude subscription or Claude Code login isn't supported.</p></details>
-    <details><summary>Is it finished?</summary><p>It's a beta. It works, and it's been tested on a fresh Mac, but expect rough edges. Please <a href="https://github.com/nyfeblade/synapse/issues">open an issue</a> if something breaks.</p></details>
-  </section>
-
-  <section class="final">
-    <h2>Meet your team.</h2>
-    <div class="cta">
-      <a class="btn primary" href="https://github.com/nyfeblade/synapse/releases" data-dl>Download for Mac</a>
-      <a class="btn ghost" href="https://github.com/nyfeblade/synapse/releases">All releases</a>
+    <div class="wrap faq">
+      <h2>Questions</h2>
+      <div>
+        <details><summary>What does it cost?</summary><p>Synapse is free and open source under the MIT licence. You pay Anthropic for what your Bots use on your API key, and you can set budgets inside the app.</p></details>
+        <details><summary>Why does macOS warn me the first time?</summary><p>Synapse is signed with its own certificate rather than an Apple Developer ID, and isn't notarized by Apple yet. Open it once with right-click → Open, or click Open Anyway in System Settings → Privacy &amp; Security. After that it opens normally.</p></details>
+        <details><summary>What do I need?</summary><p>A Mac with Apple silicon on macOS 14 or later, about 8 GB of free disk, <a href="https://orbstack.dev">OrbStack</a>, and an Anthropic API key.</p></details>
+        <details><summary>Can two people use it on one Mac?</summary><p>Yes. Since 0.1.1, Synapse runs in two macOS accounts on the same Mac at once. Each account gets its own connection to its own Bots' computer.</p></details>
+        <details><summary>Can I use my Claude subscription instead of an API key?</summary><p>No. Synapse uses an Anthropic API key only; signing in with a Claude subscription or Claude Code login isn't supported.</p></details>
+        <details><summary>Is it finished?</summary><p>It's a beta. It works, and it's been tested on a fresh Mac, but expect rough edges. Please <a href="https://github.com/nyfeblade/synapse/issues">open an issue</a> if something breaks.</p></details>
+      </div>
     </div>
   </section>
 
-</div>
-<footer class="site-footer"><div class="wrap">
-  <div class="foot">
-    <div><a class="brand" href="/"><img src="/assets/icon.png" alt="">Synapse</a><p>Your own team of AI Bots, on your Mac.</p></div>
-    <div><h4>Product</h4><a href="https://github.com/nyfeblade/synapse/releases" data-dl>Download</a><a href="/#features">Features</a><a href="/changelog">Changelog</a></div>
-    <div><h4>Resources</h4><a href="/docs">Docs</a><a href="/docs#troubleshooting">Troubleshooting</a><a href="/docs#privacy">Privacy</a></div>
-    <div><h4>Project</h4><a href="https://github.com/nyfeblade/synapse">GitHub</a><a href="https://github.com/nyfeblade/synapse/issues">Report an issue</a><a href="https://github.com/nyfeblade/synapse/blob/main/LICENSE">MIT licence</a></div>
-  </div>
-  <p class="legal">Synapse is open source and not affiliated with Anthropic. Claude is a trademark of Anthropic.</p>
-</div></footer>
+  <section class="final">
+    <div class="wrap">
+      <div class="crew small" aria-hidden="true">
+        <span class="mate" style="--d:-.8s;--bl:5.6s"><!--BOT:gem:#3674d8--></span>
+        <span class="mate" style="--d:-2.2s;--bl:4.9s"><!--BOT:pebble:#ec7431--></span>
+        <span class="mate" style="--d:-1.5s;--bl:6.3s"><!--BOT:capsule:#46995f--></span>
+      </div>
+      <h2>Meet your team.</h2>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/nyfeblade/synapse/releases" data-dl>Download for Mac</a>
+        <a class="btn ghost" href="https://github.com/nyfeblade/synapse/releases">All releases</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+<!--FOOTER-->
 
 <script src="/assets/snap.js"></script>
-<script>
-(() => {
-  const stage = document.getElementById("stage"), cv = document.getElementById("snap"), ctx = cv.getContext("2d");
-  if (!ctx || !window.Snap) return;
-  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const view = () => { const r = cv.getBoundingClientRect(); return { W: r.width, H: r.height }; };
-  const VIEW = (W, H) => ({ width: W, height: H, background: "#000000", body: "#FFFFFF", ink: "#111110", edge: null, accent: "#ED712E" });
-  const K = 2.5; // the app draws the snap small in a window; here it fills the stage
-  const size = () => { const d = devicePixelRatio || 1, { W, H } = view(); cv.width = Math.round(W * d); cv.height = Math.round(H * d); return { d, W, H }; };
-  const drawAt = (frame) => {
-    const { d, W, H } = size();
-    ctx.setTransform(d, 0, 0, d, 0, 0);
-    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
-    ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(K, K); ctx.translate(-W / 2, -H / 2);
-    Snap.drawLaunch(ctx, frame, VIEW(W, H));
-    ctx.restore();
-  };
-  const rest = () => drawAt(Snap.restFrame(1));
-  let raf = 0;
-  const play = (withSound) => {
-    cancelAnimationFrame(raf);
-    if (reduced) return rest();
-    const sim = Snap.createLaunchSim(), HOLD = 790; // stop before the app's fade-out and rest on the whole Bot
-    if (withSound) { const ac = Snap.openSnapAudio(); if (ac) { const go = () => Snap.scheduleSnapClicks(ac, 0, Snap.snapClicks()); ac.state === "running" ? go() : ac.resume().then(go, () => {}); } }
-    const t0 = performance.now();
-    const frame = (now) => {
-      const t = now - t0;
-      while (sim.t < Math.min(t, HOLD)) sim.step(Math.min(50, Math.min(t, HOLD) - sim.t + 0.01));
-      if (t >= HOLD) return rest();
-      drawAt(sim.frame()); raf = requestAnimationFrame(frame);
-    };
-    raf = requestAnimationFrame(frame);
-  };
-  const replay = () => play(true);
-  stage.addEventListener("click", replay);
-  stage.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); replay(); } });
-  addEventListener("resize", rest);
-  const io = new IntersectionObserver((es) => { if (es[0].isIntersecting) { io.disconnect(); setTimeout(() => play(false), 250); } }, { threshold: 0.4 });
-  rest(); io.observe(stage);
-})();
-</script>
 <script src="/assets/site.js"></script>
+<script src="/assets/home.js"></script>
 <script src="/assets/latest.js"></script>
 </body>
 </html>

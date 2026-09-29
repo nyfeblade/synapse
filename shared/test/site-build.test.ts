@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error plain ESM build script, no types
-import { inline, parseChangelog, renderReleases, seoHead, sitemap, robots, SITE_URL, PAGES, build } from "../../site/build.mjs";
+import { inline, parseChangelog, renderReleases, seoHead, sitemap, robots, SITE_URL, PAGES, build, botSvg, botDefs, expandBots, header, footer, EYE_INK } from "../../site/build.mjs";
 
 const md = `# Changelog\n\nintro\n\n## 0.2.0 — Unreleased\n\n- **New.** A thing.\n\n## 0.1.0 — 2026-09-28 — beta\n\nFirst.\n\n### Bots\n\n- One\n- Two\n`;
 
@@ -64,6 +64,52 @@ describe("site SEO", () => {
   it("leaves no SEO placeholder in the built pages", () => {
     const dist = build("2026-09-28");
     for (const f of ["index.html", "docs.html", "changelog.html"]) expect(fs.readFileSync(path.join(dist, f), "utf8")).not.toContain("<!--SEO");
+  });
+});
+
+describe("site Bots and shared pieces", () => {
+  it("draws a Bot as a flat body with a solid black face: no gradient, filter, highlight or cut-out", () => {
+    const svg = botSvg("pill", "#46995f", "md");
+    expect(svg).toContain('href="#f-capsule"');
+    expect(svg).toContain('fill="#46995f"');
+    expect(svg).toContain(`<g class="face" fill="${EYE_INK}">`);
+    expect(svg).toContain(`stroke="${EYE_INK}"`);
+    expect((svg.match(/class="eye"/g) ?? []).length).toBe(2);
+    for (const bad of ["Gradient", "filter", "opacity", "mask", "clipPath", "#fff", "#FFF"]) expect(svg + botDefs()).not.toContain(bad);
+  });
+
+  it("falls back to the pebble for an unknown shape, and defines every body form once", () => {
+    expect(botSvg("nope", "#3674d8")).toContain('href="#f-pebble"');
+    const defs = botDefs();
+    for (const f of ["pebble", "orb", "tile", "capsule", "dome", "gem"]) expect(defs.match(new RegExp(`id="f-${f}"`, "g"))?.length).toBe(1);
+  });
+
+  it("expands Bot placeholders and leaves other comments alone", () => {
+    const out = expandBots("<!--BOT:orb:#ec7431--><!--BOT:gem:#3674d8:sm--><!-- note -->");
+    expect(out).toContain('class="bot"');
+    expect(out).toContain('class="bot sm"');
+    expect(out).toContain("<!-- note -->");
+  });
+
+  it("marks the current page in the shared header, with the theme button and download link", () => {
+    expect(header("docs")).toContain('<a href="/docs" aria-current="page">');
+    expect(header("docs")).not.toContain('<a href="/changelog" aria-current');
+    expect(header("home")).toContain('class="theme"');
+    expect(header("home")).toContain("data-dl");
+    expect(footer()).toContain('class="wordmark"');
+  });
+
+  it("leaves no placeholder in the built pages, and every page gets the header, footer and theme boot", () => {
+    const dist = build("2026-09-28");
+    for (const f of ["index.html", "docs.html", "changelog.html"]) {
+      const html = fs.readFileSync(path.join(dist, f), "utf8");
+      expect(html).not.toMatch(/<!--(BOT|BOTDEFS|HEADER|FOOTER|THEME|TOC|RELEASES)/);
+      for (const t of ['class="site-header"', 'class="site-footer"', 'localStorage.getItem("synapse-theme")']) expect(html).toContain(t);
+    }
+    const home = fs.readFileSync(path.join(dist, "index.html"), "utf8");
+    expect(home).toContain('id="f-pebble"');
+    expect(home).toContain("data-dl");
+    expect(home).toContain("data-version");
   });
 });
 
