@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Synapse stats</title>
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+  .stats-page{max-width:760px; margin:0 auto; padding:56px 16px}
+  .stats-page h1{font-size:28px; margin:0 0 28px}
+  .totals{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:32px}
+  .totals div{border:1px solid var(--line); border-radius:12px; padding:16px}
+  .totals b{display:block; font-size:28px; font-variant-numeric:tabular-nums}
+  .totals span{color:var(--ink-2); font-size:14px}
+  table{width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums}
+  th,td{text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); font-size:15px}
+  th{color:var(--ink-2); font-weight:500}
+  td.n,th.n{text-align:right}
+  .note{color:var(--ink-2); font-size:14px; margin-top:20px}
+  @media (max-width:520px){.totals{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="stats-page">
+  <h1>Downloads</h1>
+  <div class="totals">
+    <div><b id="t-installs">–</b><span>New installs</span></div>
+    <div><b id="t-updates">–</b><span>Updates</span></div>
+    <div><b id="t-all">–</b><span>All downloads</span></div>
+  </div>
+  <table>
+    <thead><tr><th>Version</th><th>Released</th><th class="n">Installs</th><th class="n">Updates</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="4">Loading…</td></tr></tbody>
+  </table>
+  <p class="note">From GitHub's download counts. Installs are DMG downloads; updates are the zip the app fetches itself. Visits are in Vercel → Analytics.</p>
+</main>
+<script>
+(() => {
+  const fmt = (n) => n.toLocaleString("en-US");
+  const sum = (assets, re) => assets.filter((a) => re.test(a.name)).reduce((n, a) => n + (a.download_count || 0), 0);
+  fetch("https://api.github.com/repos/nyfeblade/synapse/releases?per_page=100", { headers: { Accept: "application/vnd.github+json" } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((rels) => {
+      let ti = 0, tu = 0;
+      const rows = rels.filter((r) => !r.draft).map((r) => {
+        const i = sum(r.assets, /\.dmg$/), u = sum(r.assets, /\.zip$/);
+        ti += i; tu += u;
+        const tr = document.createElement("tr");
+        for (const [v, cls] of [[r.tag_name, ""], [(r.published_at || "").slice(0, 10), ""], [fmt(i), "n"], [fmt(u), "n"]]) {
+          const td = document.createElement("td"); td.textContent = v; if (cls) td.className = cls; tr.append(td);
+        }
+        return tr;
+      });
+      document.getElementById("rows").replaceChildren(...rows);
+      document.getElementById("t-installs").textContent = fmt(ti);
+      document.getElementById("t-updates").textContent = fmt(tu);
+      document.getElementById("t-all").textContent = fmt(ti + tu);
+    })
+    .catch(() => { document.getElementById("rows").innerHTML = "<tr><td colspan=\"4\">GitHub didn't answer. Try again in a minute.</td></tr>"; });
+})();
+</script>
+</body>
+</html>

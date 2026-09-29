@@ -211,6 +211,8 @@ export function build(today = new Date().toISOString().slice(0, 10)) {
   const withSeo = (html, key) => bustAssets(partials(html, key).replace(`<!--SEO:${key}-->`, seoHead(key, version)));
   fs.writeFileSync(path.join(dist, "index.html"), withSeo(fs.readFileSync(path.join(here, "index.html"), "utf8"), "home"));
   fs.writeFileSync(path.join(dist, "docs.html"), withSeo(fs.readFileSync(path.join(here, "docs.html"), "utf8"), "docs"));
+  // A private-ish stats page: unlinked, noindex, not in the sitemap; public GitHub download counts only.
+  fs.writeFileSync(path.join(dist, "stats.html"), bustAssets(fs.readFileSync(path.join(here, "stats.html"), "utf8")));
   const { toc, body } = renderReleases(releases);
   const page = fs.readFileSync(path.join(here, "changelog.template.html"), "utf8").replace("<!--TOC-->", toc).replace("<!--RELEASES-->", body);
   fs.writeFileSync(path.join(dist, "changelog.html"), withSeo(page, "changelog"));
