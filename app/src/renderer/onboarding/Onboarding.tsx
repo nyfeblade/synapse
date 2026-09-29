@@ -7,13 +7,18 @@ import { ShapeAvatar } from "../components/ShapeAvatar";
 import { nativeCall } from "../native";
 import { AccountPanel } from "../components/settings/AccountSection";
 import { ONBOARDING_TOOLS } from "./tools";
+import { noteIfSlow, SIGN_IN_TIMEOUT_MS } from "../within-time";
 import mark from "../assets/synapse-mark.png";
 
 type Step = "splash" | "setup" | "tour" | "tools" | "new-bot";
 /** ONB-01: the clone's own terms/readme. Change this one constant when the repository has a public URL. */
 export const TERMS_URL = "https://github.com/";
 
-export function Onboarding({ onDone, initialStep = "splash" }: { onDone(botId: string): void; initialStep?: Step }) {
+export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN_TIMEOUT_MS }: {
+  onDone(botId: string): void; initialStep?: Step;
+  /** Tests only: how long the first button's ask may take before it fails with a plain line. */
+  timeoutMs?: number;
+}) {
   const [step, setStep] = useState<Step>(initialStep);
   const [page, setPage] = useState(0);
   const [tokenOk, setTokenOk] = useState(false);
@@ -73,7 +78,7 @@ export function Onboarding({ onDone, initialStep = "splash" }: { onDone(botId: s
           no next screen, no message, no way to tell a slow box from a broken one. It now runs
           through `once`, which owns the busy guard and the error line below. */}
       <button type="button" className="pill-light" disabled={busy}
-        onClick={() => void once(async () => { const o = await call("getOnboarding", {}); setStep(o.tokenConfigured || tokenOk ? "tour" : "setup"); })}>{STR5.signIn}</button>
+        onClick={() => void once(async () => { const o = await noteIfSlow(call("getOnboarding", {}), timeoutMs, () => setError(STR.hostTimeout)); setError(null); setStep(o.tokenConfigured || tokenOk ? "tour" : "setup"); })}>{STR5.signIn}</button>
       {error && <span className="error" role="alert">{error}</span>}
       <p className="onb-foot">{STR5.termsFooterBefore}<a href="#" onClick={(e) => { e.preventDefault(); void nativeCall("openExternal", { url: TERMS_URL }); }}>{STR5.termsLink}</a>.</p>
     </main>

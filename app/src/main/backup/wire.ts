@@ -13,6 +13,7 @@ import { createRotatingLog } from "../rotating-log";
 import { readSecret, storeSecret } from "../secrets";
 import { BackupService, type BackupSettings } from "./service";
 import { APP_DATA_NAME } from "../data-rename";
+import type { HostFetch } from "../host-fetch";
 
 /** ~/Library/Logs/Synapse: every log the app writes (main, voice, update, backup, crash). Bug 285: the log folder from before the rename is moved here (data-rename.ts). */
 export const logsDir = () => path.join(os.homedir(), "Library", "Logs", APP_DATA_NAME);
@@ -37,7 +38,10 @@ function runBytes(cmd: string, args: string[], stdin?: Buffer, timeoutMs = 10 * 
 
 export function registerBackups(o: {
   userData: string; appDir: string; runtime: AppRuntime; appVersion: string; fuzz: boolean;
-  gateway(): GatewayRef | null; reconnect(): Promise<void>; call(cmd: "listAgents"): Promise<{ agents: unknown[] }>;
+  gateway(): GatewayRef | null;
+  /** Token-bearing requests to the host, proven first (host-fetch.ts). */
+  hostFetch: HostFetch;
+  reconnect(): Promise<void>; call(cmd: "listAgents"): Promise<{ agents: unknown[] }>;
   reg(name: string, fn: (a: any) => unknown): void; emit(ch: string, p: unknown): void;
   dialog: { openFolder(): Promise<string | null>; openArchive(): Promise<string | null>; saveText(name: string, text: string): Promise<boolean> };
   reveal(file: string): void;
@@ -50,8 +54,7 @@ export function registerBackups(o: {
     // FUZZ / e2e profiles never write into the user's real backups folder or back up on a timer.
     return { auto: o.fuzz ? s.backupAuto === true : s.backupAuto !== false, keep: s.backupKeep ?? 7, dir: s.backupDir || (o.fuzz ? path.join(o.userData, "backups") : defaultBackupDir()) };
   };
-  const need = () => { const g = o.gateway(); if (!g) throw new Error("Synapse isn't connected to its host yet."); return g; };
-  const auth = (g: GatewayRef) => ({ authorization: `Bearer ${g.token}` });
+  const need = () => { if (!o.gateway()) throw new Error("Synapse isn't connected to its host yet."); };
   const orb = (user: "box" | "root", args: string[], stdin?: Buffer) => runBytes(resolveOrb(), ["-m", o.machine?.() ?? "box", "-u", user, ...args], stdin);
   const svc = new BackupService({
     userData: o.userData, appVersion: o.appVersion, now: Date.now, settings, log,
@@ -68,23 +71,22 @@ export function registerBackups(o: {
     },
     host: {
       snapshot: async () => {
-        const g = need();
-        const r = await fetch(`${g.baseUrl}/backup/snapshot`, { headers: auth(g) });
+        need();
+        const r = await o.hostFetch("/backup/snapshot");
         if (!r.ok || !r.body) throw new Error(`The host couldn't make a snapshot (${r.status}).`);
         return Readable.fromWeb(r.body as never);
       },
       stage: async (file, sha256) => {
-        const g = need();
-        const r = await fetch(`${g.baseUrl}/backup/restore`, {
-          method: "PUT", headers: { ...auth(g), "x-backup-sha256": sha256, "content-length": String(fs.statSync(file).size) },
+        need();
+        const r = await o.hostFetch("/backup/restore", {
+          method: "PUT", headers: { "x-backup-sha256": sha256, "content-length": String(fs.statSync(file).size) },
           body: Readable.toWeb(fs.createReadStream(file)) as never, duplex: "half",
         } as RequestInit);
         if (!r.ok) throw new Error(`The host refused the restore (${r.status}).`);
       },
       health: async () => {
-        const g = o.gateway();
-        if (!g) return null;
-        const r = await fetch(`${g.baseUrl}/health`, { headers: auth(g) }).catch(() => null);
+        if (!o.gateway()) return null;
+        const r = await o.hostFetch("/health").catch(() => null);
         return r?.ok ? (await r.json()) as HealthInfo : null;
       },
       botCount: async () => (await o.call("listAgents")).agents.length,

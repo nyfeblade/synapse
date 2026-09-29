@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { STR_AUTH, type AuthView, type KeyCheckView } from "@synapse/shared";
+import { STR, STR_AUTH, type AuthView, type KeyCheckView } from "@synapse/shared";
 import { AccountPanel } from "../../src/renderer/components/settings/AccountSection";
 
 const KEY = "sk-ant-api03-" + "R".repeat(80) + "abcd";
@@ -147,6 +147,74 @@ describe("Settings → Account: the Anthropic API key is the only sign-in", () =
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain(STR_AUTH.macKeyNotSaved);
     expect(alert.textContent).toContain("permission key");
+  });
+
+  // A rejected sign-in must never do nothing: every failure is a plain line where the user is looking, and the
+  // button is usable again.
+  const typeKey = async () => {
+    await pickApiKey();
+    fireEvent.change(screen.getByLabelText(STR_AUTH.keyLabel), { target: { value: KEY } });
+  };
+
+  it("Save refused by the host: the reason shows, without Electron's IPC wrapper, and Save works again", async () => {
+    saveKey.mockRejectedValue(new Error("Error invoking remote method 'auth:save-key': Error: Synapse is running in another account on this Mac and is using this account's connection. Quit Synapse there, then retry."));
+    render(<AccountPanel />);
+    await typeKey();
+    fireEvent.click(screen.getByRole("button", { name: STR_AUTH.saveKey }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/^Synapse is running in another account on this Mac/);
+    expect((screen.getByRole("button", { name: STR_AUTH.saveKey }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("Save that is slow shows a plain line, but keeps Save and Remove off until main's call settles", async () => {
+    view = { ...view, apiKey: { masked: "sk-ant-…abcd", savedAt: 1 } };
+    let finish!: (v: unknown) => void;
+    saveKey.mockImplementation(() => new Promise((r) => { finish = r; }));
+    render(<AccountPanel timeoutMs={40} />);
+    await typeKey();
+    fireEvent.click(screen.getByRole("button", { name: STR_AUTH.replaceKey }));
+    expect((await screen.findByRole("alert")).textContent).toBe(STR.hostTimeout);
+    // A late Save could still land: nothing else may be pressed until it does (a Remove would be undone).
+    expect((screen.getByRole("button", { name: STR_AUTH.replaceKey }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: STR_AUTH.removeKey }) as HTMLButtonElement).disabled).toBe(true);
+    finish({ apiKey: { masked: "sk-ant-…wxyz", savedAt: 2 }, boxPublicKey: "PK", macSaved: true });
+    expect(await screen.findByText(STR_AUTH.savedKey("sk-ant-…wxyz"))).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect((screen.getByRole("button", { name: STR_AUTH.removeKey }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("Save that answers without a saved key says it wasn't saved (never a silent no-op)", async () => {
+    saveKey.mockResolvedValue({ apiKey: null, boxPublicKey: "PK", macSaved: false });
+    const onReady = vi.fn();
+    render(<AccountPanel onReady={onReady} />);
+    await typeKey();
+    fireEvent.click(screen.getByRole("button", { name: STR_AUTH.saveKey }));
+    expect((await screen.findByRole("alert")).textContent).toBe(STR_AUTH.keyNotSaved);
+    expect(onReady).not.toHaveBeenCalled();
+  });
+
+  it("Test connection that fails to reach the host shows why", async () => {
+    testKey.mockRejectedValue(new Error("Error invoking remote method 'auth:test-key': Error: The Bots' computer didn't answer. Try again."));
+    render(<AccountPanel />);
+    await typeKey();
+    fireEvent.click(screen.getByRole("button", { name: STR_AUTH.testConnection }));
+    expect((await screen.findByRole("alert")).textContent).toBe(STR.hostNoAnswer);
+  });
+
+  it("Check that fails shows why, and Check works again", async () => {
+    view = { ...view, apiKey: { masked: "sk-ant-…abcd", savedAt: 1 } };
+    const base = (window as unknown as { synapse: { call: (c: string, a: unknown) => Promise<unknown> } }).synapse.call;
+    (window as unknown as { synapse: { call: unknown } }).synapse.call = async (c: string, a: unknown) =>
+      c === "checkApiKey" && (a as { refresh?: boolean }).refresh ? { ok: false, error: { code: "NETWORK", message: STR.hostNoAnswer } } : base(c, a);
+    render(<AccountPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: STR_AUTH.check }));
+    expect((await screen.findByRole("alert")).textContent).toBe(STR.hostNoAnswer);
+    expect((screen.getByRole("button", { name: STR_AUTH.check }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("a panel whose first load never answers says so instead of Loading… forever", async () => {
+    (window as unknown as { synapse: { call: unknown } }).synapse.call = () => new Promise(() => {});
+    render(<AccountPanel timeoutMs={40} />);
+    expect((await screen.findByRole("alert")).textContent).toBe(STR.hostTimeout);
   });
 
   it("the API-key choice has Save, Test and a link to create a key in the Anthropic Console", async () => {

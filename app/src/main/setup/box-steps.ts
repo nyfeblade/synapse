@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import readline from "node:readline";
+import { boxPortEnv, userPorts, WRONG_HOST_MESSAGE } from "@synapse/shared";
 import type { Exec } from "../box-provider";
 import type { BoxStep, StepContext } from "./provisioner";
 import { adoptable, CREATED_MARKER, listMachines, machineMarks, machineSize, type MachineInfo, type MachineMarks } from "./orb";
@@ -48,6 +49,10 @@ export interface BoxStepDeps {
   /** Reconnect the app to the host; resolves once it tried. `connected()` says whether it worked. */
   reconnect(): Promise<void>;
   connected(): boolean;
+  /** Why the last reconnect failed, when it's something the user must hear as it is (another account's host). */
+  connectError?(): string | null;
+  /** This Mac user's uid: the box gets this user's own ports (two accounts on one Mac, user-ports.ts). */
+  uid?: number;
   /** The app created (or recreated) the machine: its box key is new, so the old pin must go. */
   forgetPin(): void;
   /** This Mac, for sizing the machine. */
@@ -58,14 +63,15 @@ export interface BoxStepDeps {
 /** The five steps of "Set up the Bots' computer", each idempotent. */
 export function boxSteps(d: BoxStepDeps): BoxStep[] {
   const run = d.run ?? runStreamed;
-  const env = () => ({ ORB: d.orb(), BOX_MACHINE: d.machine });
+  const uid = d.uid ?? process.getuid?.() ?? 501;
+  const env = () => ({ ORB: d.orb(), BOX_MACHINE: d.machine, ...boxPortEnv(uid) });
   let listed: MachineInfo[] | null = null;
   let marks: MachineMarks | null = null;
   const machine = async (): Promise<MachineInfo | undefined> => {
     listed = await listMachines(d.exec, d.orb());
     return listed.find((m) => m.name === d.machine);
   };
-  const readMarks = async (): Promise<MachineMarks> => (marks = await machineMarks(d.exec, d.orb(), d.machine));
+  const readMarks = async (): Promise<MachineMarks> => (marks = await machineMarks(d.exec, d.orb(), d.machine, userPorts(uid).gateway));
   const orb = async (args: string[], timeoutMs: number, what: string) => {
     const r = await d.exec(d.orb(), args, { timeoutMs });
     if (r.code !== 0) throw new Error(`${what}: ${(r.stderr || r.stdout).trim().slice(0, 600)}`);
@@ -126,11 +132,17 @@ export function boxSteps(d: BoxStepDeps): BoxStep[] {
       id: "connect", label: "Connecting", weight: 5,
       done: async () => d.connected(),
       run: async (ctx) => {
+        let wrongHost = 0;
         for (let i = 0; i < 3 && !d.connected(); i++) {
           ctx.progress(i / 3);
           await d.reconnect();
+          // Another account's host holds the port: said twice in a row (a stale token gets one more go, and the
+          // reconnect re-reads gateway.json), waiting won't change it, and the user must be told as it is.
+          wrongHost = !d.connected() && d.connectError?.() === WRONG_HOST_MESSAGE ? wrongHost + 1 : 0;
+          if (wrongHost >= 2) throw new Error(WRONG_HOST_MESSAGE);
           if (!d.connected()) await new Promise((r) => setTimeout(r, 2_000));
         }
+        if (!d.connected() && wrongHost > 0) throw new Error(WRONG_HOST_MESSAGE);
         if (!d.connected()) throw new Error("The host did not start (no gateway connection).");
       },
     },

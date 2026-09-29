@@ -99,6 +99,7 @@ describe("plain-language errors", () => {
     ["spawn orb ENOENT", /OrbStack/],
     ["Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 1234 (apt-get)", /busy|another/i],
     ["FAIL gateway /health via localhost (http://127.0.0.1:47801)", /didn.t start|start/i],
+    ["FAIL http://127.0.0.1:47900: Synapse is running in another account on this Mac and is using this account's connection. Quit Synapse there, then retry.", /^Synapse is running in another account on this Mac/],
   ])("%s", (raw, want) => {
     expect(plainError(raw, "provision")).toMatch(want);
   });

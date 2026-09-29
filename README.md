@@ -29,7 +29,7 @@ on your own Anthropic API key: you pay Anthropic for what the Bots use, and noth
    the button (recent macOS versions), try to open Synapse once, then go to **System Settings → Privacy &
    Security** and click **Open Anyway** next to Synapse. After that it opens normally.
 
-To get updates, enter this repository (`owner/repo`) in **Settings → Updates**. Before Synapse installs an
+Synapse checks for updates by itself (**Settings → Updates**). Before it installs an
 update it checks the update's signature against a key built into the app, and that the new app is signed
 with the same certificate.
 

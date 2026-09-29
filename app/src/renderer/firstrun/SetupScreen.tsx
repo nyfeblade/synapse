@@ -154,6 +154,8 @@ export function UpdatesFields(p: { feed: string; setFeed(v: string): void; token
 export function SetupScreen({ onClose }: { onClose?(): void }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  /** Why the sign-in check failed: the Claude step says so instead of "Working" for good. */
+  const [signInError, setSignInError] = useState<string | null>(null);
   const connectedUi = useUi((s) => s.connection.kind === "connected");
   const started = useRef(false);
   const finish = useSetupGate((s) => s.finish);
@@ -168,9 +170,12 @@ export function SetupScreen({ onClose }: { onClose?(): void }) {
 
   const connected = connectedUi || !!status?.connected;
   useEffect(() => {
-    if (!connected) { setSignedIn(null); return; }
+    if (!connected) { setSignedIn(null); setSignInError(null); return; }
     let live = true;
-    const ask = () => void callQuiet("getOnboarding", {}).then((o) => { if (live) setSignedIn(o.tokenConfigured); }).catch(() => {});
+    // callQuiet: a failure is shown in place, under the Claude step (and asked again every 4 s).
+    const ask = () => void callQuiet("getOnboarding", {})
+      .then((o) => { if (live) { setSignedIn(o.tokenConfigured); setSignInError(null); } })
+      .catch((e: unknown) => { if (live) setSignInError(e instanceof Error && e.message ? e.message : String(e)); });
     ask();
     const t = setInterval(ask, 4000);
     return () => { live = false; clearInterval(t); };
@@ -203,6 +208,7 @@ export function SetupScreen({ onClose }: { onClose?(): void }) {
           {view.steps.claude === "needs-you" && (
             <AccountPanel onReady={() => setSignedIn(true)} />
           )}
+          {view.steps.claude === "doing" && signInError && <Announce><p role="alert" className="error">{signInError}</p></Announce>}
         </Step>
         <Step title={STR_SETUP.voices} state="optional"><VoicesBody /></Step>
         <Step title={STR_SETUP.phone} state="optional" actions={

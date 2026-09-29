@@ -45,6 +45,25 @@ describe("VncProxy (ARCH-01)", () => {
     up.close();
   });
 
+  // Final review: the proxy dialled the gateway with the token even when the host wasn't proven (no stream, or the
+  // connect got no answer). It now asks the connection to prove the host first, and dials nothing when it can't.
+  it("dials the gateway only once the host is proven; an unproven host gets no token", async () => {
+    const seen: string[] = [];
+    const up = http.createServer();
+    up.on("upgrade", (req, socket) => { seen.push(String(req.headers.authorization)); socket.destroy(); });
+    await new Promise<void>((r) => up.listen(0, "127.0.0.1", () => r()));
+    const baseUrl = `http://127.0.0.1:${(up.address() as AddressInfo).port}`;
+    let proofs = 0;
+    const proxy = new VncProxy({ upstream: () => ({ baseUrl, token: "t0k" }), ticket: "tick-3", prove: async () => { proofs++; return false; } });
+    const { port } = await proxy.start();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/vnc/bot-a?t=tick-3`);
+    expect(await new Promise<number>((res) => ws.on("unexpected-response", (_r, resp) => res(resp.statusCode ?? 0)))).toBe(502);
+    expect(proofs).toBe(1);
+    expect(seen).toEqual([]);
+    await proxy.close();
+    up.close();
+  });
+
   it("registers client.on('error') and keeps handling upstream errors after open (not just the first one)", async () => {
     capturedUpstreams.length = 0;
     const up = http.createServer();

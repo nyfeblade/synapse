@@ -2,7 +2,8 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { readJson, writeJsonAtomic } from "../util/atomic-json";
 
-export interface GatewayInfo { port: number; pid: number; startedAt: number; scheme: "http"; host: string; token: string }
+/** `hello: 1`: this host answers /hello (proof of host), so the app never sends it the token unproven. */
+export interface GatewayInfo { port: number; pid: number; startedAt: number; scheme: "http"; host: string; token: string; hello?: 1 }
 
 export function loadOrCreateGatewayToken(hostPrivate: string): string {
   const existing = readJson<Partial<GatewayInfo> | null>(path.join(hostPrivate, "gateway.json"), null);

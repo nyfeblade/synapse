@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { ForeverBoxStep, SnapshotInfo } from "@synapse/shared";
-import { STRC } from "@synapse/shared";
+import { boxPortEnv, STRC } from "@synapse/shared";
 import type { Exec } from "./box-provider";
 import { resolveOrb } from "./orb-path";
 import { BoxOpsLock, boxBusyMessage } from "./setup/box-ops-lock";
@@ -52,6 +52,8 @@ export function bundledImageVersion(boxDir: string): string {
 export class OrbBoxOps implements BoxOps {
   constructor(private o: {
     exec: Exec; boxDir: string; machine?: string; health(): Promise<boolean>; orb?: () => string;
+    /** This Mac user's uid: the scripts get this user's own ports (two accounts on one Mac, user-ports.ts). */
+    uid?: number;
     /** Sizes a recreated machine like first-run setup does (machineSize). */
     mac?: { cpus: number; totalMemBytes: number };
     /** The machine was recreated: its box key is new (the caller forgets the pin, so secret sync re-pins). */
@@ -59,7 +61,7 @@ export class OrbBoxOps implements BoxOps {
   }) {}
   private orb() { return (this.o.orb ?? resolveOrb)(); }
   private m() { return this.o.machine ?? "box"; }
-  private env() { return { ORB: this.orb(), BOX_MACHINE: this.m() }; }
+  private env() { return { ORB: this.orb(), BOX_MACHINE: this.m(), ...boxPortEnv(this.o.uid ?? process.getuid?.() ?? 501) }; }
   private async run(cmd: string, args: string[], timeoutMs = 30 * 60_000, env?: Record<string, string>): Promise<void> {
     const r = await this.o.exec(cmd, args, { timeoutMs, ...(env ? { env } : {}) });
     if (r.code !== 0) throw new Error(`${cmd} ${args[0]} failed: ${r.stderr.trim().slice(0, 300)}`);

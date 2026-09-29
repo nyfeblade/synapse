@@ -185,6 +185,15 @@ describe("BoxLifecycle (CMP-11)", () => {
     expect(seen.map((e) => e?.BOX_MACHINE)).toEqual(["synapse-box", "synapse-box"]);
   });
 
+  it("OrbBoxOps hands this Mac user's own ports to provision and deploy (two accounts on one Mac)", async () => {
+    const seen: Array<Record<string, string> | undefined> = [];
+    const mk = (uid: number) => new OrbBoxOps({ exec: async (_c, _a, opts) => { seen.push(opts?.env); return { code: 0, stdout: "", stderr: "" }; }, boxDir: "/b", health: async () => true, machine: "synapse-box", uid });
+    await mk(501).provision();
+    await mk(502).deploy();
+    expect(seen[0]).toMatchObject({ SYNAPSE_GATEWAY_PORT: "47800", SYNAPSE_WEBHOOK_PORT: "47801", SYNAPSE_AUTH_PROXY_PORT: "47802" });
+    expect(seen[1]).toMatchObject({ SYNAPSE_GATEWAY_PORT: "47900", SYNAPSE_WEBHOOK_PORT: "47901", SYNAPSE_AUTH_PROXY_PORT: "47902" });
+  });
+
   it("OrbBoxOps runs the resolved orb and hands the same path to the box scripts as ORB (DMG-symlink ruling)", async () => {
     const seen: { cmd: string; env?: Record<string, string> }[] = [];
     const ops = new OrbBoxOps({

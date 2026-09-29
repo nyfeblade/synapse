@@ -14,3 +14,6 @@ PER_BOT_UID="${PER_BOT_UID:-auto}"
 case "$PER_BOT_UID" in on|off|auto) ;; *) echo "provision-from-mac: PER_BOT_UID must be on, off or auto" >&2; exit 2 ;; esac
 tar -C "$ROOT" -czf - provision.sh files desktop.env | orb -m "$BOX_MACHINE" -u root sh -c \
   "rm -rf /tmp/prov && mkdir -p /tmp/prov && tar -xzf - -C /tmp/prov && PER_BOT_UID=$PER_BOT_UID bash /tmp/prov/provision.sh"
+# Two accounts on one Mac: this Mac user's own ports (orb.sh), again after provision.sh reinstalled the shipped
+# firewall rule. The host picks them up at deploy's restart.
+box_apply_ports

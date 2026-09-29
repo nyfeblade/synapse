@@ -71,13 +71,17 @@ export async function listMachines(exec: Exec, orb: string): Promise<MachineInfo
 export interface MachineMarks { ok: boolean; image: string | null; provisioned: string | null; created: boolean; hostBuild: string | null; gateway: boolean }
 
 /** One call into the machine: the markers Synapse writes, the host build it runs, whether the host is up. */
-export async function machineMarks(exec: Exec, orb: string, name: string): Promise<MachineMarks> {
+/** `gatewayPort`: the host counts as up only on this Mac user's own port (two accounts on one Mac, user-ports.ts). */
+export async function machineMarks(exec: Exec, orb: string, name: string, gatewayPort?: number): Promise<MachineMarks> {
+  const port = gatewayPort !== undefined && Number.isInteger(gatewayPort) ? gatewayPort : null;
   const script = [
     "cat /etc/bots/image-version 2>/dev/null; echo '|'",
     "cat /etc/bots/provisioned 2>/dev/null; echo '|'",
     `test -f ${CREATED_MARKER} && echo yes; echo '|'`,
     "cat /opt/bothost/app/build-id.txt 2>/dev/null; echo '|'",
-    "test -s /home/box/.host/gateway.json && echo yes",
+    port === null
+      ? "test -s /home/box/.host/gateway.json && echo yes"
+      : `grep -Eq '"port"[[:space:]]*:[[:space:]]*${port}[^0-9]' /home/box/.host/gateway.json 2>/dev/null && echo yes`,
   ].join("; ");
   const r = await exec(orb, ["-m", name, "-u", "root", "sh", "-c", script], { timeoutMs: 60_000 });
   const parts = r.stdout.split("|");

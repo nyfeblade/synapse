@@ -260,10 +260,11 @@ if as_host_q sudo -n $BU ensure verify-walls-a >/dev/null 2>&1 && as_host_q sudo
   fi
   # Bug 117: the auth proxy port answers bothost, box and a Bot account, and refuses any other local user.
   check "auth proxy port rule is loaded"                  orb -m $M -u root sh -c 'systemctl is-active --quiet bots-auth-proxy.service && nft list table inet bots_auth_proxy >/dev/null'
-  check "box reaches the auth proxy"                      orb -m $M -u root setpriv --reuid=box --regid=box --init-groups -- curl -sf -m 3 -I http://127.0.0.1:47802/api/hello
-  check "a Bot account reaches the auth proxy"            orb -m $M -u root setpriv --reuid=$UB --regid=$UB --init-groups -- curl -sf -m 3 -I http://127.0.0.1:47802/api/hello
-  check "another local user can't reach the auth proxy"   bash -c "! orb -m $M -u root setpriv --reuid=nobody --regid=nogroup --clear-groups -- curl -sf -m 3 -I http://127.0.0.1:47802/api/hello"
-  check "the proxy refuses a made-up proxy token"         orb -m $M -u root sh -c "setpriv --reuid=box --regid=box --init-groups -- curl -s -m 3 -o /dev/null -w '%{http_code}' -H 'x-api-key: sk-ant-api03-synproxy-madeup' -d '{}' http://127.0.0.1:47802/v1/messages | grep -qx 401"
+  check "the rule guards this account's proxy port"       orb -m $M -u root sh -c "nft list table inet bots_auth_proxy | grep dport | grep -qw $SYNAPSE_AUTH_PROXY_PORT"
+  check "box reaches the auth proxy"                      orb -m $M -u root setpriv --reuid=box --regid=box --init-groups -- curl -sf -m 3 -I http://127.0.0.1:$SYNAPSE_AUTH_PROXY_PORT/api/hello
+  check "a Bot account reaches the auth proxy"            orb -m $M -u root setpriv --reuid=$UB --regid=$UB --init-groups -- curl -sf -m 3 -I http://127.0.0.1:$SYNAPSE_AUTH_PROXY_PORT/api/hello
+  check "another local user can't reach the auth proxy"   bash -c "! orb -m $M -u root setpriv --reuid=nobody --regid=nogroup --clear-groups -- curl -sf -m 3 -I http://127.0.0.1:$SYNAPSE_AUTH_PROXY_PORT/api/hello"
+  check "the proxy refuses a made-up proxy token"         orb -m $M -u root sh -c "setpriv --reuid=box --regid=box --init-groups -- curl -s -m 3 -o /dev/null -w '%{http_code}' -H 'x-api-key: sk-ant-api03-synproxy-madeup' -d '{}' http://127.0.0.1:$SYNAPSE_AUTH_PROXY_PORT/v1/messages | grep -qx 401"
   # synapse-public: every Claude process runs on a proxy API-key token, and none holds a Claude login.
   check "every process's ANTHROPIC_API_KEY is a proxy token" orb -m $M -u root sh -c "! cat /proc/[0-9]*/environ 2>/dev/null | tr '\\0' '\\n' | grep -a '^ANTHROPIC_API_KEY=' | grep -av -- '-synproxy-' | grep -q ."
   check "no process holds a Claude login token"           orb -m $M -u root sh -c "! cat /proc/[0-9]*/environ 2>/dev/null | tr '\\0' '\\n' | grep -aq '^CLAUDE_CODE_OAUTH_TOKEN='"

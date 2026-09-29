@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import type { Duplex } from "node:stream";
 import WebSocket, { WebSocketServer } from "ws";
 
 /**
@@ -12,7 +13,11 @@ export class VncProxy {
   private wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
   private ticket: string;
 
-  constructor(private o: { upstream(): { baseUrl: string; token: string } | null; ticket?: string }) {
+  /**
+   * `prove`: the gateway's host is proven before the token goes to it (the live stream's proof, else a /hello
+   * challenge: GatewayClient.provenForUse). Not proven: the viewer gets a 502 and nothing is dialled.
+   */
+  constructor(private o: { upstream(): { baseUrl: string; token: string } | null; ticket?: string; prove?(): Promise<boolean> }) {
     this.ticket = o.ticket ?? randomBytes(24).toString("base64url");
   }
 
@@ -29,28 +34,37 @@ export class VncProxy {
         socket.destroy();
         return;
       }
-      const target = `${up.baseUrl.replace(/^http/, "ws")}/vnc/${m[1]}`;
-      const upstream = new WebSocket(target, { headers: { authorization: `Bearer ${up.token}` }, perMessageDeflate: false });
-      // Only covers a failure before the handshake completes; removed once `open` fires so a later error
-      // can never land here and write raw HTTP onto a socket that's already been upgraded (see the `on("error", end)` below).
-      const onPreOpenError = () => { socket.write("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n"); socket.destroy(); };
-      upstream.once("error", onPreOpenError);
-      upstream.once("open", () => {
-        upstream.removeListener("error", onPreOpenError);
-        this.wss.handleUpgrade(req, socket, head, (client) => {
-          upstream.on("message", (d) => client.send(d as Buffer, { binary: true }));
-          client.on("message", (d) => upstream.send(d as Buffer, { binary: true }));
-          const end = () => { client.close(); upstream.close(); };
-          client.on("close", end);
-          client.on("error", end);
-          upstream.on("close", end);
-          upstream.on("error", end);
-        });
-      });
+      void this.dial(req, socket, head, up, m[1]!);
     });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
     this.server = server;
     return { port: (server.address() as AddressInfo).port, ticket: this.ticket };
+  }
+
+  private async dial(req: http.IncomingMessage, socket: Duplex, head: Buffer, up: { baseUrl: string; token: string }, botId: string): Promise<void> {
+    if (this.o.prove && !(await this.o.prove().catch(() => false))) {
+      socket.write("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+    const target = `${up.baseUrl.replace(/^http/, "ws")}/vnc/${botId}`;
+    const upstream = new WebSocket(target, { headers: { authorization: `Bearer ${up.token}` }, perMessageDeflate: false });
+    // Only covers a failure before the handshake completes; removed once `open` fires so a later error
+    // can never land here and write raw HTTP onto a socket that's already been upgraded (see the `on("error", end)` below).
+    const onPreOpenError = () => { socket.write("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n"); socket.destroy(); };
+    upstream.once("error", onPreOpenError);
+    upstream.once("open", () => {
+      upstream.removeListener("error", onPreOpenError);
+      this.wss.handleUpgrade(req, socket, head, (client) => {
+        upstream.on("message", (d) => client.send(d as Buffer, { binary: true }));
+        client.on("message", (d) => upstream.send(d as Buffer, { binary: true }));
+        const end = () => { client.close(); upstream.close(); };
+        client.on("close", end);
+        client.on("error", end);
+        upstream.on("close", end);
+        upstream.on("error", end);
+      });
+    });
   }
 
   async close(): Promise<void> {

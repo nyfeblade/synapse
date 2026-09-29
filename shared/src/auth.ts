@@ -132,6 +132,7 @@ export const STR_AUTH = {
   noKeyTitle: "No API key",
   noKeyDetail: "Bots need an Anthropic API key. Add one in Settings → Account.",
   macKeyTitle: "Save the API key on this Mac",
+  keyNotSaved: "The key wasn't saved. Try again.",
   macKeyNotSaved: "Saved on the Bots' computer, but not on this Mac:",
   save: "Save",
   webSearchDisabled: "Web search is off for this API key",

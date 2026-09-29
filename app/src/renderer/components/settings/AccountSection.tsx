@@ -1,26 +1,29 @@
 import { useEffect, useState } from "react";
-import { API_KEY_RE, STR_AUTH, modelLabel, type AuthTestResult, type AuthView, type KeyCheckView } from "@synapse/shared";
+import { API_KEY_RE, STR, STR_AUTH, modelLabel, type AuthTestResult, type AuthView, type KeyCheckView } from "@synapse/shared";
 import { callQuiet } from "../../bridge";
 import { subscribeChannel } from "../../feature-store";
 import { nativeCall } from "../../native";
 import { useModelAccess } from "../../model-access";
 import { SectionBlocks } from "./sections";
+import { noteIfSlow, SIGN_IN_TIMEOUT_MS } from "../../within-time";
 
 /** Fired on this window when the key changes (the one-time prompts re-check, KeyPrompts.tsx). */
 export const API_KEY_CHANGED = "synapse:api-key-changed";
 const changed = () => window.dispatchEvent(new Event(API_KEY_CHANGED));
 
 /** An IPC rejection arrives as "Error invoking remote method 'auth:save-key': Error: <reason>". */
-const reason = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
+const reason = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, "") || STR.hostNoAnswer;
 
 /**
  * The Anthropic API key: the only way Bots reach Claude (synapse-public). The key is typed here and handed to the main
  * process (window.synapse.auth), which seals it to the box; the host only ever answers with `sk-ant-…last4`. A new key
  * applies from each Bot's next turn. Used by Settings → Account and the first-run Sign in step.
  */
-export function AccountPanel({ onReady }: {
+export function AccountPanel({ onReady, timeoutMs = SIGN_IN_TIMEOUT_MS }: {
   /** A key is saved (a first-run step moves on). */
   onReady?(): void;
+  /** Tests only: how long a step may take before it fails with a plain line. */
+  timeoutMs?: number;
 }) {
   const [view, setView] = useState<AuthView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +32,11 @@ export function AccountPanel({ onReady }: {
   const [checking, setChecking] = useState(false);
   const [test, setTest] = useState<AuthTestResult | "testing" | null>(null);
   const [check, setCheck] = useState<KeyCheckView | null>(null);
-  useEffect(() => { void callQuiet("getAuth", {}).then(setView).catch((e) => setError(reason(e))); }, []);
+  // callQuiet: the panel shows this failure itself, in place of the key field.
+  useEffect(() => {
+    void noteIfSlow(callQuiet("getAuth", {}), timeoutMs, () => setError(STR.hostTimeout))
+      .then((v) => { setView(v); setError(null); }).catch((e) => setError(reason(e)));
+  }, [timeoutMs]);
   // Bug 281: the API-key check's last answer, and each new one (after a key is saved, or from Check).
   useEffect(() => {
     const take = (v: unknown) => { if (isKeyCheck(v)) setCheck(v); };
@@ -40,20 +47,27 @@ export function AccountPanel({ onReady }: {
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(null);
-    try { await fn(); } catch (e) { setError(reason(e)); } finally { setBusy(false); }
+    // Slow: say so, but keep the buttons off until main's call settles (a late Save must not overtake a Remove).
+    let slow = false;
+    try {
+      await noteIfSlow(fn(), timeoutMs, () => { slow = true; setError(STR.hostTimeout); });
+      if (slow) setError((e) => (e === STR.hostTimeout ? null : e));
+    } catch (e) { setError(reason(e)); } finally { setBusy(false); }
   };
 
   const save = () => run(async () => {
     const k = key.trim();
     if (!API_KEY_RE.test(k)) throw new Error(STR_AUTH.badKeyFormat);
-    const saved = (await window.synapse.auth.saveKey(k)) as AuthView & { macSaved?: boolean; macError?: string };
+    const saved = (await window.synapse.auth.saveKey(k)) as (AuthView & { macSaved?: boolean; macError?: string }) | null;
+    // An answer without a saved key is never a silent no-op (the typed key stays, for Save again).
+    if (!saved?.apiKey) throw new Error(STR_AUTH.keyNotSaved);
     setKey("");
     setTest(null);
     setView(saved);
     changed();
     // Review fix 4: the box has the key, but this Mac couldn't keep its copy (the Bots' claude here can't run yet).
     if (saved.macSaved === false && saved.macError) setError(`${STR_AUTH.macKeyNotSaved} ${saved.macError}`);
-    if (saved.apiKey) onReady?.();
+    onReady?.();
   });
 
   const remove = () => run(async () => {
@@ -75,7 +89,9 @@ export function AccountPanel({ onReady }: {
     setChecking(true);
     setError(null);
     try {
-      const v = await callQuiet("checkApiKey", { refresh: true });
+      let slow = false;
+      const v = await noteIfSlow(callQuiet("checkApiKey", { refresh: true }), timeoutMs, () => { slow = true; setError(STR.hostTimeout); });
+      if (slow) setError((e) => (e === STR.hostTimeout ? null : e));
       if (isKeyCheck(v)) setCheck(v);
       void useModelAccess.getState().load(); // the check re-probed the models
     } catch (e) { setError(reason(e)); } finally { setChecking(false); }

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { STR_SETUP } from "@synapse/shared";
 import { SetupScreen } from "../../src/renderer/firstrun/SetupScreen";
 import { useSetupGate } from "../../src/renderer/firstrun/store";
 
@@ -73,6 +74,14 @@ describe("the setup screen", () => {
     await vi.waitFor(() => expect(invoked.map((c) => c[0])).toContain("setup.box.start"));
     fireEvent.click(screen.getByRole("button", { name: "Log" }));
     await vi.waitFor(() => expect(invoked.map((c) => c[0])).toContain("setup.box.log"));
+  });
+
+  it("connected, but the sign-in check is refused: the Claude step says why instead of spinning forever", async () => {
+    current = status({ connected: true, orb: { app: true, cli: true, status: "running", version: "2.2.3" }, box: box({ phase: "ready", progress: 1 }) });
+    (window as unknown as { synapse: { call: unknown } }).synapse.call = async () => ({ ok: false, error: { code: "WRONG_HOST", message: "Synapse is running in another account on this Mac and is using this account's connection. Quit Synapse there, then retry." } });
+    render(<SetupScreen />);
+    const claude = await screen.findByRole("listitem", { name: STR_SETUP.claude });
+    expect(await within(claude).findByRole("alert")).toHaveProperty("textContent", expect.stringMatching(/^Synapse is running in another account on this Mac/));
   });
 
   it("offers the optional voices with their size, and the GitHub updates row with a token link", async () => {

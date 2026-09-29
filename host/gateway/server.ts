@@ -1,7 +1,7 @@
 import http from "node:http";
-import { timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Duplex } from "node:stream";
-import { LIMITS, type CommandName, type GatewayCommands } from "@synapse/shared";
+import { HELLO_NONCE_RE, LIMITS, helloMessage, type CommandName, type GatewayCommands } from "@synapse/shared";
 import { GatewayError } from "./errors";
 import type { SseHub } from "./sse-hub";
 import { log } from "../util/log";
@@ -59,6 +59,13 @@ export function createGateway(opts: GatewayOptions): http.Server {
   const server = http.createServer(async (req, res) => {
     if (req.headers.origin !== undefined) {
       return send(res, 403, { ok: false, error: { code: "FORBIDDEN_ORIGIN", message: "Browser requests are not allowed" } });
+    }
+    // Proof of host (two accounts on one Mac share 127.0.0.1): the app's nonce, answered with the token as the HMAC key.
+    // No token asked for, and none given away: the app checks this before it sends its token anywhere.
+    if (req.method === "GET" && (req.url ?? "").split("?")[0] === "/hello") {
+      const nonce = new URL(req.url ?? "/", "http://gateway").searchParams.get("nonce") ?? "";
+      if (!HELLO_NONCE_RE.test(nonce)) return send(res, 400, { ok: false, error: { code: "INVALID", message: "nonce must be 32 hex characters" } });
+      return send(res, 200, { ok: true, proof: createHmac("sha256", opts.token).update(helloMessage(nonce)).digest("hex") });
     }
     const got = Buffer.from(req.headers.authorization ?? "");
     if (got.length !== expected.length || !timingSafeEqual(got, expected)) {

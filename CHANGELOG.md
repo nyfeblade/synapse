@@ -3,10 +3,17 @@
 Every version of Synapse. The website's Changelog page is built from this file.
 Newest first. A version headed `Unreleased` shows as "in progress".
 
-## 0.1.1 — Unreleased
+## 0.1.1 — 2026-09-29
 
 - **Synapse in two macOS accounts on one Mac.** Each account gets its own connection to its own Bots' computer, and Synapse tells you clearly if it ever reaches another account's instead.
 - **Sign-in never fails silently.** If adding, replacing or checking your API key fails, Synapse says what went wrong.
+- **Your connection key stays yours.** Before Synapse sends its key to the Bots' computer, that computer has to prove it's yours, so another account on the same Mac can never pick it up.
+- **Key changes happen in order.** Saving, testing and removing your API key run one at a time, so a slow save can't undo a removal.
+- **Long jobs aren't cut off.** Restoring a backup or importing no longer stops after five minutes.
+
+### Updating from 0.1.0
+
+- The Bots' computer updates itself once, automatically, the first time 0.1.1 opens. If a Bot is mid-reply in a second macOS account at that moment, it may be interrupted once.
 
 ## 0.1.0 — 2026-09-28 — beta
 

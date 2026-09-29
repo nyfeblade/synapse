@@ -40,6 +40,8 @@ host_stream | orb -m "$BOX_MACHINE" -u root sh -c '
 # must never wipe.
 printf '[Service]\nEnvironment=HOST_BIND=%s\nEnvironment=WEBHOOK_HOST=%s.orb.local\n' "$BIND" "$BOX_MACHINE" | orb -m "$BOX_MACHINE" -u root sh -c \
   'install -d -m 0755 /etc/systemd/system/bothost.service.d && cat > /etc/systemd/system/bothost.service.d/10-bind.conf && systemctl daemon-reload'
+# Two accounts on one Mac: this Mac user's own ports (orb.sh). A box that was on another account's ports moves here.
+box_apply_ports
 echo "::step 3/3 starting the Bots' software"
 orb -m "$BOX_MACHINE" -u root systemctl restart bothost
 "$HERE/check-gateway.sh"

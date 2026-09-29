@@ -65,7 +65,8 @@ describe("stage-box.mjs (what package.mjs hands packager as extraResource)", () 
     const log = path.join(bin, "log");
     fs.writeFileSync(path.join(bin, "npm"), `#!/bin/sh\necho "npm $*" >> "${log}"\nexit 1\n`, { mode: 0o755 });
     fs.writeFileSync(path.join(bin, "node"), `#!/bin/sh\necho "node $*" >> "${log}"\nexit 1\n`, { mode: 0o755 });
-    fs.writeFileSync(path.join(bin, "curl"), `#!/bin/sh\ncase "$*" in *http_code*) echo 403;; *) echo '{"ok":true}';; esac\n`, { mode: 0o755 });
+    // Like curl: a config on stdin (-K -, how check-gateway.sh passes the token) is read.
+    fs.writeFileSync(path.join(bin, "curl"), `#!/bin/sh\ncase "$*" in *"-K -"*) cat >/dev/null;; esac\ncase "$*" in *http_code*) echo 403;; *) echo '{"ok":true}';; esac\n`, { mode: 0o755 });
     fs.writeFileSync(path.join(bin, "orb"), [
       "#!/bin/sh", `echo "orb $*" >> "${log}"`,
       `case "$*" in *gateway.json*) echo '{"port":47800,"token":"t"}'; exit 0;; esac`,

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Exec } from "../../src/main/box-provider";
 import { boxSteps, type BoxStepDeps } from "../../src/main/setup/box-steps";
 import { BoxProvisioner } from "../../src/main/setup/provisioner";
-import { adoptable, boxMachineName, detectOrb, listMachines, machineSize, startOrbStack } from "../../src/main/setup/orb";
+import { adoptable, boxMachineName, detectOrb, listMachines, machineMarks, machineSize, startOrbStack } from "../../src/main/setup/orb";
+import { WRONG_HOST_MESSAGE } from "@synapse/shared";
 
 const ORB = "/Applications/OrbStack.app/Contents/MacOS/bin/orb";
 const IMAGE = "0123456789abcdef";
@@ -32,9 +33,10 @@ function fakeOrb(init: { machines?: Array<{ name: string; state: string; isolate
   return { exec, machines, calls };
 }
 
-function deps(f: ReturnType<typeof fakeOrb>, o: Partial<BoxStepDeps> & { scripts?: string[]; failProvision?: string } = {}): BoxStepDeps {
+function deps(f: ReturnType<typeof fakeOrb>, o: Partial<BoxStepDeps> & { scripts?: string[]; envs?: Record<string, string>[]; failProvision?: string } = {}): BoxStepDeps {
   let connected = false;
   const scripts = o.scripts ?? [];
+  const envs = o.envs ?? [];
   return {
     exec: f.exec, orb: () => ORB, machine: "synapse-box", boxDir: "/App/Resources/box",
     imageVersion: () => IMAGE, hostBuild: () => HOST,
@@ -45,6 +47,7 @@ function deps(f: ReturnType<typeof fakeOrb>, o: Partial<BoxStepDeps> & { scripts
     run: async (_cmd, args, r) => {
       const script = args[0]!.split("/").at(-1)!;
       scripts.push(`${script} ${r.env.BOX_MACHINE}`);
+      envs.push(r.env);
       r.ctx.line("::step 3/10 Node.js");
       const m = f.machines.get(r.env.BOX_MACHINE!)!;
       if (script === "provision-from-mac.sh") {
@@ -67,6 +70,42 @@ describe("first run on a new Mac", () => {
     expect(create).toEqual([ORB, "create", "--isolated", "-a", "arm64", "--cpus", "4", "--memory", "8192", "--disk", "64G", "-u", "synapse-admin", "debian:bookworm", "synapse-box"]);
     expect(f.machines.get("synapse-box")!.created).toBe(true);
     expect(scripts).toEqual(["forget-pin", "provision-from-mac.sh synapse-box", "deploy.sh synapse-box"]);
+  });
+
+  it("hands this Mac user's own ports to provision and deploy (two accounts on one Mac)", async () => {
+    const f = fakeOrb();
+    const envs: Record<string, string>[] = [];
+    await new BoxProvisioner({ steps: boxSteps(deps(f, { envs, uid: 502 })), publish: () => {} }).start();
+    expect(envs).toHaveLength(2);
+    for (const e of envs) expect(e).toMatchObject({ SYNAPSE_GATEWAY_PORT: "47900", SYNAPSE_WEBHOOK_PORT: "47901", SYNAPSE_AUTH_PROXY_PORT: "47902" });
+  });
+
+  it("the deploy counts as done only when the host is on this user's port", async () => {
+    const seen: string[] = [];
+    await machineMarks(async (_c, args) => { seen.push(args.at(-1)!); return { code: 0, stdout: "", stderr: "" }; }, ORB, "synapse-box", 47900);
+    expect(seen[0]).toContain("47900");
+  });
+
+  it("one wrong-host answer is retried (a stale token after the machine was recreated) before setup gives up", async () => {
+    const f = fakeOrb({ machines: [{ name: "synapse-box", state: "running", image: IMAGE, provisioned: IMAGE, created: true, host: HOST, gateway: true }] });
+    let tries = 0;
+    let connected = false;
+    const end = await new BoxProvisioner({
+      steps: boxSteps(deps(f, { reconnect: async () => { tries++; connected = tries >= 2; }, connected: () => connected, connectError: () => (connected ? null : WRONG_HOST_MESSAGE) })),
+      publish: () => {},
+    }).start();
+    expect(end.phase).toBe("ready");
+    expect(tries).toBe(2);
+  });
+
+  it("a port answered by another account's host fails the connection plainly, not as \"didn't start\"", async () => {
+    const f = fakeOrb({ machines: [{ name: "synapse-box", state: "running", image: IMAGE, provisioned: IMAGE, created: true, host: HOST, gateway: true }] });
+    const end = await new BoxProvisioner({
+      steps: boxSteps(deps(f, { reconnect: async () => {}, connected: () => false, connectError: () => WRONG_HOST_MESSAGE })),
+      publish: () => {},
+    }).start();
+    expect(end.phase).toBe("failed");
+    expect(end.error).toBe(WRONG_HOST_MESSAGE);
   });
 
   it("resumes after a failed provision: the machine is not created twice, and provision runs again", async () => {

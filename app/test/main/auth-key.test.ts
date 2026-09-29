@@ -77,3 +77,52 @@ describe("dual-auth: the same key serves (through the Mac key proxy) the Bots' c
     expect(logs.join("\n")).not.toContain(KEY.slice(13, 40));
   });
 });
+
+// Review of 0c7a33f0: the panel may give up waiting on a slow Save while main's call is still running. A Remove
+// pressed then must not be overtaken by that Save landing afterwards and bringing the key back: key operations run
+// one at a time, in the order they were asked.
+describe("key operations run one at a time", () => {
+  it("a Remove asked while a Save is still running waits for it, so the key stays removed", async () => {
+    const log: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const call = (async (cmd: string) => {
+      log.push(`${cmd}:start`);
+      if (cmd === "setApiKey") await gate;
+      log.push(`${cmd}:end`);
+      return cmd === "getAuth" ? view : { ...view, apiKey: cmd === "setApiKey" ? { masked: "m", savedAt: 1 } : null };
+    }) as never;
+    const s = createApiKeySender({ call, pin: { check: () => "match" }, seal: async () => "sealed" });
+    const saving = s.save(KEY);
+    await new Promise((r) => setTimeout(r, 10));
+    const removing = s.remove();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(log).not.toContain("clearApiKey:start");
+    release();
+    await Promise.all([saving, removing]);
+    expect(log.filter((l) => l !== "getAuth:start" && l !== "getAuth:end")).toEqual(["setApiKey:start", "setApiKey:end", "clearApiKey:start", "clearApiKey:end"]);
+  });
+
+  it("a failed operation doesn't block the next one", async () => {
+    const call = (async (cmd: string) => { if (cmd === "setApiKey") throw new Error("refused"); return view; }) as never;
+    const s = createApiKeySender({ call, pin: { check: () => "match" }, seal: async () => "sealed" });
+    await expect(s.save(KEY)).rejects.toThrow("refused");
+    await expect(s.remove()).resolves.toBeTruthy();
+  });
+});
+
+
+// Final review: a Save whose client-side limit ran out could still land on the box after a Remove queued behind it (the
+// limit settled the queue early while the host kept working). The key calls have no client time limit: the queue waits
+// for the host's real answer, and the panel shows its slow note meanwhile.
+describe("the key sender's gateway calls have no client time limit", () => {
+  it("main builds the key sender's call without timeoutMs", async () => {
+    const fs = await import("node:fs");
+    const src = fs.readFileSync(new URL("../../src/main/index.ts", import.meta.url), "utf8");
+    const at = src.indexOf("apiKeySender = createApiKeySender(");
+    expect(at).toBeGreaterThan(0);
+    const block = src.slice(at, src.indexOf("});", at));
+    expect(block).not.toMatch(/timeoutMs/);
+    expect(src).not.toMatch(/AUTH_CALL_TIMEOUT_MS/);
+  });
+});

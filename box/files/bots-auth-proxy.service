@@ -6,7 +6,7 @@ Before=bothost.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/sbin/nft -f /etc/bots/auth-proxy.nft
+ExecStart=/usr/local/lib/bots/bots-ports load
 ExecStop=/usr/sbin/nft delete table inet bots_auth_proxy
 [Install]
 WantedBy=multi-user.target

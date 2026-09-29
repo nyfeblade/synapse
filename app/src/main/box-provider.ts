@@ -54,13 +54,14 @@ export class OrbBoxProvider {
     if (r.code !== 0) throw new Error(`orb stop failed: ${r.stderr.trim()}`);
   }
 
-  async readGatewayInfo(timeoutMs = 60_000): Promise<{ port: number; token: string }> {
+  /** `hello`: the host answers /hello (proof of host); an older host's gateway.json has no such field. */
+  async readGatewayInfo(timeoutMs = 60_000): Promise<{ port: number; token: string; hello?: boolean }> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       const r = await this.exec(resolveOrb(), ["-m", this.cfg.machine, "-u", "root", "cat", "/home/box/.host/gateway.json"]);
       if (r.code === 0) {
-        const j = JSON.parse(r.stdout) as { port: number; token: string };
-        return { port: j.port, token: j.token };
+        const j = JSON.parse(r.stdout) as { port: number; token: string; hello?: unknown };
+        return { port: j.port, token: j.token, ...(j.hello === 1 ? { hello: true } : {}) };
       }
       if (Date.now() > deadline) throw new Error("The host did not start (no gateway.json).");
       await new Promise((res) => setTimeout(res, this.cfg.pollMs ?? 1000));

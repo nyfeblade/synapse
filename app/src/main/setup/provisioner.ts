@@ -1,3 +1,4 @@
+import { WRONG_HOST_MESSAGE } from "@synapse/shared";
 /**
  * Portable install: "Set up the Bots' computer" — create the OrbStack machine, start it, provision it,
  * deploy the host, connect. Every step first asks whether it is already done, so running this again
@@ -49,6 +50,8 @@ const STEP_NAMES: Record<BoxStepId, string> = {
 export function plainError(raw: string, step: BoxStepId): string {
   // Already written for the user (a step's own refusal): pass it through as it is.
   if (/^A machine called /.test(raw)) return raw.split("\n")[0]!;
+  // Two accounts on one Mac: another account's host answered on this account's port (check-gateway.sh, connect).
+  if (raw.includes(WRONG_HOST_MESSAGE)) return WRONG_HOST_MESSAGE;
   const t = raw.toLowerCase();
   if (/could not resolve|temporary failure resolving|network is unreachable|failed to connect to|connection timed out|name or service not known|no route to host|failed to fetch/.test(t)) {
     return "No internet connection reached the Bots' computer. Check your connection and retry.";

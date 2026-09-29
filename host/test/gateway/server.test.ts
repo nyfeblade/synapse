@@ -1,4 +1,6 @@
+import { createHmac } from "node:crypto";
 import type { AddressInfo } from "node:net";
+import { helloMessage } from "@synapse/shared";
 import type http from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { GatewayError } from "../../gateway/errors";
@@ -33,6 +35,20 @@ const auth = { authorization: `Bearer ${TOKEN}` };
 afterEach(async () => { await new Promise((r) => server?.close(r)); server = null; });
 
 describe("gateway", () => {
+  // Two accounts on one Mac: the app proves it reached ITS host before it sends the token anywhere. /hello needs no
+  // token and answers HMAC-SHA256(token, "synapse-hello:" + the app's nonce); only the right host can.
+  it("/hello answers the app's nonce with a proof of the token, without asking for the token", async () => {
+    const { base } = await start();
+    const nonce = "0123456789abcdef0123456789abcdef";
+    const r = await fetch(`${base}/hello?nonce=${nonce}`);
+    expect(r.status).toBe(200);
+    const want = createHmac("sha256", TOKEN).update(helloMessage(nonce)).digest("hex");
+    expect(await r.json()).toEqual({ ok: true, proof: want });
+    expect((await fetch(`${base}/hello?nonce=nothex`)).status).toBe(400);
+    expect((await fetch(`${base}/hello`)).status).toBe(400);
+    expect((await fetch(`${base}/hello?nonce=${nonce}`, { headers: { origin: "http://evil.example" } })).status).toBe(403);
+  });
+
   it("rejects missing or wrong tokens with 401", async () => {
     const { base } = await start();
     expect((await fetch(`${base}/health`)).status).toBe(401);

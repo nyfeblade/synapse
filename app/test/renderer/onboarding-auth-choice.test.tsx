@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { STR5, STR_AUTH, type AuthView } from "@synapse/shared";
+import { STR, STR5, STR_AUTH, WRONG_HOST_MESSAGE, type AuthView } from "@synapse/shared";
 import { Onboarding } from "../../src/renderer/onboarding/Onboarding";
 
 const KEY = "sk-ant-api03-" + "O".repeat(80) + "wxyz";
@@ -37,5 +37,26 @@ describe("first run: the Anthropic API key is the only sign-in", () => {
     fireEvent.click(screen.getByRole("button", { name: STR_AUTH.saveKey }));
     expect(await screen.findByRole("heading", { name: STR5.meetApp })).toBeTruthy();
     expect(calls.some(([c]) => c === "setAuthMode")).toBe(false);
+  });
+
+  // "Input API Key →" is the first button in the app: a refusal or a host that never answers must say so and free it.
+  it("Input API Key refused by another account's host shows that plainly and the button works again", async () => {
+    (window as unknown as { synapse: { call: unknown } }).synapse.call = async () => ({ ok: false, error: { code: "NOT_CONNECTED", message: WRONG_HOST_MESSAGE } });
+    render(<Onboarding onDone={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: STR5.signIn }));
+    expect((await screen.findByRole("alert")).textContent).toBe(WRONG_HOST_MESSAGE);
+    expect((screen.getByRole("button", { name: STR5.signIn }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("Input API Key that is slow shows a plain line, and the button comes back when the ask settles", async () => {
+    let answer!: (v: unknown) => void;
+    (window as unknown as { synapse: { call: unknown } }).synapse.call = () => new Promise((r) => { answer = r; });
+    render(<Onboarding onDone={() => {}} timeoutMs={40} />);
+    fireEvent.click(await screen.findByRole("button", { name: STR5.signIn }));
+    expect((await screen.findByRole("alert")).textContent).toBe(STR.hostTimeout);
+    expect((screen.getByRole("button", { name: STR5.signIn }) as HTMLButtonElement).disabled).toBe(true);
+    answer({ ok: false, error: { code: "NETWORK", message: STR.hostNoAnswer } });
+    expect(await screen.findByText(STR.hostNoAnswer)).toBeTruthy();
+    expect((screen.getByRole("button", { name: STR5.signIn }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

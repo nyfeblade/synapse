@@ -865,7 +865,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
         server.once("error", reject);
         server.listen(cfg.port, cfg.bind, () => {
           const port = (server.address() as AddressInfo).port;
-          writeGatewayInfo(cfg.hostPrivate, { port, pid: process.pid, startedAt: now(), scheme: "http", host: cfg.bind, token });
+          writeGatewayInfo(cfg.hostPrivate, { port, pid: process.pid, startedAt: now(), scheme: "http", host: cfg.bind, token, hello: 1 });
           p4.start().then(() => resolve({ port }), reject);
         });
       }),

@@ -5,15 +5,17 @@ import { hkdfSync, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { availableMemory, refreshAvailableMemory, seedAvailableMemory } from "./mac-memory";
-import { scrubClaudeLogin, APP_NAME, CALL_FEEL, LIMITSC, VOICE_ENGINE_MEMORY_MB, defaultVoiceMode, isVoiceMode, resolveVoiceMode, shouldDropToLight, type VoiceMode } from "@synapse/shared";
+import { scrubClaudeLogin, boxPortEnv, WRONG_HOST_MESSAGE, APP_NAME, CALL_FEEL, LIMITSC, VOICE_ENGINE_MEMORY_MB, defaultVoiceMode, isVoiceMode, resolveVoiceMode, shouldDropToLight, type VoiceMode } from "@synapse/shared";
 import { BoxLifecycle, OrbBoxOps, bundledImageVersion, defaultBoxDir, type LifecycleState } from "./box-lifecycle";
 import { BoxPin } from "./box-pin";
 import { CoordinatorHost, type CoordinatorProcess } from "./coordinator-host";
-import { execCommand } from "./box-provider";
+import { execCommand, OrbBoxProvider } from "./box-provider";
 import { shutdownOnQuit } from "./box-quit";
 import { resolveOrb } from "./orb-path";
 import { resolveGateway, type GatewayHandle } from "./gateway-bootstrap";
-import { gatewayCall } from "./gateway-call";
+import { gatewayCall, type HostCreds } from "./gateway-call";
+import { createHostFetch, streamProves } from "./host-fetch";
+import { deployAndReconnect, hostMoved } from "./auto-update-steps";
 import { PROBE_ENV, codeIdentity, electronStore, migrationItemName, openLegacyKeychain, runProbeMode } from "./keychain";
 import { FileKeyStore } from "./file-key-store";
 import { SECRETS_RELOCKED_MESSAGE, mayCreateKey, openSealing, prepareSealing, retireStaleHashKey, sealer } from "./sealing";
@@ -62,7 +64,7 @@ import { registerMacDisk } from "./mac-disk";
 import { configureProfile } from "./profile";
 import { resolveUnpacked } from "./resolve-unpacked";
 import { MacSecretVault } from "./secret-vault";
-import { createApiKeySender } from "./auth-key";
+import { createApiKeySender, registerAuthIpc, type ApiKeySender } from "./auth-key";
 import { SecretSync, sealWith } from "./secret-sync";
 import { saveFileFromGateway } from "./save-file";
 import { readSecret, storeSecret } from "./secrets";
@@ -140,6 +142,8 @@ async function openSecrets(): Promise<void> {
 }
 
 let secretSync: SecretSync | null = null;
+/** Settings → Account's sender, once connected (registerAuthIpc answers before that with why not). */
+let apiKeySender: ApiKeySender | null = null;
 /**
  * Review fix 4: the Mac's copy of the API key is kept by the coordinator, which owns the permission key file (and
  * creates it on demand with its one-time migration). Main asks over the parent port; no answer in 10 s is a failure.
@@ -160,16 +164,30 @@ function macKeyRpc<T>(op: "save" | "clear" | "has", key?: string): Promise<T> {
     postToCoordinator({ type: "mac-key", op, id, ...(key !== undefined ? { key } : {}) });
   });
 }
+/**
+ * How main's gateway calls reach the host (set on every connect): prove it first when it answers /hello, and ask for
+ * fresh credentials before blaming another account for a refusal (a machine recreated under a stale token).
+ */
+/** The coordinator's client was refused by the host (set once the window's connect() exists). */
+let onGatewayRefused: () => void = () => {};
+let hostCallOpts: { hello?: boolean; onStale?: () => Promise<HostCreds | null>; proven?: (c: HostCreds) => boolean } = {};
+/** The connected host, and whether the coordinator's event stream is up on it (its proof is then reused). */
+let currentCreds: HostCreds | null = null;
+let streamUp = false;
+/** Main's raw token-bearing requests (health, backups, snapshots, file saves), proven first (host-fetch.ts). */
+const hostFetch = createHostFetch({ creds: () => currentCreds, streamUp: () => streamUp });
 function startSecrets(profileDir: string, baseUrl: string, token: string): void {
   const vault = new MacSecretVault(path.join(profileDir, "secrets.vault.json"), { encrypt: (s) => sealer.require((k) => k.encryptString(s)), decrypt: (b) => sealer.require((k) => k.decryptString(b)) }, hashKey(profileDir));
-  const call = gatewayCall(baseUrl, token);
+  const call = gatewayCall(baseUrl, token, hostCallOpts);
   const pin = new BoxPin(path.join(profileDir, "box-pin.json"));
   secretSync = new SecretSync({ vault, pin, call, seal: sealWith });
   // Settings → Account: the Anthropic API key is sealed to the box here and never sent back (auth-key.ts). A saved key
   // is also kept for the Bots' claude on this Mac (through the coordinator's key proxy), encrypted with
   // the profile's local-policy.key (never the keychain).
-  const apiKey = createApiKeySender({
-    call, pin, seal: sealWith, log: (s) => console.error(s),
+  apiKeySender = createApiKeySender({
+    // No client time limit: a Save must reach its real end before a queued Remove runs (auth-key.ts), or a Save given
+    // up on here could still land on the box after the Remove. The panel shows its slow note meanwhile.
+    call: gatewayCall(baseUrl, token, hostCallOpts), pin, seal: sealWith, log: (s) => console.error(s),
     mac: {
       save: (key) => macKeyRpc<{ ok: boolean; error?: string }>("save", key),
       clear: () => macKeyRpc<void>("clear"),
@@ -186,10 +204,6 @@ function startSecrets(profileDir: string, baseUrl: string, token: string): void 
     ["secrets:rename", (botId: string, from: string, to: string) => secretSync!.rename(botId, from, to)],
     ["secrets:submit-request", (botId: string, entryId: string, value: string, meta: never) => secretSync!.submitRequest(botId, entryId, value, meta)],
     ["secrets:submit-form", (botId: string, entryId: string, answers: never, secrets: never) => secretSync!.submitForm(botId, entryId, answers, secrets)],
-    ["auth:save-key", (value: string) => apiKey.save(value)],
-    ["auth:test-key", (value: string) => apiKey.test(value)],
-    ["auth:remove-key", () => apiKey.remove()],
-    ["auth:has-mac-key", async () => apiKey.hasMacCopy()],
   ] as const) {
     ipcMain.removeHandler(ch);
     ipcMain.handle(ch, (_e, ...args: unknown[]) => (fn as (...a: unknown[]) => Promise<unknown>)(...args));
@@ -224,13 +238,12 @@ function startBoxOps(win: BrowserWindow, profileDir: string, baseUrl: string, to
     ipcMain.handle("box:reset", () => { throw new Error("Not available in FUZZ mode"); });
     return;
   }
-  const call = gatewayCall(baseUrl, token);
-  const auth = { authorization: `Bearer ${token}` };
+  const call = gatewayCall(baseUrl, token, hostCallOpts);
   const sink = new SnapshotSink({
     dir: path.join(profileDir, "snapshots"), call,
     http: {
-      get: async (p) => Buffer.from(await (await fetch(`${baseUrl}${p}`, { headers: auth })).arrayBuffer()),
-      put: async (p, body) => { const r = await fetch(`${baseUrl}${p}`, { method: "PUT", headers: auth, body: body as unknown as BodyInit }); if (!r.ok) throw new Error(`upload failed (${r.status})`); },
+      get: async (p) => Buffer.from(await (await hostFetch(p)).arrayBuffer()),
+      put: async (p, body) => { const r = await hostFetch(p, { method: "PUT", body: body as unknown as BodyInit }); if (!r.ok) throw new Error(`upload failed (${r.status})`); },
     },
   });
   const boxDir = process.env.APP_BOX_DIR ?? defaultBoxDir(app.getAppPath(), appRuntime());
@@ -241,7 +254,7 @@ function startBoxOps(win: BrowserWindow, profileDir: string, baseUrl: string, to
   // 401/403ing against the recreated gateway with the stale one (T22 fix 1).
   const deps = {
     ops: new OrbBoxOps({
-      exec: execCommand, boxDir, machine: boxMachine(), health: async () => (await fetch(`${baseUrl}/health`, { headers: auth }).catch(() => null))?.ok === true,
+      exec: execCommand, boxDir, machine: boxMachine(), health: async () => (await hostFetch("/health").catch(() => null))?.ok === true,
       // Blocker (c): the recreated box has a new key; the next secret sync pins it instead of refusing forever.
       onRecreated: () => new BoxPin(boxPinFile()).forget(),
     }),
@@ -352,6 +365,9 @@ async function start(): Promise<void> {
     onMessage: (m) => {
       if (macBrowser.onMessage(m)) return;
       if (macApps.onMessage(m)) return;
+      if (m.type === "gateway-refused") { onGatewayRefused(); return; }
+      // The coordinator's stream: "connected" means its client proved this host for the connection (a restart drops it).
+      if (m.type === "conn-state") { streamUp = (m as { kind?: string }).kind === "connected"; return; }
       if (m.type === "mac-key-result" && typeof m.id === "number") {
         macKeyWaits.get(m.id)?.((m as { result?: unknown }).result);
         macKeyWaits.delete(m.id);
@@ -740,12 +756,18 @@ async function start(): Promise<void> {
   let handle: GatewayHandle | null = null;
   /** The last connect() reached the host (setup's "connect" step reads it). */
   let hostConnected = false;
+  /** Why the last connect() failed (setup's "connect" step shows another account's host as it is). */
+  let hostConnectError: string | null = null;
+  // Settings → Account and the setup screen can Save before the first connection lands (or after it failed): the
+  // auth IPC is there from the start and says why, instead of Electron's "No handler registered".
+  registerAuthIpc(ipcMain, () => (hostConnected ? apiKeySender : null), () => hostConnectError);
   // Settings → Backups: talks to whichever host the app is connected to right now.
   registerBackups({
     userData: app.getPath("userData"), appDir: app.getAppPath(), runtime: appRuntime(), appVersion: app.getVersion(), fuzz: process.env.FUZZ === "1",
     gateway: () => (handle ? { baseUrl: handle.baseUrl, token: handle.token } : null),
+    hostFetch,
     reconnect: () => connect(),
-    call: (cmd) => { if (!handle) throw new Error("Synapse isn't connected to its host yet."); return gatewayCall(handle.baseUrl, handle.token)(cmd, {}); },
+    call: (cmd) => { if (!handle) throw new Error("Synapse isn't connected to its host yet."); return gatewayCall(handle.baseUrl, handle.token, hostCallOpts)(cmd, {}); },
     reg: registerNative, emit: emitNative,
     dialog: {
       openFolder: async () => (await dialog.showOpenDialog(win, { properties: ["openDirectory", "createDirectory"] })).filePaths[0] ?? null,
@@ -760,10 +782,11 @@ async function start(): Promise<void> {
     reveal: (f) => shell.showItemInFolder(f),
     machine: boxMachine,
   });
-  ipcMain.handle("save-file", (_e, req: { path: string; name: string }) => (handle ? saveFileFromGateway(win, handle, req) : { saved: false }));
+  ipcMain.handle("save-file", (_e, req: { path: string; name: string }) => (handle ? saveFileFromGateway(win, hostFetch, req) : { saved: false }));
   ipcMain.on("native-theme", (_e, pref: string) => applyNativeTheme(pref));
   const connect = async () => {
     coordinator.postMessage({ type: "state", state: { kind: "starting" } });
+    streamUp = false;
     try {
       // Reconnect: keep a FUZZ host's store, so a restarted host recovers its data (interrupted runs) like the box.
       const reuseRoot = handle?.root;
@@ -771,6 +794,16 @@ async function start(): Promise<void> {
       handle = await resolveGateway({
         env: scrubClaudeLogin(process.env), userData: app.getPath("userData"), appDir: app.getAppPath(), runtime: appRuntime(), reuseRoot, machine: boxMachine(),
         storeSecret: (n, v) => storeSecret(app.getPath("userData"), n, v),
+        // An older host under another uid sits on 47800 (maybe another account's): bring it up to date through orb
+        // before any token goes out. Under the one box-operations lock, like every other deploy.
+        redeployOldHost: async () => {
+          const release = boxLock.tryAcquire("re-provision");
+          if (!release) throw new Error(boxBusyMessage(boxLock.holder()));
+          try {
+            const boxDir = process.env.APP_BOX_DIR ?? defaultBoxDir(app.getAppPath(), appRuntime());
+            await new OrbBoxOps({ exec: execCommand, boxDir, machine: boxMachine(), health: async () => false }).deploy();
+          } finally { release(); }
+        },
       });
       // Test-only hook: FUZZ=1 is never set for a real user profile, only the disposable fuzz/e2e
       // local host. Lets Playwright's app.evaluate() read the current baseUrl/token to assert host
@@ -783,24 +816,46 @@ async function start(): Promise<void> {
       // is asked for only while that file doesn't exist yet (the one-time migration), never again after.
       const userData = app.getPath("userData");
       const legacyPolicyKey = fs.existsSync(path.join(userData, "local-policy.key")) ? undefined : localPolicyKey(userData);
-      coordinator.postMessage({ type: "connect", baseUrl: handle.baseUrl, token: handle.token, userData, legacyPolicyKey });
+      hostCallOpts = { hello: handle.hello === true, onStale: freshHostCreds, proven: (c) => streamProves(streamUp, currentCreds, c) };
+      currentCreds = { baseUrl: handle.baseUrl, token: handle.token, hello: handle.hello === true };
+      coordinator.postMessage({ type: "connect", baseUrl: handle.baseUrl, token: handle.token, hello: handle.hello === true, userData, legacyPolicyKey });
       startSecrets(app.getPath("userData"), handle.baseUrl, handle.token);
       startBoxOps(win, app.getPath("userData"), handle.baseUrl, handle.token, async () => { await connect(); });
       // A hold left by an app that crashed or quit mid-operation is let go on every connect, unless this app is
       // running a box operation itself (then the host was restarted under it and the operation still owns it).
       const conn = handle;
-      void releaseStaleHold({ lock: boxLock, hold: (on) => gatewayCall(conn.baseUrl, conn.token)("setBoxMaintenance", { on }), log: (l) => console.log(l) })
+      void releaseStaleHold({ lock: boxLock, hold: (on) => gatewayCall(conn.baseUrl, conn.token, hostCallOpts)("setBoxMaintenance", { on }), log: (l) => console.log(l) })
         .then((released) => { if (released) holdingTurns = false; })
         .finally(() => void afterConnected());
       gatewayToken = handle.token;
       hostConnected = true;
+      hostConnectError = null;
       void checkHost();
     } catch (e) {
       hostConnected = false;
+      hostConnectError = (e as Error).message;
+      currentCreds = null;
       coordinator.postMessage({ type: "state", state: { kind: "unreachable", error: (e as Error).message } });
     }
   };
   ipcMain.on("retry-connection", () => void connect());
+  // A refused token: before anyone is told "another account", the box's gateway.json is read again. A new token (the
+  // machine was recreated), a new port (a redeploy moved it) or a new proof (an updated host) reconnects everything;
+  // an unchanged box means the host there really isn't ours.
+  let staleCheck: Promise<HostCreds | null> | null = null;
+  const freshHostCreds = (): Promise<HostCreds | null> => (staleCheck ??= (async () => {
+    try {
+      if (!handle || handle.mode !== "box") return null;
+      const st = readAppSettings(app.getPath("userData"), app.getAppPath(), appRuntime());
+      const info = await new OrbBoxProvider(execCommand, { machine: boxMachine(), route: st.gatewayRoute, gatewayHost: st.gatewayHost }).readGatewayInfo(5_000).catch(() => null);
+      if (!info || !hostMoved(handle, info)) return null;
+      await connect();
+      return hostConnected && handle ? { baseUrl: handle.baseUrl, token: handle.token, hello: handle.hello === true } : null;
+    } finally { staleCheck = null; }
+  })());
+  onGatewayRefused = () => void freshHostCreds().then((c) => {
+    if (!c) coordinator.postMessage({ type: "state", state: { kind: "unreachable", error: WRONG_HOST_MESSAGE } });
+  });
   // Portable install: the first-run setup screen (OrbStack → the Bots' computer → Claude → optional
   // voices, phone access, updates). An existing profile (it pinned a box) never sees it.
   const boxDirNow = () => process.env.APP_BOX_DIR ?? defaultBoxDir(app.getAppPath(), appRuntime());
@@ -810,7 +865,7 @@ async function start(): Promise<void> {
     exec: execCommand, orb: () => resolveOrb(), machine: boxMachine, boxDir: boxDirNow,
     imageVersion: () => { try { return bundledImageVersion(boxDirNow()); } catch { return null; } },
     hostBuild: () => (app.isPackaged ? bundledHostBuild(process.resourcesPath) : bundledHostBuild(path.join(app.getAppPath(), ".."))),
-    reconnect: () => connect(), connected: () => hostConnected,
+    reconnect: () => connect(), connected: () => hostConnected, connectError: () => hostConnectError,
     forgetPin: () => new BoxPin(boxPinFile()).forget(),
     openExternal: async (url) => { if (process.env.FUZZ !== "1") await shell.openExternal(url); },
     skip: process.env.FUZZ === "1" && process.env.SYNAPSE_SETUP_FORCE !== "1",
@@ -825,7 +880,7 @@ async function start(): Promise<void> {
   // to time, level and message in the crash store) goes with the report.
   const checkHost = async () => {
     if (!handle) return;
-    const r = await fetch(`${handle.baseUrl}/health`, { headers: { authorization: `Bearer ${handle.token}` } }).catch(() => null);
+    const r = await hostFetch("/health").catch(() => null);
     const h = r?.ok ? (await r.json().catch(() => null)) as { hostVersion?: string; previousRun?: { bootId: string; startedAt: number; clean: boolean } | null } | null : null;
     if (h?.hostVersion) lastHostVersion = h.hostVersion;
     await crash.noteHostHealth(h, async () => {
@@ -837,8 +892,7 @@ async function start(): Promise<void> {
   let afterUpdateDone = false;
   const afterConnected = async () => {
     if (afterUpdateDone || !handle) return;
-    const g = { baseUrl: handle.baseUrl, auth: { authorization: `Bearer ${handle.token}` } };
-    const health = async () => { const r = await fetch(`${g.baseUrl}/health`, { headers: g.auth }).catch(() => null); return r?.ok ? (await r.json()) as { hostBuild?: string | null } : null; };
+    const health = async () => { const r = await hostFetch("/health").catch(() => null); return r?.ok ? (await r.json()) as { hostBuild?: string | null } : null; };
     if (!(await health())) return;
     afterUpdateDone = true;
     if (!app.isPackaged || process.env.FUZZ === "1") return;
@@ -854,7 +908,7 @@ async function start(): Promise<void> {
     // box-operations lock keeps this apart from setup and Settings → Update.
     // The hold is a lease on the host (5 min); reprovisionIfChanged renews it every minute while it runs.
     const hold = async (on: boolean, opts?: { quietMs?: number }) => {
-      const r = await gatewayCall(handle!.baseUrl, handle!.token)("setBoxMaintenance", on ? { on, ttlMs: HOLD_LEASE_MS, ...(opts?.quietMs ? { quietMs: opts.quietMs } : {}) } : { on });
+      const r = await gatewayCall(handle!.baseUrl, handle!.token, hostCallOpts)("setBoxMaintenance", on ? { on, ttlMs: HOLD_LEASE_MS, ...(opts?.quietMs ? { quietMs: opts.quietMs } : {}) } : { on });
       holdingTurns = on && !r.deferred;
       return r;
     };
@@ -868,9 +922,9 @@ async function start(): Promise<void> {
         callLive: () => micLive,
         lock: boxLock,
         hold,
-        provision: () => ops.provision(), deploy: () => ops.deploy(), waitHealthy: () => ops.waitHealthy(180_000),
+        provision: () => ops.provision(), deploy: deployAndReconnect({ deploy: () => ops.deploy(), reconnect: () => connect() }), waitHealthy: () => ops.waitHealthy(180_000),
         verify: async () => {
-          const r = await execCommand("bash", [path.join(boxDir, "verify-box.sh")], { timeoutMs: 10 * 60_000, env: { ORB: resolveOrb(), BOX_MACHINE: boxMachine() } });
+          const r = await execCommand("bash", [path.join(boxDir, "verify-box.sh")], { timeoutMs: 10 * 60_000, env: { ORB: resolveOrb(), BOX_MACHINE: boxMachine(), ...boxPortEnv(process.getuid?.() ?? 501) } });
           const failed = r.stdout.split("\n").filter((l) => l.startsWith("FAIL ")).map((l) => l.slice(5));
           return { ok: r.code === 0 && failed.length === 0, failed };
         },
@@ -897,7 +951,7 @@ async function start(): Promise<void> {
           if (r.runningBotIds.length && Date.now() - since >= HOLD_WAIT_CAP_MS) { capped = true; throw new Error(`${r.runningBotIds.length} Bot(s) still working after ${Math.round(HOLD_WAIT_CAP_MS / 60_000)} min; released the hold, will try again later`); }
           return { ok: r.runningBotIds.length === 0, busyBotIds: r.runningBotIds };
         },
-        deploy: () => ops.deploy(), waitHealthy: () => ops.waitHealthy(180_000), log: updateLog,
+        deploy: deployAndReconnect({ deploy: () => ops.deploy(), reconnect: () => connect() }), waitHealthy: () => ops.waitHealthy(180_000), log: updateLog,
         retryMs: 5_000,
       }).then(async () => { stopRenew?.(); if (holdingTurns) await hold(false).catch(() => {}); })
         .catch(async (e: Error) => { stopRenew?.(); updateLog(`host redeploy: ${e.message}`); if (holdingTurns) await hold(false).catch(() => {}); })
@@ -921,7 +975,7 @@ async function start(): Promise<void> {
     // Quitting mid box operation: let the held turns run now (best effort; the host's lease is the backstop).
     if (holdingTurns && handle) {
       holdingTurns = false;
-      void gatewayCall(handle.baseUrl, handle.token)("setBoxMaintenance", { on: false }).catch(() => {});
+      void gatewayCall(handle.baseUrl, handle.token, hostCallOpts)("setBoxMaintenance", { on: false }).catch(() => {});
     }
     const keep = readAppSettings(app.getPath("userData"), app.getAppPath(), appRuntime()).keepBoxOnQuit !== false;
     if (keep || !handle?.stopBox) {
@@ -966,7 +1020,7 @@ async function start(): Promise<void> {
     notify: (title, body) => showAppNotification(win, { title, body }),
     boxFree: async () => {
       if (!handle) return null;
-      const r = await fetch(`${handle.baseUrl}/health`, { headers: { authorization: `Bearer ${handle.token}` } }).catch(() => null);
+      const r = await hostFetch("/health").catch(() => null);
       const h = r?.ok ? (await r.json().catch(() => null)) as { diskFreeBytes?: number | null } | null : null;
       return typeof h?.diskFreeBytes === "number" ? h.diskFreeBytes : null;
     },

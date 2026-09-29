@@ -31,6 +31,8 @@ export function registerSetup(o: {
   exec: Exec; orb(): string; machine(): string; boxDir(): string;
   imageVersion(): string | null; hostBuild(): string | null;
   reconnect(): Promise<void>; connected(): boolean; forgetPin(): void;
+  /** Why the last reconnect failed (another account's host holds this account's port). */
+  connectError?(): string | null;
   openExternal(url: string): Promise<void>;
   /** FUZZ / e2e profiles never see the setup screen (there is no OrbStack machine behind them). */
   skip: boolean;
@@ -60,6 +62,7 @@ export function registerSetup(o: {
   const steps = () => boxSteps({
     exec: o.exec, orb: o.orb, machine: o.machine(), boxDir: o.boxDir(),
     imageVersion: o.imageVersion, hostBuild: o.hostBuild, reconnect: o.reconnect, connected: o.connected,
+    ...(o.connectError ? { connectError: o.connectError } : {}),
     forgetPin: o.forgetPin, mac: { cpus: os.cpus().length, totalMemBytes: os.totalmem() }, run: o.run,
   });
   const provisioner = new BoxProvisioner({ steps: steps(), publish });

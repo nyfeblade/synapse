@@ -22,6 +22,9 @@ describe("bundled host (smoke)", () => {
     const info = JSON.parse(fs.readFileSync(infoFile, "utf8"));
     const res = await fetch(`http://127.0.0.1:${info.port}/health`, { headers: { authorization: `Bearer ${info.token}` } });
     expect(res.status).toBe(200);
+    // The app asks /hello before it sends the token, when gateway.json says this host answers it.
+    expect(info.hello).toBe(1);
+    expect((await fetch(`http://127.0.0.1:${info.port}/hello?nonce=${"ab".repeat(16)}`)).status).toBe(200);
     const exited = new Promise<number | null>((r) => child.on("exit", (code) => r(code)));
     child.kill("SIGTERM");
     expect(await exited).toBe(0);

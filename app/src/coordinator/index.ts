@@ -1,6 +1,6 @@
 import type { MessagePortMain } from "electron";
 import type { BotSummary } from "@synapse/shared";
-import { GatewayClient, type ConnectionState } from "./gateway-client";
+import { GatewayClient, notConnectedMessage, type ConnectionState } from "./gateway-client";
 import { VncProxy } from "./vnc-proxy";
 import type { LocalExecDaemon, BrowserCall, BrowserResult, MacAppCallMsg, MacAppResultMsg } from "./local-exec/daemon";
 import { createLocalDaemon } from "./local-exec/wiring";
@@ -22,7 +22,8 @@ const outbox: unknown[] = [];
 let loopback: Promise<{ port: number; close(): void }> | null = null;
 
 let upstream: { baseUrl: string; token: string } | null = null;
-const vnc = new VncProxy({ upstream: () => upstream });
+// The VNC proxy dials the gateway with the token only once this connection's host is proven (gateway-client.ts).
+const vnc = new VncProxy({ upstream: () => upstream, prove: async () => (client ? client.provenForUse() : false) });
 const vncReady = vnc.start();
 
 const policy = new NotificationPolicy({
@@ -57,10 +58,12 @@ const post = (m: unknown): void => {
 const setState = (s: ConnectionState) => {
   lastState = s;
   post({ connection: s });
+  // Main reuses this client's proof of host while the stream is up (main/host-fetch.ts).
+  process.parentPort.postMessage({ type: "conn-state", kind: s.kind });
 };
 
 async function onRendererMessage(data: { id: number; cmd: string; args: unknown }): Promise<void> {
-  if (!client) return post({ id: data.id, response: { ok: false, error: { code: "NOT_CONNECTED", message: "Not connected yet" } } });
+  if (!client) return post({ id: data.id, response: { ok: false, error: { code: "NOT_CONNECTED", message: notConnectedMessage(lastState) } } });
   try {
     const local = daemon ? await daemon.intercept(data.cmd, data.args) : { handled: false as const };
     if (local.handled) return post({ id: data.id, response: { ok: true, result: local.result } });
@@ -73,7 +76,7 @@ async function onRendererMessage(data: { id: number; cmd: string; args: unknown 
 }
 
 process.parentPort.on("message", (e) => {
-  const msg = e.data as { type: string; baseUrl?: string; token?: string; state?: ConnectionState; userData?: string; legacyPolicyKey?: string; id?: number; result?: unknown };
+  const msg = e.data as { type: string; baseUrl?: string; token?: string; hello?: boolean; state?: ConnectionState; userData?: string; legacyPolicyKey?: string; id?: number; result?: unknown };
   if ((msg.type === "browser-result" || msg.type === "macapp-result" || msg.type === "nolimits-verify-result") && typeof msg.id === "number") {
     browserWaits.get(msg.id)?.(msg.result);
     browserWaits.delete(msg.id);
@@ -103,6 +106,9 @@ process.parentPort.on("message", (e) => {
     client = new GatewayClient({
       baseUrl: msg.baseUrl,
       token: msg.token,
+      // Proof of host before the token is sent (the host answers /hello); a refusal asks main whether the token is stale.
+      hello: msg.hello === true,
+      onRefused: () => process.parentPort.postMessage({ type: "gateway-refused" }),
       onEvent: (ev) => {
         if (ev.channel === "agent-upserted") policy.update(ev.payload.agent);
         else if (ev.channel === "agents") policy.remove(ev.payload.removedId);

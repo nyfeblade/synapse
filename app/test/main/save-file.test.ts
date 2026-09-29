@@ -13,7 +13,8 @@ describe("Save (FILE-06)", () => {
       const chunk = data.subarray(a.offset, a.offset + a.length);
       return new Response(JSON.stringify({ ok: true, result: { chunkBase64: chunk.toString("base64"), size: data.length, mime: "application/octet-stream", eof: a.offset + chunk.length >= data.length } }));
     });
-    const r = await saveFileFromGateway({} as never, { baseUrl: "http://g", token: "t", mode: "local", dispose: () => {} }, { path: "/workspace/big.bin", name: "big.bin" }, { showSaveDialog: async () => ({ canceled: false, filePath: dest }), fetchFn: fetchFn as never });
+    const hostFetch = (p: string, init?: RequestInit) => fetchFn(`http://g${p}`, init as never);
+    const r = await saveFileFromGateway({} as never, hostFetch, { path: "/workspace/big.bin", name: "big.bin" }, { showSaveDialog: async () => ({ canceled: false, filePath: dest }) });
     expect(r).toEqual({ saved: true });
     expect(fetchFn).toHaveBeenCalledTimes(3);
     expect(fs.readFileSync(dest).equals(data)).toBe(true);
