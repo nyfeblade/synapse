@@ -10,13 +10,15 @@
 //   FEEDBACK_ALLOWED_ORIGINS  optional, comma-separated site origins allowed to post from a browser
 // Without the first two it answers 503. It never logs a message, logs, a thread code or an IP address.
 //
-// Abuse limits: browser posts only from our site; a first-line in-memory limit per coarse IP; and a
-// durable global limit read from GitHub's issue and comment lists (never search), failing closed.
+// Abuse limits: browser posts only from our site (Origin, or Sec-Fetch-Site: same-origin); a request with
+// neither is accepted only as the app's (source "app"); a first-line in-memory limit per coarse IP on every
+// POST, and a stricter one for app posts; and a durable global limit read from GitHub's issue and comment
+// lists (never search), failing closed.
 import crypto from "node:crypto";
 import { isSpam } from "../../shared/src/feedback-content.js";
 import {
   CAPS, GENERIC_REFUSAL, attachScreenshot, clientIp, contentKind, github, isBot, issueBody, issueTitle, labelsFor,
-  makeLimiter, makeRecent, newThreadSecret, originAllowed, readBody, redirect, sendJson, tally, threadFooter, today, validate,
+  LIMITS, RATE_APP, makeLimiter, makeRecent, newThreadSecret, postSource, readBody, redirect, sendJson, tally, threadFooter, today, tooBig, validate,
 } from "../_lib/feedback-core.js";
 
 export { validate, isBot } from "../_lib/feedback-core.js";
@@ -24,6 +26,7 @@ export { validate, isBot } from "../_lib/feedback-core.js";
 export function createHandler(deps = {}) {
   const now = deps.now || Date.now;
   const limiter = deps.limiter || makeLimiter(now);
+  const appLimiter = deps.appLimiter || makeLimiter(now, RATE_APP);
   const recent = deps.recent || makeRecent(now);
   const log = deps.log || ((m) => console.error(m));
   return async function handler(req, res) {
@@ -39,14 +42,22 @@ export function createHandler(deps = {}) {
     const repo = env.FEEDBACK_REPO, token = env.FEEDBACK_GITHUB_TOKEN;
     if (!repo || !token || !/^[\w.-]+\/[\w.-]+$/.test(repo)) return fail(503, "Feedback isn't set up on this server: FEEDBACK_REPO and FEEDBACK_GITHUB_TOKEN are missing.");
     if (!kind) return sendJson(res, 415, { ok: false, error: "Send JSON or a form." });
-    if (!originAllowed(req, env)) return sendJson(res, 403, { ok: false, error: "Not allowed." });
+    const from = postSource(req, env);
+    if (!from) return sendJson(res, 403, { ok: false, error: "Not allowed." });
+    // Every POST counts, valid or not; the app path (no Origin, which any script can copy) has a smaller budget too.
+    const ip = clientIp(req);
+    if (!limiter(ip) || (from === "app" && !appLimiter(ip))) return fail(429, "Too many at once. Try again in a few minutes.");
 
+    // Size first, before anything is read or cleaned: a browser sends only a type and a message; the app
+    // may add logs and a screenshot.
+    const max = from === "web" ? LIMITS.webBody : LIMITS.body;
+    if (tooBig(req, max)) return fail(413, "That's too big.");
     let body;
-    try { body = await readBody(req, kind); } catch (e) { return fail(e.status || 400, e.status === 413 ? "That's too big." : "That couldn't be read."); }
+    try { body = await readBody(req, kind, max); } catch (e) { return fail(e.status || 400, e.status === 413 ? "That's too big." : "That couldn't be read."); }
+    if (from === "app" && body?.source !== "app") return sendJson(res, 403, { ok: false, error: "Not allowed." });
     if (isBot(body)) return form ? redirect(res, "/feedback?sent=1#sent") : sendJson(res, 200, { ok: true });
     const v = validate(body);
     if (!v.ok) return fail(v.status, v.error);
-    if (!limiter(clientIp(req))) return fail(429, "Too many at once. Try again in a few minutes.");
 
     const gh = github(token, fetchImpl);
     // The durable limits. If they can't be read, nothing is filed: fail closed.

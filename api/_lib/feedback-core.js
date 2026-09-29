@@ -5,7 +5,9 @@ import { cleanMessage, dropLinks, isAbusive, isSpam, looksLikeInjection, maskAbu
 
 export const TYPES = { bug: "Bug", idea: "Idea", confusing: "Something confusing", love: "Love it" };
 export const LABELS = { bug: "bug", idea: "idea", confusing: "confusing", love: "love-it" };
-export const LIMITS = { message: 5000, logsBytes: 64 * 1024, screenshotChars: 1_500_000, meta: 60, body: 2_200_000, pngSide: 4096 };
+export const LIMITS = { message: 5000, logsBytes: 64 * 1024, screenshotChars: 1_500_000, meta: 60, body: 2_200_000, pngSide: 4096,
+  // Checked on the raw request, before any cleaning runs: a browser body (message and type only) and a raw message.
+  webBody: 32 * 1024, rawMessage: 6000 };
 export const CAPS = { perDay: 50, screenshotsPerDay: 15, followUpsPerThread: 20 };
 export const ATTACHMENTS_BRANCH = "feedback-attachments";
 export const DEFAULT_ORIGINS = ["https://synapse-site-virid.vercel.app"];
@@ -41,7 +43,7 @@ export function validPng(b64) {
   return false;
 }
 
-const meta = (v) => (typeof v === "string" ? stripHidden(v).text.replace(/[^\w .,()+-]/g, "").trim().slice(0, LIMITS.meta) : "");
+const meta = (v) => (typeof v === "string" ? stripHidden(v.slice(0, 4 * LIMITS.meta)).text.replace(/[^\w .,()+-]/g, "").trim().slice(0, LIMITS.meta) : "");
 
 /** A short hash of what someone said, so the same message twice in a day can be found. */
 export const messageHash = (text) => `fh-${crypto.createHash("sha256").update(text.toLowerCase().replace(/\s+/g, " ").trim()).digest("hex").slice(0, 16)}`;
@@ -51,6 +53,8 @@ export const messageHash = (text) => `fh-${crypto.createHash("sha256").update(te
  * personal details hidden; nothing else in the text is changed. Returns { ok, value } or { ok: false, status, error }.
  */
 export function checkText(raw) {
+  // The raw length first: nothing long is ever cleaned.
+  if (typeof raw === "string" && raw.length > LIMITS.rawMessage) return { ok: false, status: 400, error: `Keep the message under ${LIMITS.message} characters.` };
   const c = cleanMessage(typeof raw === "string" ? raw : "");
   if (!c.text) return { ok: false, status: 400, error: "Write a message." };
   if (c.text.length > LIMITS.message) return { ok: false, status: 400, error: `Keep the message under ${LIMITS.message} characters.` };
@@ -63,7 +67,7 @@ export function checkText(raw) {
 /** Checks one new submission. The honeypot is checked by the caller. */
 export function validate(input) {
   const b = input && typeof input === "object" ? input : {};
-  const type = typeof b.type === "string" ? stripHidden(b.type).text.trim() : "";
+  const type = typeof b.type === "string" && b.type.length <= 40 ? stripHidden(b.type).text.trim() : "";
   if (!Object.hasOwn(TYPES, type)) return { ok: false, status: 400, error: "Choose a type." };
   const t = checkText(b.message);
   if (!t.ok) return t;
@@ -163,6 +167,18 @@ export function originAllowed(req, env) {
   return true;
 }
 
+/**
+ * New feedback from a browser must prove it came from our site: an allowed Origin, or, with no Origin,
+ * Sec-Fetch-Site: same-origin. "app" when the request carries neither (the app's main process);
+ * false when it's a browser request from anywhere else.
+ */
+export function postSource(req, env) {
+  const origin = req.headers.origin, site = req.headers["sec-fetch-site"];
+  if (origin !== undefined) return originAllowed(req, env) ? "web" : false;
+  if (site !== undefined) return site === "same-origin" ? "web" : false;
+  return "app";
+}
+
 export function contentKind(req) {
   const ct = String(req.headers["content-type"] || "").toLowerCase();
   if (ct.startsWith("application/json")) return "json";
@@ -170,15 +186,22 @@ export function contentKind(req) {
   return null;
 }
 
-export async function readBody(req, kind) {
+/** Content-Length over `max` → a 413 before the body is read (and before anything cleans it). */
+export function tooBig(req, max) {
+  const n = Number(req.headers["content-length"]);
+  return Number.isFinite(n) && n > max;
+}
+
+export async function readBody(req, kind, max = LIMITS.body) {
   if (req.body !== undefined && req.body !== null && typeof req.body === "object" && !Buffer.isBuffer(req.body)) return req.body;
   let raw = typeof req.body === "string" ? req.body : Buffer.isBuffer(req.body) ? req.body.toString("utf8") : null;
   if (raw === null) {
     const chunks = [];
     let size = 0;
-    for await (const c of req) { size += c.length; if (size > LIMITS.body) throw Object.assign(new Error("too big"), { status: 413 }); chunks.push(c); }
+    for await (const c of req) { size += c.length; if (size > max) throw Object.assign(new Error("too big"), { status: 413 }); chunks.push(c); }
     raw = Buffer.concat(chunks).toString("utf8");
   }
+  if (raw.length > max) throw Object.assign(new Error("too big"), { status: 413 });
   if (kind === "form") return Object.fromEntries(new URLSearchParams(raw));
   try { return JSON.parse(raw || "{}"); } catch { throw Object.assign(new Error("bad json"), { status: 400 }); }
 }
@@ -203,6 +226,8 @@ export function clientIp(req) {
 /* ---- first-line rate limit: in memory, per instance, keyed by a salted hash of a coarse IP ---- */
 const WINDOW_MS = 10 * 60 * 1000;
 export const RATE = { perSource: 5, perInstance: 60 };
+/** The app posts without an Origin, which any script can copy: its own, stricter budget per address. */
+export const RATE_APP = { perSource: 3, perInstance: 30 };
 const SALT = crypto.randomBytes(16);
 /** 203.0.113.7 → 203.0.113; 2001:db8:1:2:… → 2001:db8:1 (a /48). */
 export function coarseIp(ip) {

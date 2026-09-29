@@ -146,10 +146,11 @@ const GH = "https://github.com/nyfeblade/synapse";
 export const themeBoot = `<script>try{var t=localStorage.getItem("synapse-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>`;
 export function header(key) {
   const cur = (k) => (k === key ? ' aria-current="page"' : "");
-  return `<header class="site-header"><div class="wrap"><nav>
+  return `<a class="skip" href="#main">Skip to content</a>
+<header class="site-header"><div class="wrap"><nav>
     <a class="brand" href="/"><img src="/assets/icon.png" alt="" width="26" height="26">Synapse</a>
     <div class="nav-right"><div class="navlinks"><a href="/#features"${key === "home" ? ' aria-current="page"' : ""}>Features</a><a href="/docs"${cur("docs")}>Docs</a><a href="/changelog"${cur("changelog")}>Changelog</a><a href="${GH}" class="gh"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub<span data-stars hidden></span></a></div>
-    <button class="theme" type="button" aria-label="Switch theme"><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/></svg></button>
+    <button class="theme" type="button" aria-label="Switch to dark theme"><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/></svg></button>
     <a class="btn primary sm" href="${GH}/releases" data-dl>Download</a></div>
   </nav></div></header>`;
 }
@@ -157,9 +158,9 @@ export function footer() {
   return `<footer class="site-footer"><div class="wrap">
   <div class="foot">
     <div class="foot-brand"><a class="brand" href="/"><img src="/assets/icon.png" alt="" width="26" height="26">Synapse</a></div>
-    <div><h4>Product</h4><a href="${GH}/releases" data-dl>Download</a><a href="/#features">Features</a><a href="/#starters">Starter Bots</a><a href="/changelog">Changelog</a></div>
-    <div><h4>Help</h4><a href="/docs">Docs</a><a href="/docs#install">Install</a><a href="/docs#troubleshooting">Troubleshooting</a><a href="/docs#privacy">Privacy</a><a href="/feedback">Send feedback</a></div>
-    <div><h4>Project</h4><a href="${GH}">GitHub</a><a href="${GH}/issues">Report an issue</a><a href="${GH}/blob/main/LICENSE">MIT licence</a></div>
+    <div><h2>Product</h2><a href="${GH}/releases" data-dl>Download</a><a href="/#features">Features</a><a href="/#starters">Starter Bots</a><a href="/changelog">Changelog</a></div>
+    <div><h2>Help</h2><a href="/docs">Docs</a><a href="/docs#install">Install</a><a href="/docs#troubleshooting">Troubleshooting</a><a href="/docs#privacy">Privacy</a><a href="/feedback">Send feedback</a></div>
+    <div><h2>Project</h2><a href="${GH}">GitHub</a><a href="${GH}/issues">Report an issue</a><a href="${GH}/blob/main/LICENSE">MIT licence</a></div>
   </div>
   <p class="legal">Synapse is open source and not affiliated with Anthropic. Claude is a trademark of Anthropic.</p>
   <div class="wordmark" aria-hidden="true">Synapse</div>
@@ -192,41 +193,71 @@ ${renderBody(r.body)}
   return { toc, body };
 }
 
-/** Browsers keep /assets/* for an hour, so a new page must never pair with an old stylesheet: each CSS/JS link
- * gets ?v=<first 10 hex of its SHA-256>, which changes exactly when the file does. */
-export function bustAssets(html, dir = path.join(here, "assets")) {
-  return html.replace(/(["'(])\/assets\/([\w.-]+\.(?:css|js))(?=["')?])/g, (m, pre, f) => {
-    const file = path.join(dir, f);
-    if (!fs.existsSync(file)) return m;
-    const v = crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex").slice(0, 10);
-    return `${pre}/assets/${f}?v=${v}`;
-  });
+/* ---- asset names: a content hash in every asset's file name, so browsers keep them for a year ---- */
+/** Served under a fixed name: the share image, the favicon and the font licence. Everything else gets a hash. */
+const FIXED = new Set(["og.png", "favicon.png", "fonts/OFL.txt"]);
+const HASHABLE = /\.(?:css|js|woff2|png|webp|svg)$/;
+export const hashOf = (buf) => crypto.createHash("sha256").update(buf).digest("hex").slice(0, 10);
+const walk = (dir, base = "") => fs.readdirSync(path.join(dir, base), { withFileTypes: true })
+  .flatMap((e) => (e.isDirectory() ? walk(dir, path.posix.join(base, e.name)) : [path.posix.join(base, e.name)]));
+
+/**
+ * Renames every asset in `dir` to name.<hash>.ext (site.css → site.3f2a0c9e1b.css), leaf first: a stylesheet's
+ * url()s and a module's imports are rewritten to their hashed names before its own hash is taken, so a change in
+ * anything a file loads changes that file's name too. Returns { "/assets/site.css": "/assets/site.3f2a0c9e1b.css", … }.
+ */
+export function hashAssets(dir) {
+  const all = new Set(walk(dir));
+  const done = new Map();
+  const visit = (rel, stack) => {
+    if (done.has(rel)) return done.get(rel);
+    if (FIXED.has(rel) || !HASHABLE.test(rel)) { done.set(rel, rel); return rel; }
+    if (stack.includes(rel)) throw new Error(`asset import cycle: ${[...stack, rel].join(" → ")}`);
+    const file = path.join(dir, rel);
+    let buf = fs.readFileSync(file);
+    if (/\.(?:css|js)$/.test(rel)) {
+      const next = [...stack, rel];
+      buf = Buffer.from(buf.toString("utf8")
+        .replace(/\/assets\/([\w./-]+\.[a-z0-9]+)(?=["'`)\s?#])/g, (m, ref) => (all.has(ref) ? `/assets/${visit(ref, next)}` : m))
+        .replace(/(\bfrom\s*["']|\bimport\s*\(?\s*["'])\.\/([\w.-]+\.js)(?=["'])/g, (m, pre, ref) => {
+          const r = path.posix.join(path.posix.dirname(rel), ref);
+          return all.has(r) ? `${pre}./${path.posix.basename(visit(r, next))}` : m;
+        }));
+    }
+    const out = rel.replace(/(\.[a-z0-9]+)$/, `.${hashOf(buf)}$1`);
+    fs.writeFileSync(path.join(dir, out), buf);
+    fs.rmSync(file);
+    done.set(rel, out);
+    return out;
+  };
+  for (const rel of all) visit(rel, []);
+  return Object.fromEntries([...done].map(([rel, out]) => [`/assets/${rel}`, `/assets/${out}`]));
 }
+/** Every /assets/… reference in a page → its hashed name. */
+export const renameAssets = (html, names) => html.replace(/\/assets\/[\w./-]+\.[a-z0-9]+(?=["')\s?#])/g, (m) => names[m] ?? m);
 
 export function build(today = new Date().toISOString().slice(0, 10)) {
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, "assets"), { recursive: true });
-  for (const f of fs.readdirSync(path.join(here, "assets"))) fs.copyFileSync(path.join(here, "assets", f), path.join(dist, "assets", f));
-  // The feedback page's preview uses the same text checks as the app and /api/feedback: one file, copied in,
-  // imported by feedback.js with its content hash (so a new version is never paired with an old one).
-  const content = fs.readFileSync(path.join(here, "..", "shared", "src", "feedback-content.js"));
-  fs.writeFileSync(path.join(dist, "assets", "feedback-content.js"), content);
-  const contentV = crypto.createHash("sha256").update(content).digest("hex").slice(0, 10);
-  for (const f of ["feedback.js", "feedback-thread.js"]) {
-    const js = path.join(dist, "assets", f);
-    fs.writeFileSync(js, fs.readFileSync(js, "utf8").replace("./feedback-content.js", `./feedback-content.js?v=${contentV}`));
-  }
+  fs.cpSync(path.join(here, "assets"), path.join(dist, "assets"), { recursive: true });
+  // The feedback page's preview uses the same text checks as the app and /api/feedback: one file, copied in and
+  // imported by feedback.js (hashed with the rest, so a new version is never paired with an old one).
+  fs.copyFileSync(path.join(here, "..", "shared", "src", "feedback-content.js"), path.join(dist, "assets", "feedback-content.js"));
+  const names = hashAssets(path.join(dist, "assets"));
+  const bustAssets = (html) => renameAssets(html, names);
   const releases = parseChangelog(fs.readFileSync(path.join(here, "..", "CHANGELOG.md"), "utf8"));
   const version = releases.find((r) => !r.unreleased)?.version ?? null;
   const withSeo = (html, key) => bustAssets(partials(html, key).replace(`<!--SEO:${key}-->`, seoHead(key, version)));
   fs.writeFileSync(path.join(dist, "index.html"), withSeo(fs.readFileSync(path.join(here, "index.html"), "utf8"), "home"));
   fs.writeFileSync(path.join(dist, "docs.html"), withSeo(fs.readFileSync(path.join(here, "docs.html"), "utf8"), "docs"));
   // A private-ish stats page: unlinked, noindex, not in the sitemap; public GitHub download counts only.
-  fs.writeFileSync(path.join(dist, "stats.html"), bustAssets(fs.readFileSync(path.join(here, "stats.html"), "utf8")));
+  fs.writeFileSync(path.join(dist, "stats.html"), bustAssets(partials(fs.readFileSync(path.join(here, "stats.html"), "utf8"), "stats")));
   fs.writeFileSync(path.join(dist, "feedback.html"), withSeo(fs.readFileSync(path.join(here, "feedback.html"), "utf8"), "feedback"));
   // The private conversation page (/feedback/thread, a rewrite in vercel.json, so /feedback stays a
   // plain page and not a folder): not in the sitemap, not indexed.
   fs.writeFileSync(path.join(dist, "feedback-thread.html"), bustAssets(partials(fs.readFileSync(path.join(here, "feedback-thread.html"), "utf8"), "feedback")));
+  // Vercel serves 404.html for any path that isn't a page.
+  fs.writeFileSync(path.join(dist, "404.html"), bustAssets(partials(fs.readFileSync(path.join(here, "404.html"), "utf8"), "404")));
   const { toc, body } = renderReleases(releases);
   const page = fs.readFileSync(path.join(here, "changelog.template.html"), "utf8").replace("<!--TOC-->", toc).replace("<!--RELEASES-->", body);
   fs.writeFileSync(path.join(dist, "changelog.html"), withSeo(page, "changelog"));

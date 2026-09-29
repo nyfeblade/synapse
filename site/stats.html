@@ -4,8 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
+<!--THEME-->
 <title>Synapse stats</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 <style>
   .stats-page{max-width:760px; margin:0 auto; padding:56px 16px}
@@ -36,30 +38,6 @@
   </table>
   <p class="note">From GitHub's download counts. Installs are DMG downloads; updates are the zip the app fetches itself. Visits are in Vercel → Analytics.</p>
 </main>
-<script>
-(() => {
-  const fmt = (n) => n.toLocaleString("en-US");
-  const sum = (assets, re) => assets.filter((a) => re.test(a.name)).reduce((n, a) => n + (a.download_count || 0), 0);
-  fetch("https://api.github.com/repos/nyfeblade/synapse/releases?per_page=100", { headers: { Accept: "application/vnd.github+json" } })
-    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-    .then((rels) => {
-      let ti = 0, tu = 0;
-      const rows = rels.filter((r) => !r.draft).map((r) => {
-        const i = sum(r.assets, /\.dmg$/), u = sum(r.assets, /\.zip$/);
-        ti += i; tu += u;
-        const tr = document.createElement("tr");
-        for (const [v, cls] of [[r.tag_name, ""], [(r.published_at || "").slice(0, 10), ""], [fmt(i), "n"], [fmt(u), "n"]]) {
-          const td = document.createElement("td"); td.textContent = v; if (cls) td.className = cls; tr.append(td);
-        }
-        return tr;
-      });
-      document.getElementById("rows").replaceChildren(...rows);
-      document.getElementById("t-installs").textContent = fmt(ti);
-      document.getElementById("t-updates").textContent = fmt(tu);
-      document.getElementById("t-all").textContent = fmt(ti + tu);
-    })
-    .catch(() => { document.getElementById("rows").innerHTML = "<tr><td colspan=\"4\">GitHub didn't answer. Try again in a minute.</td></tr>"; });
-})();
-</script>
+<script src="/assets/stats.js"></script>
 </body>
 </html>

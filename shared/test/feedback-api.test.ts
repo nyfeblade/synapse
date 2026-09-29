@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 // @ts-expect-error plain ESM serverless function, no types
 import { createHandler, validate, isBot } from "../../api/feedback/index.js";
 // @ts-expect-error plain ESM, no types
-import { makeLimiter, coarseIp, issueBody, issueTitle, attachScreenshot, validPng, RATE, CAPS, UNTRUSTED_HEADER, labelsFor } from "../../api/_lib/feedback-core.js";
+import { makeLimiter, coarseIp, issueBody, issueTitle, attachScreenshot, validPng, RATE, RATE_APP, CAPS, UNTRUSTED_HEADER, labelsFor } from "../../api/_lib/feedback-core.js";
 
 const ENV = { FEEDBACK_REPO: "owner/private-repo", FEEDBACK_GITHUB_TOKEN: "test-token" };
 const SITE = "https://synapse-site-virid.vercel.app";
@@ -24,10 +24,14 @@ const PNG = png(2, 2);
 
 interface Res { statusCode: number; headers: Record<string, string>; body: string; setHeader(k: string, v: string): void; end(b?: string): void }
 const res = (): Res => ({ statusCode: 0, headers: {}, body: "", setHeader(k, v) { this.headers[k.toLowerCase()] = v; }, end(b) { this.body = b ?? ""; } });
-const jsonReq = (body: unknown, o: { ip?: string; origin?: string; site?: string; ct?: string } = {}) => ({
-  method: "POST", body,
-  headers: { "content-type": o.ct ?? "application/json", "x-forwarded-for": o.ip ?? "203.0.113.7", ...(o.origin ? { origin: o.origin } : {}), ...(o.site ? { "sec-fetch-site": o.site } : {}) },
-});
+/** A JSON POST. Website sends carry our Origin unless told otherwise; the app's (source "app") carry none, like its main process. */
+const jsonReq = (body: any, o: { ip?: string; origin?: string; site?: string; ct?: string; bare?: boolean } = {}) => {
+  const origin = o.origin ?? (o.bare || o.site || body?.source === "app" ? undefined : SITE);
+  return {
+    method: "POST", body,
+    headers: { "content-type": o.ct ?? "application/json", "x-forwarded-for": o.ip ?? "203.0.113.7", ...(origin ? { origin } : {}), ...(o.site ? { "sec-fetch-site": o.site } : {}) },
+  };
+};
 const formReq = (fields: Record<string, string>, o: { ip?: string; origin?: string } = {}) => Object.assign(Readable.from([Buffer.from(new URLSearchParams(fields).toString())]), {
   method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": o.ip ?? "203.0.113.7", origin: o.origin ?? SITE, host: "synapse-site-virid.vercel.app" },
 });
@@ -198,17 +202,18 @@ describe("POST /api/feedback", () => {
 });
 
 describe("origin and content type", () => {
-  it("accepts browser posts only from our site; the app (no Origin) is accepted", async () => {
+  it("accepts website posts only from our site (Origin, or Sec-Fetch-Site: same-origin); with neither, only as the app", async () => {
     const { g, h } = handler();
-    const cases: [Record<string, string>, number][] = [
-      [{ origin: SITE }, 200], [{ origin: "https://evil.example" }, 403], [{ origin: "null" }, 403],
-      [{ site: "cross-site" }, 403], [{ site: "same-origin" }, 200], [{}, 200],
+    const cases: [Record<string, unknown>, object, number][] = [
+      [{ origin: SITE }, good, 200], [{ origin: "https://evil.example" }, good, 403], [{ origin: "null" }, good, 403],
+      [{ site: "cross-site" }, good, 403], [{ site: "same-origin" }, good, 200], [{ site: "none" }, good, 403],
+      [{ bare: true }, good, 403], [{ bare: true }, { ...good, source: undefined }, 403], [{ bare: true }, app, 200],
     ];
     let n = 1;
-    for (const [o, want] of cases) {
+    for (const [o, body, want] of cases) {
       const r = res();
-      await h(jsonReq({ ...good, message: `${good.message} ${n}` }, { ...o, ip: `198.51.${n++}.1` }), r);
-      expect(r.statusCode, JSON.stringify(o)).toBe(want);
+      await h(jsonReq({ ...body, message: `${good.message} ${n}` }, { ...o, ip: `198.51.${n++}.1` }), r);
+      expect(r.statusCode, JSON.stringify([o, body])).toBe(want);
     }
     expect(g.created()).toBe(3);
   });
@@ -222,13 +227,39 @@ describe("origin and content type", () => {
 });
 
 describe("rate limits", () => {
-  it("in memory, after validation: invalid requests don't use up the budget", async () => {
-    const { h } = handler();
-    for (let i = 0; i < 20; i++) await h(jsonReq({ ...good, type: "x" }, { ip: "198.51.100.1" }), res());
-    for (let i = 0; i < RATE.perSource; i++) { const r = res(); await h(jsonReq({ ...good, message: `${good.message} ${i}` }, { ip: `198.51.100.${i + 1}` }), r); expect(r.statusCode).toBe(200); }
+  it("every POST counts: 5 per 10 minutes per address, valid or not, then 429 before the body is read", async () => {
+    expect(RATE.perSource).toBe(5);
+    let t = Date.now();
+    const { g, h } = handler(gh(), { now: () => t });
+    for (let i = 0; i < 3; i++) { const r = res(); await h(jsonReq({ ...good, type: "x" }, { ip: "198.51.100.1" }), r); expect(r.statusCode).toBe(400); }
+    for (let i = 0; i < 2; i++) { const r = res(); await h(jsonReq({ ...good, message: `${good.message} ${i}` }, { ip: `198.51.100.${i + 2}` }), r); expect(r.statusCode).toBe(200); }
     const r = res();
     await h(jsonReq({ ...good, message: "one more thing" }, { ip: "198.51.100.99" }), r);
     expect(r.statusCode).toBe(429);
+    expect(JSON.parse(r.body).error).toMatch(/Too many/);
+    const form = res();
+    await h(formReq(good, { ip: "198.51.100.3" }), form);
+    expect(form.headers.location).toBe("/feedback?error=busy#failed");
+    const other = res();
+    await h(jsonReq({ ...good, message: "from elsewhere" }, { ip: "192.0.2.10" }), other);
+    expect(other.statusCode).toBe(200);
+    t += 11 * 60 * 1000;
+    const later = res();
+    await h(jsonReq({ ...good, message: "ten minutes on" }, { ip: "198.51.100.1" }), later);
+    expect(later.statusCode).toBe(200);
+    expect(g.created()).toBe(4);
+  });
+  it("app posts (no Origin) have their own, stricter budget per address", async () => {
+    expect(RATE_APP.perSource).toBeLessThan(RATE.perSource);
+    const { g, h } = handler();
+    for (let i = 0; i < RATE_APP.perSource; i++) { const r = res(); await h(jsonReq({ ...app, message: `app ${i}` }, { ip: "192.0.2.20" }), r); expect(r.statusCode).toBe(200); }
+    const r = res();
+    await h(jsonReq({ ...app, message: "app again" }, { ip: "192.0.2.20" }), r);
+    expect(r.statusCode).toBe(429);
+    const web = res();
+    await h(jsonReq({ ...good, message: "web from the same address" }, { ip: "192.0.2.20" }), web);
+    expect(web.statusCode).toBe(200);
+    expect(g.created()).toBe(RATE_APP.perSource + 1);
   });
   it("keys IPv6 by /48 and keeps no address", () => {
     expect(coarseIp("2001:db8:1:2:3:4:5:6")).toBe("2001:db8:1");
@@ -368,5 +399,37 @@ describe("logging", () => {
     expect(r2.statusCode).toBe(502);
     const logged = JSON.stringify(log.mock.calls);
     for (const s of ["SECRET MESSAGE TEXT", "LOGLINE", "203.0.113"]) expect(logged).not.toContain(s);
+  });
+});
+
+// Pressure test 2026-09-29 (U1): a 300 KB message was cleaned before its length was checked and held the function ~150 s.
+describe("long bodies are refused before any cleaning", () => {
+  const huge = `QA TEST — ${"x".repeat(300_000)}`;
+  const timed = async (req: unknown) => { const { g, h } = handler(); const r = res(); const t0 = performance.now(); await h(req, r); return { r, ms: performance.now() - t0, g }; };
+  it("a browser body over 32 KB → 413 from Content-Length alone", async () => {
+    const q = jsonReq({ ...good, message: huge }, { origin: SITE });
+    (q.headers as Record<string, string>)["content-length"] = String(huge.length + 40);
+    const { r, ms, g } = await timed(q);
+    expect(r.statusCode).toBe(413);
+    expect(ms).toBeLessThan(200);
+    expect(g.fetch).not.toHaveBeenCalled();
+  });
+  it("a raw message over 6,000 characters → 400, even when the body arrives parsed or without a length", async () => {
+    for (const q of [jsonReq({ ...good, message: huge }, { origin: SITE }), jsonReq({ ...app, message: huge })]) {
+      const { r, ms, g } = await timed(q);
+      expect(r.statusCode).toBe(400);
+      expect(JSON.parse(r.body).error).toBe("Keep the message under 5000 characters.");
+      expect(ms).toBeLessThan(200);
+      expect(g.fetch).not.toHaveBeenCalled();
+    }
+    const streamed = Object.assign(Readable.from([Buffer.from(JSON.stringify({ ...good, message: huge }))]), { method: "POST", headers: { "content-type": "application/json", origin: SITE, "x-forwarded-for": "192.0.2.77" } });
+    const { r, ms } = await timed(streamed);
+    expect(r.statusCode).toBe(413);
+    expect(ms).toBeLessThan(200);
+  });
+  it("6,000 characters of the worst shape still clean fast", async () => {
+    const { r, ms } = await timed(jsonReq({ ...good, message: "a.".repeat(2500) }, { origin: SITE }));
+    expect(r.statusCode).toBe(200);
+    expect(ms).toBeLessThan(200);
   });
 });

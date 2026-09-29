@@ -7,11 +7,17 @@
 
   const root = document.documentElement;
   const dark = () => root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-  document.querySelectorAll(".theme").forEach((b) => b.addEventListener("click", () => {
+  // The button says what it will do: "Switch to dark theme" while light, and back.
+  const buttons = document.querySelectorAll(".theme");
+  const label = () => buttons.forEach((b) => b.setAttribute("aria-label", `Switch to ${dark() ? "light" : "dark"} theme`));
+  buttons.forEach((b) => b.addEventListener("click", () => {
     const next = dark() ? "light" : "dark";
     root.dataset.theme = next;
     try { localStorage.setItem("synapse-theme", next); } catch { /* private window: this visit only */ }
+    label();
   }));
+  label();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", label);
 
   if (!("IntersectionObserver" in window)) { document.querySelectorAll("[data-anim]").forEach((el) => el.classList.add("on")); return; }
   const anim = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle("on", e.isIntersecting)));

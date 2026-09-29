@@ -6,14 +6,12 @@
 <!--THEME-->
 <!--SEO:docs-->
 <link rel="icon" type="image/png" href="/assets/favicon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 </head>
 <body>
 <!--HEADER:docs-->
-<div class="wrap">
+<main id="main" class="wrap">
 
   <div class="page">
     <aside class="toc" aria-label="On this page">
@@ -145,7 +143,7 @@
         <li><b>Your data stays on your Mac</b>, in <span class="path">~/Library/Application Support/Synapse</span>, and in the Bots' computer (an OrbStack machine called <span class="path">box</span>).</li>
         <li><b>Secrets are encrypted</b> with a key kept in the app's own data folder. Bots' sandboxed commands can't read it.</li>
         <li><b>Logs</b> are in <span class="path">~/Library/Logs/Synapse</span> and never leave your Mac unless you send them.</li>
-        <li><b>This website</b> counts visits with Vercel Web Analytics: no cookies, no personal data, nothing that identifies you. The app itself sends no analytics.</li>
+        <li><b>This website</b> counts visits with Vercel Web Analytics: no cookies, no personal data, nothing that identifies you. Its fonts are served from this site. It loads release info (the latest version and download link) from GitHub's API, so GitHub sees your IP address for that request. The app itself sends no analytics.</li>
         <li><b>Feedback</b> leaves your Mac only when you press <b>Send privately</b> or <b>Post on GitHub</b>, and only what its preview shows. Logs are cleaned of keys, tokens, emails and your user name first, and phone numbers, card numbers and addresses in your message are hidden. Replies appear in the app under <b>Your feedback</b>, or at the private link the website gives you. 👍 and 👎 on replies stay on your Mac.</li>
       </ul>
 
@@ -171,7 +169,7 @@
     </article>
   </div>
 
-</div>
+</main>
 <!--FOOTER-->
 <script src="/assets/site.js"></script>
 <script src="/assets/latest.js"></script>

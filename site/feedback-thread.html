@@ -8,38 +8,39 @@
 <!--THEME-->
 <title>Your feedback · Synapse</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 </head>
 <body>
 <!--HEADER:feedback-->
-<div class="wrap">
+<main id="main" class="wrap">
   <article class="doc fb">
     <p class="crumb">Feedback</p>
     <h1>Your feedback</h1>
-    <div class="fb-done" data-sent role="status">
-      <h2>Sent. Thank you.</h2>
+    <!-- Everything below appears once the script has read the link: its space is reserved so nothing jumps. -->
+    <div class="fb-thread">
+      <div class="fb-done" data-sent role="status">
+        <h2>Sent. Thank you.</h2>
+      </div>
+      <div class="fb-keep" data-keep hidden>
+        <p><b>Keep this link to see replies. Anyone with it can read this thread.</b></p>
+        <p class="fb-link"><code data-link></code> <button class="btn ghost sm" type="button" data-copy hidden>Copy link</button></p>
+      </div>
+      <noscript><p>Turn on JavaScript to see replies.</p></noscript>
+      <p class="fb-error" data-error hidden></p>
+      <ol class="fb-msgs" data-msgs></ol>
+      <p class="fb-empty" data-empty hidden>No replies yet</p>
+      <form class="fb-form" data-reply hidden>
+        <label class="fb-field">
+          <span>Reply</span>
+          <textarea name="message" rows="4" maxlength="5000" required></textarea>
+        </label>
+        <p class="fb-hide" data-hide hidden></p>
+        <button class="btn primary" type="submit">Send</button>
+      </form>
     </div>
-    <div class="fb-keep">
-      <p><b>Keep this link to see replies. Anyone with it can read this thread.</b></p>
-      <p class="fb-link"><code data-link></code> <button class="btn ghost sm" type="button" data-copy hidden>Copy link</button></p>
-    </div>
-    <noscript><p>Turn on JavaScript to see replies.</p></noscript>
-    <p class="fb-error" data-error hidden></p>
-    <ol class="fb-msgs" data-msgs></ol>
-    <p class="fb-empty" data-empty hidden>No replies yet</p>
-    <form class="fb-form" data-reply hidden>
-      <label class="fb-field">
-        <span>Reply</span>
-        <textarea name="message" rows="4" maxlength="5000" required></textarea>
-      </label>
-      <p class="fb-hide" data-hide hidden></p>
-      <button class="btn primary" type="submit">Send</button>
-    </form>
   </article>
-</div>
+</main>
 <!--FOOTER-->
 <script src="/assets/site.js"></script>
 <script type="module" src="/assets/feedback-thread.js"></script>

@@ -1,10 +1,15 @@
 /* Synapse site. Neutral greys, white and black; the Bots' colours are the only accents.
    No glass, blur, glow or translucency: depth comes from form and motion. */
+/* Geist and Geist Mono, served from this site (SIL Open Font License 1.1, see fonts/OFL.txt): no third-party font requests. */
+@font-face{font-family:"Geist"; font-style:normal; font-weight:400 700; font-display:swap; src:url(/assets/fonts/geist-latin-ext.woff2) format("woff2"); unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:"Geist"; font-style:normal; font-weight:400 700; font-display:swap; src:url(/assets/fonts/geist-latin.woff2) format("woff2"); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:"Geist Mono"; font-style:normal; font-weight:400 500; font-display:swap; src:url(/assets/fonts/geist-mono-latin-ext.woff2) format("woff2"); unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:"Geist Mono"; font-style:normal; font-weight:400 500; font-display:swap; src:url(/assets/fonts/geist-mono-latin.woff2) format("woff2"); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 :root{
   --bg:#FFFFFF; --surface:#F6F6F7; --surface-2:#EEEEF0; --card:#FFFFFF;
-  --ink:#111110; --ink-2:#3E3E42; --muted:#6D6D72; --faint:#A3A3A8; --line:#E6E6E9; --line-2:#D9D9DD;
+  --ink:#111110; --ink-2:#3E3E42; --muted:#646469; --faint:#A3A3A8; --line:#E6E6E9; --line-2:#D9D9DD;
   --btn:#111110; --btn-ink:#FFFFFF; --ground:#ECECEE; --wordmark:#F1F1F3;
-  --spark:#ED712E; --green:#3F8F58; --red:#C8403F; --shadow:rgba(0,0,0,.22);
+  --spark:#ED712E; --green:#2F7A47; --red:#C8403F; --shadow:rgba(0,0,0,.22);
   --sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
   --ease:cubic-bezier(.22,1,.36,1);
   color-scheme:light;
@@ -27,6 +32,8 @@
 }
 
 *{box-sizing:border-box}
+/* `hidden` always wins over a component's display (the sent form and the thread's reply box stayed visible). */
+[hidden]{display:none !important}
 html{scroll-behavior:smooth; -webkit-text-size-adjust:100%}
 body{margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 var(--sans); -webkit-font-smoothing:antialiased; overflow-x:hidden}
 a{color:inherit}
@@ -41,6 +48,8 @@ code{font:13.5px var(--mono); background:var(--surface); padding:2px 6px; border
 :focus-visible{outline:2px solid var(--ink); outline-offset:3px; border-radius:6px}
 
 /* ---- header ---- */
+.skip{position:absolute; left:16px; top:-60px; z-index:30; background:var(--btn); color:var(--btn-ink); padding:10px 14px; border-radius:10px; font-size:14px; text-decoration:none}
+.skip:focus{top:12px}
 .site-header{position:sticky; top:0; z-index:20; background:var(--bg); border-bottom:1px solid transparent; transition:border-color .2s}
 .site-header.scrolled{border-bottom-color:var(--line)}
 nav{display:flex; align-items:center; justify-content:space-between; gap:16px; padding-block:14px}
@@ -109,7 +118,7 @@ a.count:hover{color:var(--ink)}
 .win-side{background:var(--surface); border-right:1px solid var(--line); padding:14px 10px; font-size:13px}
 .lights{display:flex; gap:7px; padding:2px 6px 16px} .lights i{width:11px; height:11px; border-radius:50%; background:var(--line-2)}
 .search{display:flex; justify-content:space-between; align-items:center; height:30px; padding:0 10px; border-radius:8px; background:var(--card); border:1px solid var(--line); color:var(--muted)}
-.search kbd{font:11px var(--mono); color:var(--faint)}
+.search kbd{font:11px var(--mono); color:var(--muted)}
 .grp{font-size:12px; color:var(--muted); margin:16px 8px 6px}
 .row{display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:9px}
 .row.on{background:var(--surface-2)}
@@ -150,7 +159,7 @@ a.count:hover{color:var(--ink)}
 .pr span{color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
 .pr em{margin-left:auto; font:12px var(--mono); font-style:normal; white-space:nowrap}
 ins{color:var(--green); text-decoration:none} del{color:var(--red); text-decoration:none}
-.composer{margin:0 18px 16px; border:1px solid var(--line); border-radius:12px; padding:12px 14px; color:var(--faint); font-size:14px}
+.composer{margin:0 18px 16px; border:1px solid var(--line); border-radius:12px; padding:12px 14px; color:var(--muted); font-size:14px}
 /* the script: hidden steps keep their space, so nothing jumps */
 .demo.js [data-step]{opacity:0; transform:translateY(6px); transition:opacity .45s var(--ease), transform .45s var(--ease)}
 .demo.js [data-step].show{opacity:1; transform:none}
@@ -172,7 +181,7 @@ ins{color:var(--green); text-decoration:none} del{color:var(--red); text-decorat
 @keyframes pass{0%{translate:-92px 0; opacity:0} 6%{opacity:1} 12%,33%{translate:-92px 0} 45%,66%{translate:0 0} 78%,92%{translate:92px 0; opacity:1} 97%,100%{translate:92px 0; opacity:0}}
 /* computer: a terminal */
 .term{width:80%; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px 12px; display:flex; flex-direction:column; gap:3px}
-.term .tl{font:11px var(--mono); color:var(--faint); margin-bottom:4px}
+.term .tl{font:11px var(--mono); color:var(--muted); margin-bottom:4px}
 .term code{background:none; padding:0; font-size:12.5px; color:var(--ink-2); animation:6s steps(1) infinite}
 .term code b{color:var(--faint); font-weight:400}
 .term .ok{color:var(--green)}
@@ -248,7 +257,7 @@ ins{color:var(--green); text-decoration:none} del{color:var(--red); text-decorat
 .starter:hover .bot .bb{animation:hopin .6s var(--ease)}
 @keyframes hopin{35%{transform:translateY(-5px) scale(.97,1.04)} 70%{transform:scale(1.04,.96)}}
 .starter p{margin:0; color:var(--muted); font-size:14px; line-height:1.5}
-.starter>span{margin-top:auto; padding-top:10px; font:12px var(--mono); color:var(--faint)}
+.starter>span{margin-top:auto; padding-top:10px; font:12px var(--mono); color:var(--muted)}
 
 /* ---- built in the open ---- */
 .proof{display:flex; justify-content:space-between; align-items:center; gap:28px 32px; flex-wrap:wrap; border-block:1px solid var(--line); padding-block:40px}
@@ -259,6 +268,11 @@ ins{color:var(--green); text-decoration:none} del{color:var(--red); text-decorat
 .stats b{font:600 28px var(--sans); letter-spacing:-.03em; line-height:1.1; font-variant-numeric:tabular-nums}
 .stats span{font-size:13px; color:var(--muted)}
 .stats a:hover span{color:var(--ink)}
+.stats a.gh-card{flex-direction:row; align-items:center; gap:12px; border:1px solid var(--line-2); border-radius:12px; padding:14px 18px; transition:border-color .15s}
+.gh-card b{font:500 15px var(--mono); letter-spacing:0}
+.gh-card i{font-style:normal; color:var(--muted); transition:transform .2s var(--ease)}
+.gh-card:hover{border-color:var(--faint)} .gh-card:hover i{transform:translateX(3px); color:var(--ink)}
+@media (max-width:640px){.stats a.gh-card{flex-basis:100%} .gh-card i{margin-left:auto}}
 
 /* ---- install ---- */
 .steps{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:28px}
@@ -290,7 +304,7 @@ details p{color:var(--muted); margin:10px 0 0; max-width:64ch}
 /* ---- footer ---- */
 .site-footer{border-top:1px solid var(--line); padding-top:48px; overflow:hidden}
 .foot{display:grid; grid-template-columns:1.6fr repeat(3,minmax(0,1fr)); gap:32px; font-size:14px}
-.foot h4{font:500 12px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 12px}
+.foot h2{font:500 12px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 12px}
 .foot a{display:block; text-decoration:none; color:var(--ink-2); padding:3px 0}
 .foot a:hover{color:var(--ink)}
 .foot .brand{display:flex}
@@ -347,6 +361,8 @@ details p{color:var(--muted); margin:10px 0 0; max-width:64ch}
 .eyebrow{font:500 12.5px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 12px}
 .crumb{font:13px var(--mono); color:var(--muted); margin:0 0 14px}
 .doc{max-width:70ch}
+.doc.nf{padding-block:clamp(64px,12vw,128px)}
+.doc.nf h1{margin-bottom:32px}
 .doc h1{font-size:clamp(34px,4.4vw,48px); margin:0 0 14px}
 .doc .intro{font-size:18px; color:var(--ink-2); margin:0 0 40px}
 .doc h2{font-size:26px; max-width:none; border-top:1px solid var(--line); padding-top:40px; margin:48px 0 14px; scroll-margin-top:84px}
@@ -401,6 +417,7 @@ section.release{padding-block:32px 8px; margin-top:0}
 .fb-field textarea,.fb-field input{width:100%; box-sizing:border-box; font:16px/1.5 var(--sans); color:var(--ink); background:var(--card); border:1px solid var(--line-2); border-radius:10px; padding:10px 12px; outline:none; transition:border-color .15s}
 .fb-field textarea{resize:vertical; min-height:150px}
 .fb-field textarea:focus,.fb-field input:focus{border-color:var(--ink)}
+.fb-field textarea:focus-visible,.fb-field input:focus-visible{outline:2px solid var(--ink); outline-offset:3px}
 .fb-hp{position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden}
 .fb-error{margin:0; color:var(--red); font-size:15px}
 .fb-done,.fb-failed{display:none; border:1px solid var(--line); background:var(--surface); border-radius:12px; padding:18px 20px; margin:0 0 28px; outline:none}
@@ -409,6 +426,8 @@ section.release{padding-block:32px 8px; margin-top:0}
 .fb-done.on,.fb-failed.on,.fb-done:target,.fb-failed:target{display:block}
 .fb-done:target ~ .fb-form{display:none}
 .fb-hide{margin:-8px 0 0; font-size:14px; color:var(--muted)}
+.fb-thread{min-height:460px}
+@media (max-width:640px){.fb-thread{min-height:560px}}
 .fb-keep{border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin:0 0 28px}
 .fb-keep p{margin:0}
 .fb-link{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:8px !important}

@@ -7,7 +7,11 @@ const MIN_DOWNLOADS = 250, MIN_STARS = 50;
   const API = "https://api.github.com/repos/nyfeblade/synapse";
   const get = (u) => fetch(u, { headers: { Accept: "application/vnd.github+json" } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const fmt = (n) => (n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, "")}k` : n.toLocaleString("en-US"));
-  const show = (key, n) => document.querySelectorAll(`[data-stat="${key}"]`).forEach((el) => { el.querySelector("b").textContent = fmt(n); el.hidden = false; });
+  // The GitHub link card stands in for the counts until one of them is shown.
+  const show = (key, n) => {
+    document.querySelectorAll(`[data-stat="${key}"]`).forEach((el) => { el.querySelector("b").textContent = fmt(n); el.hidden = false; });
+    document.querySelectorAll("[data-gh-card]").forEach((el) => { el.hidden = true; });
+  };
 
   get(`${API}/releases?per_page=100`).then((list) => {
     const rels = (Array.isArray(list) ? list : []).filter((x) => !x.draft);

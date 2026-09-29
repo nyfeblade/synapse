@@ -38,12 +38,17 @@ const KEYS = [
   /\bsk-[A-Za-z0-9_-]{8,}/g, /\bAQ\.[A-Za-z0-9_.-]{8,}/g, /\bAIza[0-9A-Za-z_-]{20,}/g,
   /\bgh[pousr]_[A-Za-z0-9]{8,}/g, /\bgithub_pat_[A-Za-z0-9_]{8,}/g, /\bxox[abprs]-[A-Za-z0-9-]{8,}/g,
 ];
-const BEARER = /\b(Bearer|Basic)\s+(?!\[redacted\])[A-Za-z0-9._~+/=-]{6,}/gi;
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+// Every pattern here runs on untrusted text of any length, so each is linear: a run can only start where
+// the lookbehind says it begins, and every repeat is bounded. (An unbounded `[…]+@` restarted at every
+// position of a long run of letters and took minutes on 300 KB.)
+const BEARER = /\b(Bearer|Basic)\s{1,20}(?!\[redacted\])[A-Za-z0-9._~+/=-]{6,}/gi;
+const EMAIL = /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){0,8}\.[A-Za-z]{2,24}(?![A-Za-z])/g;
 const CARD = /(?<![\d.])(?:\d[ -]?){12,18}\d(?![\d.])/g;
 const SSN = /(?<![\d-])\d{3}-\d{2}-\d{4}(?![\d-])/g;
-const PHONE = /(?<![\w.+-])(?:\+\d{1,3}[\s.-]?(?:\(?\d{1,4}\)?[\s.-]?){1,4}\d{2,4}|\(\d{3}\)\s?\d{3}[\s.-]\d{4}|\d{3}[.-]\d{3}[.-]\d{4}|0\d{2,4}\s\d{3,4}\s\d{3,4})(?![\w.-]*\d)/g;
-const ADDRESS = /\b\d{1,6}\s+(?:[A-Z][a-z]+\s+){1,3}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way|Place|Pl|Terrace|Crescent|Close|Parkway|Pkwy|Highway|Hwy)\b\.?/g;
+// US (415) 555-0132 and 555-123-4567; international +44 20 7946 0958, +49 30 123456; UK and EU trunk
+// numbers 07700 900123, 020 7946 0958, 030 123456, 06 12 34 56 78. Never inside a longer token (versions, dates, IPs).
+const PHONE = /(?<![\w.+-])(?:\+\d{1,3}[\s.-]?(?:\(?\d{1,4}\)?[\s.-]?){1,4}\d{2,4}|\(\d{3}\)\s?\d{3}[\s.-]\d{4}|\d{3}[.-]\d{3}[.-]\d{4}|0\d{2,4}(?:[\s-]?\d{3,4}){1,2}|0\d(?:[\s.]\d{2}){4})(?![\w.-]{0,32}\d)/g;
+const ADDRESS = /\b\d{1,6}\s{1,4}(?:[A-Z][a-z]{1,30}\s{1,4}){1,3}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way|Place|Pl|Terrace|Crescent|Close|Parkway|Pkwy|Highway|Hwy)\b\.?/g;
 
 /** Keys, emails, card numbers (Luhn-checked), US SSNs, phone numbers and street addresses → placeholders, with a count of each. */
 export function redactPersonal(input) {
@@ -109,7 +114,7 @@ export function isAbusive(text) {
   const t = String(text ?? "");
   for (const m of t.matchAll(TOKEN)) if (badWord(m[0])) return true;
   // Spelled out with dots, dashes, stars or spaces between single letters: f.u.c.k, s h i t.
-  for (const m of t.matchAll(/(?<![\p{L}\p{N}])(?:[\p{L}@$0-9][.\-_* ]){2,}[\p{L}@$0-9](?![\p{L}\p{N}])/gu)) if (badWord(m[0].replace(/[.\-_* ]/g, ""))) return true;
+  for (const m of t.matchAll(/(?<![\p{L}\p{N}])(?:[\p{L}@$0-9][.\-_* ]){2,40}[\p{L}@$0-9](?![\p{L}\p{N}])/gu)) if (badWord(m[0].replace(/[.\-_* ]/g, ""))) return true;
   const flat = leet(t).replace(/\s+/g, " ");
   return THREATS.some((re) => re.test(flat));
 }
@@ -119,11 +124,16 @@ export function maskAbuse(title) {
   let out = String(title ?? "").replace(TOKEN, (w) => (badWord(w) ? maskWord(w) : w));
   // Threat phrases: masked in place, keeping lengths, so later matches still line up.
   const keep = (w) => w[0] + "*".repeat(w.length - 1);
+  // One pass per pattern over one lowered copy (re-lowering after each match was quadratic on long text).
   for (const re of THREATS) {
-    for (let m = re.exec(leet(out)); m; m = re.exec(leet(out))) {
-      const seg = out.slice(m.index, m.index + m[0].length).replace(/[\p{L}\p{N}@$']+/gu, keep);
-      out = out.slice(0, m.index) + seg + out.slice(m.index + m[0].length);
+    const low = leet(out);
+    if (low.length !== out.length) continue; // a character whose lower case is longer: indexes would not line up
+    let masked = "", at = 0;
+    for (const m of low.matchAll(new RegExp(re.source, `${re.flags}g`))) {
+      masked += out.slice(at, m.index) + out.slice(m.index, m.index + m[0].length).replace(/[\p{L}\p{N}@$']+/gu, keep);
+      at = m.index + m[0].length;
     }
+    out = masked + out.slice(at);
   }
   return out;
 }
@@ -157,14 +167,16 @@ export function spamReason(text) {
 
 /* ---- prompt injection: labelled, never blocked (a report about injection is legitimate) ---- */
 const INJECTION = [
-  /\b(?:ignore|disregard|forget|override)\s+(?:all\s+|any\s+|the\s+|your\s+)?(?:previous|prior|above|earlier|preceding|system)?\s*(?:instructions?|prompts?|rules|directions)\b/i,
-  /\bsystem\s+prompt\b/i, /\byou\s+are\s+now\b/i, /\bas\s+an\s+ai\b/i, /\bnew\s+instructions\b/i, /\b(?:developer|god|dan)\s+mode\b/i, /\bjailbreak/i,
-  /<\|[^|>\n]{1,40}\|>/, /^\s*(?:assistant|system|user|human|developer)\s*:/im, /\[\/?(?:INST|SYS)\]/,
-  /\b(?:run|execute)\s+(?:this|the\s+following|these)\s+(?:command|commands|script|code)\b/i,
-  /\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b/i,
-  /"(?:tool_use|function_call|tool_calls|tool_name)"\s*:/i, /"name"\s*:\s*"[^"]{1,60}"\s*,\s*"(?:input|arguments|parameters)"\s*:/i,
+  // Whitespace runs are bounded ({1,20}), a line start never spans newlines, and a long base64 run is
+  // matched once, from its start: every pattern stays linear on long logs.
+  /\b(?:ignore|disregard|forget|override)\s{1,20}(?:(?:all|any|the|your)\s{1,20})?(?:(?:previous|prior|above|earlier|preceding|system)\s{0,20})?(?:instructions?|prompts?|rules|directions)\b/i,
+  /\bsystem\s{1,20}prompt\b/i, /\byou\s{1,20}are\s{1,20}now\b/i, /\bas\s{1,20}an\s{1,20}ai\b/i, /\bnew\s{1,20}instructions\b/i, /\b(?:developer|god|dan)\s{1,20}mode\b/i, /\bjailbreak/i,
+  /<\|[^|>\n]{1,40}\|>/, /^[ \t]{0,20}(?:assistant|system|user|human|developer)[ \t]{0,20}:/im, /\[\/?(?:INST|SYS)\]/,
+  /\b(?:run|execute)\s{1,20}(?:this|the\s{1,20}following|these)\s{1,20}(?:command|commands|script|code)\b/i,
+  /\b(?:curl|wget)\b[^\n|]{0,500}\|[ \t]{0,20}(?:sudo\s{1,20})?(?:ba|z|da)?sh\b/i,
+  /"(?:tool_use|function_call|tool_calls|tool_name)"\s{0,20}:/i, /"name"\s{0,20}:\s{0,20}"[^"]{1,60}"\s{0,20},\s{0,20}"(?:input|arguments|parameters)"\s{0,20}:/i,
   /<\/?(?:function_calls|invoke|tool_use|system)\b/i,
-  /[A-Za-z0-9+/]{200,}={0,2}/,
+  /(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{200}/,
 ];
 /** True when the text looks like an attempt to instruct an AI that reads it. */
 export function looksLikeInjection(text) {
@@ -174,7 +186,7 @@ export function looksLikeInjection(text) {
 
 /* ---- links, emails and mentions out of anything shown in a title or a reply ---- */
 /** URLs out of a title: they become "[link]". */
-export const dropLinks = (s) => String(s ?? "").replace(/\b(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s]*/gi, "[link]");
+export const dropLinks = (s) => String(s ?? "").replace(/(?:(?<![a-z0-9+.-])[a-z][a-z0-9+.-]{0,31}:\/\/|\bwww\.)[^\s]*/gi, "[link]");
 /** An owner's reply as the sender sees it: no email address, no @mention, no github.com profile link. */
 export function cleanReply(s) {
   return stripHidden(s).text

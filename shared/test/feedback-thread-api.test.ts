@@ -226,3 +226,24 @@ describe("POST /api/feedback/thread (follow-ups)", () => {
     expect(ok.statusCode).toBe(200);
   });
 });
+
+// Pressure test 2026-09-29 (U1): the follow-up path gets the same raw-size checks as a new message.
+describe("long follow-ups are refused before any cleaning", () => {
+  it("over 32 KB → 413 before GitHub is asked; a raw message over 6,000 characters → 400; both fast", async () => {
+    const g = fakeGitHub();
+    const s = await send(g);
+    const huge = `QA TEST — ${"x".repeat(300_000)}`;
+    const before = g.calls.length;
+    const big = req("POST", { "x-feedback-code": s.thread, "content-type": "application/json", "content-length": String(huge.length + 20) }, { message: huge });
+    let r = res(); let t0 = performance.now();
+    await thread(g)(big, r);
+    expect(r.statusCode).toBe(413);
+    expect(performance.now() - t0).toBeLessThan(200);
+    expect(g.calls.length).toBe(before);
+    r = res(); t0 = performance.now();
+    await thread(g)(req("POST", { "x-feedback-code": s.thread, "content-type": "application/json" }, { message: huge }), r);
+    expect(r.statusCode).toBe(400);
+    expect(performance.now() - t0).toBeLessThan(200);
+    expect(g.comments[1] ?? []).toHaveLength(0);
+  });
+});

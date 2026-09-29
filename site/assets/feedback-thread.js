@@ -4,19 +4,32 @@ import { cleanMessage, describeHidden, spamReason } from "./feedback-content.js"
 
 const code = decodeURIComponent(location.hash.slice(1));
 const $ = (s) => document.querySelector(s);
-const msgs = $("[data-msgs]"), err = $("[data-error]"), form = $("[data-reply]"), link = $("[data-link]"), copy = $("[data-copy]");
+const msgs = $("[data-msgs]"), err = $("[data-error]"), form = $("[data-reply]"), link = $("[data-link]"), copy = $("[data-copy]"), keep = $("[data-keep]");
+// Only a well-formed code gets the link box, Copy and the reply box; anything else only says the link is incomplete.
+const valid = /^[1-9]\d{0,9}\.[A-Za-z0-9_-]{22}$/.test(code);
 const sent = new URLSearchParams(location.search).get("sent") === "1";
 $("[data-sent]").classList.toggle("on", sent);
 
 const url = `${location.origin}/feedback/thread#${code}`;
 link.textContent = url;
-if (navigator.clipboard) { copy.hidden = false; copy.addEventListener("click", () => navigator.clipboard.writeText(url).then(() => { copy.textContent = "Copied"; }, () => {})); }
+keep.hidden = !valid;
+if (valid && navigator.clipboard) { copy.hidden = false; copy.addEventListener("click", () => navigator.clipboard.writeText(url).then(() => { copy.textContent = "Copied"; }, () => {})); }
 
 const fail = (m) => { err.textContent = m; err.hidden = false; };
 const when = (at) => (at ? new Date(at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "");
 
+// The sent message, kept in this browser only until the server has it (first successful load) or for 7 days.
 const GRACE_MS = 7 * 24 * 3600 * 1000;
-const local = (() => { try { return JSON.parse(localStorage.getItem(`synapse-feedback:${code}`) || "null"); } catch { return null; } })();
+const KEY = `synapse-feedback:${code}`;
+const forget = () => { try { localStorage.removeItem(KEY); } catch { /* private window */ } };
+const local = (() => {
+  if (!valid) return null;
+  try {
+    const l = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (l && !(Date.now() - l.sentAt < GRACE_MS)) { forget(); return null; }
+    return l;
+  } catch { return null; }
+})();
 const empty = $("[data-empty]");
 
 function draw(j) {
@@ -37,20 +50,23 @@ function draw(j) {
 }
 
 async function load() {
-  if (!/^[1-9]\d{0,9}\.[A-Za-z0-9_-]{22}$/.test(code)) return fail("This link isn't complete. Check you copied all of it.");
+  if (!valid) return fail("This link isn't complete. Check you copied all of it.");
   try {
     const r = await fetch("/api/feedback/thread", { headers: { accept: "application/json", "x-feedback-code": code }, referrerPolicy: "no-referrer" });
     const j = await r.json().catch(() => ({}));
-    // Just after sending, GitHub may not have it yet: that's "later", not "gone".
-    if (r.status === 404) return fail(!local || Date.now() - local.sentAt < GRACE_MS ? "Couldn't load replies yet. Try again later." : "This conversation wasn't found.");
+    // Just after sending from this browser, GitHub may not have it yet: that's "later", not "gone".
+    // With no record here, a 404 is a wrong or mistyped link.
+    if (r.status === 404) return fail(local ? "Couldn't load replies yet. Try again later." : "This conversation wasn't found. Check you copied the whole link.");
     if (!r.ok || !j.ok) return fail(j.error || "Couldn't load it. Try again later.");
     err.hidden = true;
+    forget();
     draw(j);
   } catch { fail("Couldn't load it. Check your connection and try again."); }
 }
 
 const box = form.querySelector("textarea"), hide = $("[data-hide]");
 box.addEventListener("input", () => {
+  box.setCustomValidity(box.value && !box.value.trim() ? "Write a message." : ""); // only spaces counts as empty
   const c = cleanMessage(box.value), w = describeHidden(c.found);
   hide.textContent = [w ? `We'll hide: ${w}` : "", spamReason(c.text)].filter(Boolean).join(" ");
   hide.hidden = !hide.textContent;

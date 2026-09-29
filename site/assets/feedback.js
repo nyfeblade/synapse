@@ -13,6 +13,8 @@ if (form) {
   else if (q.get("error")) show(failed);
 
   const preview = () => {
+    // Only spaces counts as empty, as the server says: the browser refuses it before sending.
+    box.setCustomValidity(box.value && !box.value.trim() ? "Write a message." : "");
     const c = cleanMessage(box.value);
     const what = describeHidden(c.found);
     // The same checks the server makes: say what will be hidden, and why a message would be refused.

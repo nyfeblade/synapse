@@ -14,8 +14,8 @@
 // Unknown or wrong code → 404 with no detail.
 import { cleanReply, stripHidden } from "../../shared/src/feedback-content.js";
 import {
-  CAPS, GENERIC_REFUSAL, UNTRUSTED_HEADER, checkText, clientIp, followUpBody, footerHash, github, hashMatches, makeLimiter, makeRecent,
-  originAllowed, parseCode, readBody, sendJson, tally,
+  CAPS, GENERIC_REFUSAL, LIMITS, UNTRUSTED_HEADER, checkText, clientIp, followUpBody, footerHash, github, hashMatches, makeLimiter, makeRecent,
+  originAllowed, parseCode, readBody, sendJson, tally, tooBig,
 } from "../_lib/feedback-core.js";
 
 const FOLLOW_UP_MARK = "**Follow-up from the sender**";
@@ -52,6 +52,8 @@ export function createThreadHandler(deps = {}) {
     if (!limiter(clientIp(req))) return sendJson(res, 429, { ok: false, error: "Too many at once. Try again in a few minutes." });
     const code = parseCode(req.headers["x-feedback-code"]);
     if (!code) return notFound();
+    // A follow-up is only a message: anything bigger is refused before GitHub is asked or any text is cleaned.
+    if (req.method === "POST" && tooBig(req, LIMITS.webBody)) return sendJson(res, 413, { ok: false, error: "That's too big." });
     const gh = github(token, deps.fetch || globalThis.fetch);
 
     try {
@@ -88,7 +90,7 @@ export function createThreadHandler(deps = {}) {
       // POST: a follow-up, through the same checks as a new message.
       if (!String(req.headers["content-type"] || "").toLowerCase().startsWith("application/json")) return sendJson(res, 415, { ok: false, error: "Send JSON." });
       let body;
-      try { body = await readBody(req, "json"); } catch { return sendJson(res, 400, { ok: false, error: "That couldn't be read." }); }
+      try { body = await readBody(req, "json", LIMITS.webBody); } catch (e) { return sendJson(res, e.status === 413 ? 413 : 400, { ok: false, error: e.status === 413 ? "That's too big." : "That couldn't be read." }); }
       const t = checkText(body?.message);
       if (!t.ok) return sendJson(res, t.status, { ok: false, error: t.error });
       if (followUps.length >= CAPS.followUpsPerThread) return sendJson(res, 429, { ok: false, error: "This conversation is full. Send new feedback instead." });
