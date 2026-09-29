@@ -179,7 +179,7 @@ describe("vercel.json", () => {
     expect(v).toMatchObject({ buildCommand: "node site/build.mjs", outputDirectory: "site/dist", cleanUrls: true });
     expect(fs.existsSync(path.join(__dirname, "../../api/feedback/index.js"))).toBe(true);
     expect(JSON.stringify(v)).not.toMatch(/"\/api/);
-    expect(v.rewrites).toEqual([{ source: "/feedback/thread", destination: "/feedback-thread.html" }]);
+    expect(v.rewrites).toEqual([{ source: "/feedback/thread", destination: "/feedback-thread" }]); // cleanUrls: a .html destination 308s, so the rewrite 404ed
     expect(fs.existsSync(path.join(__dirname, "../../api/feedback/thread.js"))).toBe(true);
   });
 });

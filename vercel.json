@@ -17,7 +17,7 @@
   "rewrites": [
     {
       "source": "/feedback/thread",
-      "destination": "/feedback-thread.html"
+      "destination": "/feedback-thread"
     }
   ]
 }
