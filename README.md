@@ -12,6 +12,8 @@ write, talk to them on voice calls and let them use your Mac, with your approval
 Bot has its own name, memory and skills, and its own Linux computer in a sandbox on your Mac. Synapse runs
 on your own Anthropic API key: you pay Anthropic for what the Bots use, and nothing else.
 
+**Website:** [synapse-site-virid.vercel.app](https://synapse-site-virid.vercel.app) · [Docs](https://synapse-site-virid.vercel.app/docs) · [Changelog](https://synapse-site-virid.vercel.app/changelog)
+
 <p align="center">
   <img alt="Synapse: a Bot at work, with its plan, your Mac and an approval card" src="docs/media/screenshot-chat.png" width="880">
 </p>

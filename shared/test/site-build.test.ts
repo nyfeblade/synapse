@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error plain ESM build script, no types
-import { inline, parseChangelog, renderReleases } from "../../site/build.mjs";
+import { inline, parseChangelog, renderReleases, seoHead, sitemap, robots, SITE_URL, PAGES, build } from "../../site/build.mjs";
 
 const md = `# Changelog\n\nintro\n\n## 0.2.0 — Unreleased\n\n- **New.** A thing.\n\n## 0.1.0 — 2026-09-28 — beta\n\nFirst.\n\n### Bots\n\n- One\n- Two\n`;
 
@@ -36,5 +36,33 @@ describe("site changelog", () => {
     const real = parseChangelog(fs.readFileSync(path.join(__dirname, "../../CHANGELOG.md"), "utf8"));
     expect(real.length).toBeGreaterThan(0);
     expect(real.some((x: { version: string }) => x.version === "0.1.0")).toBe(true);
+  });
+});
+
+describe("site SEO", () => {
+  it("gives every page its own title, description, canonical and share tags", () => {
+    for (const key of Object.keys(PAGES)) {
+      const h = seoHead(key, "0.1.0");
+      expect(h).toContain(`<link rel="canonical" href="${SITE_URL}${PAGES[key].path}">`);
+      for (const t of ["<title>", 'name="description"', 'property="og:url"', 'property="og:image" content="https://', 'name="twitter:title"']) expect(h).toContain(t);
+    }
+  });
+
+  it("marks the home page as a free macOS app, with the version from the changelog", () => {
+    const h = seoHead("home", "0.1.0");
+    const app = JSON.parse(h.match(/<script type="application\/ld\+json">(.*?)<\/script>/)![1]);
+    expect(app).toMatchObject({ "@type": "SoftwareApplication", softwareVersion: "0.1.0", offers: { price: "0" } });
+    expect(seoHead("docs", "0.1.0")).not.toContain("ld+json");
+  });
+
+  it("lists every page in the sitemap and points robots at it", () => {
+    const xml = sitemap("2026-09-28");
+    for (const p of Object.values(PAGES) as { path: string }[]) expect(xml).toContain(`<loc>${SITE_URL}${p.path}</loc>`);
+    expect(robots()).toContain(`Sitemap: ${SITE_URL}/sitemap.xml`);
+  });
+
+  it("leaves no SEO placeholder in the built pages", () => {
+    const dist = build("2026-09-28");
+    for (const f of ["index.html", "docs.html", "changelog.html"]) expect(fs.readFileSync(path.join(dist, f), "utf8")).not.toContain("<!--SEO");
   });
 });
