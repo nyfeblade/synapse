@@ -1,6 +1,7 @@
 // Builds the website into site/dist: the static pages as they are, plus the Changelog page rendered
 // from the repo's CHANGELOG.md, so writing a changelog entry is all it takes to update the site.
 // Node built-ins only (the Vercel build installs nothing): `node site/build.mjs`.
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -188,13 +189,24 @@ ${renderBody(r.body)}
   return { toc, body };
 }
 
+/** Browsers keep /assets/* for an hour, so a new page must never pair with an old stylesheet: each CSS/JS link
+ * gets ?v=<first 10 hex of its SHA-256>, which changes exactly when the file does. */
+export function bustAssets(html, dir = path.join(here, "assets")) {
+  return html.replace(/(["'(])\/assets\/([\w.-]+\.(?:css|js))(?=["')?])/g, (m, pre, f) => {
+    const file = path.join(dir, f);
+    if (!fs.existsSync(file)) return m;
+    const v = crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex").slice(0, 10);
+    return `${pre}/assets/${f}?v=${v}`;
+  });
+}
+
 export function build(today = new Date().toISOString().slice(0, 10)) {
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, "assets"), { recursive: true });
   for (const f of fs.readdirSync(path.join(here, "assets"))) fs.copyFileSync(path.join(here, "assets", f), path.join(dist, "assets", f));
   const releases = parseChangelog(fs.readFileSync(path.join(here, "..", "CHANGELOG.md"), "utf8"));
   const version = releases.find((r) => !r.unreleased)?.version ?? null;
-  const withSeo = (html, key) => partials(html, key).replace(`<!--SEO:${key}-->`, seoHead(key, version));
+  const withSeo = (html, key) => bustAssets(partials(html, key).replace(`<!--SEO:${key}-->`, seoHead(key, version)));
   fs.writeFileSync(path.join(dist, "index.html"), withSeo(fs.readFileSync(path.join(here, "index.html"), "utf8"), "home"));
   fs.writeFileSync(path.join(dist, "docs.html"), withSeo(fs.readFileSync(path.join(here, "docs.html"), "utf8"), "docs"));
   const { toc, body } = renderReleases(releases);

@@ -124,3 +124,15 @@ describe("the docs say what the app does (code audit 2026-09-29)", () => {
     expect(docs).toMatch(/<b>Automatic Updates<\/b>/);
   });
 });
+
+describe("asset cache-busting", () => {
+  it("every CSS/JS link in the built pages carries a content hash, so a new page never pairs with an old stylesheet", () => {
+    const dist = build("2026-09-29");
+    for (const f of ["index.html", "docs.html", "changelog.html"]) {
+      const html = fs.readFileSync(path.join(dist, f), "utf8");
+      const links = html.match(/\/assets\/[\w.-]+\.(?:css|js)[^"')\s]*/g) ?? [];
+      expect(links.length).toBeGreaterThan(0);
+      for (const l of links) expect(l).toMatch(/\?v=[0-9a-f]{10}$/);
+    }
+  });
+});
