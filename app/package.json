@@ -1,7 +1,7 @@
 {
   "name": "@synapse/app",
   "productName": "Synapse",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "license": "MIT",
   "type": "module",
