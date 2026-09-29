@@ -235,7 +235,7 @@ export interface VoiceCallView {
 
 // ---------- Coding agent (TOOL-20) ----------
 export type CodingAgentStatus = "running" | "done" | "error" | "cancelled" | "timed-out";
-export interface CodingAgentView { id: string; botId: string; title: string; repo: string; branch: string; worktree: string; status: CodingAgentStatus; startedAt: number; endedAt: number | null; prUrl: string | null; summary: string | null }
+export interface CodingAgentView { id: string; botId: string; title: string; repo: string; branch: string; worktree: string; status: CodingAgentStatus; startedAt: number; endedAt: number | null; prUrl: string | null; summary: string | null; /** Set when origin couldn't be fetched: what the agent started from instead. */ note?: string | null }
 
 // ---------- Transcript cards (CHAT-16 kinds added by Phase 5) ----------
 export interface ConnectCardView { kind: "connect"; serverId: string | null; catalogId: string | null; name: string; logo: string | null; toolCount: number; state: "available" | "added" | "waiting-auth" | "connected" }
@@ -247,7 +247,7 @@ export interface EngineeringOfferCardView { kind: "engineering-offer" }
 export type CardPayload = ConnectCardView | LocalToolCardView | CodingAgentCardView | EngineeringOfferCardView | BrowserSessionCardView;
 
 // ---------- Host settings extras (SET-17 keys added by Phase 5) ----------
-export interface Phase5SettingsView { memoryMode: "standard" | "dreaming"; useHardwareSecurityKeys: boolean; hasSeenOnboarding: boolean; advancedEnabled: boolean }
+export interface Phase5SettingsView { memoryMode: "standard" | "dreaming"; hasSeenOnboarding: boolean; advancedEnabled: boolean }
 
 export type Phase5SseEvent =
   | { channel: "usage"; payload: UsageView }
@@ -347,10 +347,9 @@ declare module "./gateway" {
     completeOnboarding: { args: None; result: None };
     // Coding agent (TOOL-20)
     listCodingAgents: { args: { id: string }; result: { agents: CodingAgentView[] } };
-    // Memory, follow-ups, security key, extras
+    // Memory, follow-ups, extras
     getPhase5Settings: { args: None; result: Phase5SettingsView };
     setMemoryMode: { args: { mode: "standard" | "dreaming" }; result: Phase5SettingsView };
-    setHardwareSecurityKeys: { args: { enabled: boolean }; result: Phase5SettingsView };
     setAgentFollowups: { args: { id: string; enabled: boolean }; result: { agent: BotSummary } };
     setAgentEngineeringMode: { args: { id: string; enabled: boolean }; result: { agent: BotSummary } };
     setAgentPermMode: { args: { id: string; mode: PermMode }; result: { agent: BotSummary } };

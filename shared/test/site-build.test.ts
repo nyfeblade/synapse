@@ -66,3 +66,15 @@ describe("site SEO", () => {
     for (const f of ["index.html", "docs.html", "changelog.html"]) expect(fs.readFileSync(path.join(dist, f), "utf8")).not.toContain("<!--SEO");
   });
 });
+
+describe("the docs say what the app does (code audit 2026-09-29)", () => {
+  const docs = fs.readFileSync(path.join(__dirname, "../../site/docs.html"), "utf8");
+  it("two macOS accounts are supported since 0.1.1, not \"fixed in the next version\"", () => {
+    expect(docs).not.toMatch(/Not supported yet|Fixed in the next version/i);
+    expect(docs).toMatch(/two macOS accounts[\s\S]{0,300}0\.1\.1/i);
+  });
+  it("updates: always checked, and the switch only decides whether they install by themselves", () => {
+    expect(docs).toMatch(/Synapse checks for new versions itself/);
+    expect(docs).toMatch(/<b>Automatic Updates<\/b>/);
+  });
+});

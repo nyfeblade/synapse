@@ -6,7 +6,6 @@ import type { HostModule, ModuleContext } from "./types";
 export function phase5SettingsView(settings: HostSettingsStore): Phase5SettingsView {
   return {
     memoryMode: settings.extra<"standard" | "dreaming">("memoryMode", "standard"),
-    useHardwareSecurityKeys: settings.extra("useHardwareSecurityKeys", false),
     hasSeenOnboarding: settings.extra("hasSeenOnboarding", false),
     advancedEnabled: settings.extra<{ enabled?: boolean }>("advanced", {}).enabled ?? false,
   };
@@ -23,8 +22,6 @@ export function createPhase5SettingsModule(ctx: Pick<ModuleContext, "settings" |
         ctx.settings.setExtra("memoryMode", a.mode);
         return publish();
       },
-      // D15-B: the toggle is stored for the future WebAuthn proxy; nothing uses it in v1 (floor F8: user-only, no Bot tool).
-      setHardwareSecurityKeys: (a) => { ctx.settings.setExtra("useHardwareSecurityKeys", !!a.enabled); return publish(); },
     },
   };
 }

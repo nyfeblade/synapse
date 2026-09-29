@@ -7,6 +7,9 @@
 set -uo pipefail
 B="${1:-$(cd "$(dirname "$0")" && pwd)}"; SIM_UID="${2:-502}"; M="synapse-twoacct-$$"; REAL="${REAL_BOX:-box}"
 export BOX_MACHINE="$M" SYNAPSE_UID="$SIM_UID"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=box/orb.sh
+source "$HERE/orb.sh"  # OrbStack.app's CLI first, as every box script does
 LOG="$(mktemp -d)"; trap 'orb delete -f "$M" >/dev/null 2>&1; rm -rf "$LOG"' EXIT
 fail=0; ok() { echo "PASS $1"; }; bad() { echo "FAIL $1"; fail=1; }
 # gateway.json fields other than the token (never printed).

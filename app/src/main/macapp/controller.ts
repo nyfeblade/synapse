@@ -18,6 +18,7 @@ import {
   macAppConsequence,
   macAppLabelConsequence,
   macAppSummary,
+  isTrashPath,
   namesSynapseApp,
   MAX_CONTACT_OPTIONS,
   pickContact,
@@ -29,7 +30,19 @@ import {
 import { axDiff, axOutline, staleRef, toRead, type AxRead } from "./ax";
 import type { MacHelper } from "./helper";
 import type { OsaRunner } from "./osa";
-import { buildScript } from "./scripts";
+import { buildScript, expand } from "./scripts";
+
+/** A path with every symlink resolved; for a path that doesn't exist (yet), its deepest existing parent's real
+ *  path with the rest appended. */
+function realWalk(p: string): string {
+  let cur = p; const tail: string[] = [];
+  for (;;) {
+    try { return path.join(fs.realpathSync.native(cur), ...tail); } catch { /* walk up */ }
+    const up = path.dirname(cur);
+    if (up === cur) return p;
+    tail.unshift(path.basename(cur)); cur = up;
+  }
+}
 
 export interface MacAppCall {
   botId: string;
@@ -76,15 +89,7 @@ export class MacAppController {
     const fold = (p: string) => p.normalize("NFC").toLowerCase();
     const roots = new Set([path.resolve(root)]);
     try { roots.add(fs.realpathSync.native(root)); } catch { /* not there */ }
-    const real = (p: string): string => {
-      let cur = p; const tail: string[] = [];
-      for (;;) {
-        try { return path.join(fs.realpathSync.native(cur), ...tail); } catch { /* walk up */ }
-        const up = path.dirname(cur);
-        if (up === cur) return p;
-        tail.unshift(path.basename(cur)); cur = up;
-      }
-    };
+    const real = realWalk;
     for (const v of [a.target, a.value, a.list]) {
       if (typeof v !== "string" || !v.trim()) continue;
       if (fold(v).includes("local-policy.key")) return true;
@@ -92,6 +97,22 @@ export class MacAppController {
       if (!s.startsWith("/") && !s.startsWith("~")) continue;
       const abs = path.resolve(s === "~" ? this.d.home : s.startsWith("~/") ? path.join(this.d.home, s.slice(2)) : s);
       for (const p of [abs, real(abs)]) for (const r of roots) if (fold(p) === fold(r) || fold(p).startsWith(fold(r) + path.sep)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * A Finder move from or into a Trash folder, judged on the path the script will really use: trimmed and ~-expanded
+   * exactly as scripts.ts expand() does, resolved, and with symlinks followed (Finder follows them), so "~/.Trash ",
+   * "~/.Trash\n" or a link to ~/.Trash can't skip the delete card.
+   */
+  private movesTrash(a: MacAppCall["args"]): boolean {
+    if (a.action !== "finder.move") return false;
+    for (const raw of [a.target ?? "", a.value ?? a.list ?? ""]) {
+      const s = expand(raw, this.d.home);
+      if (!s) continue;
+      const abs = path.resolve(s);
+      if (isTrashPath(s) || isTrashPath(abs) || isTrashPath(realWalk(abs))) return true;
     }
     return false;
   }
@@ -167,6 +188,7 @@ export class MacAppController {
   private async gate(call: MacAppCall, s: Session): Promise<MacAppResult | null> {
     const a = call.args;
     let why = macAppConsequence(a);
+    if (!why && this.movesTrash(a)) why = "destruction";
     // The generic fallback presses a ref, not a word: resolve its on-screen label and judge THAT too, so
     // pressing [e9] "Delete everything" is gated exactly as choosing the menu item would be.
     if (!why && (a.action === "ui.press" || a.action === "ui.focus")) {

@@ -78,8 +78,10 @@ Both sources are checked: the local release folder first, then the GitHub feed.
    - Downloads are capped at 3 GB, checked against both Content-Length and the streamed bytes.
    - The token goes only to `https://api.github.com`, matched on the exact origin.
    - Concurrent checks or downloads share one run, and a download keeps the release it started with.
-6. **The swap.** The swap script is fixed text that takes its paths as argv. The new build has 60 s to report healthy,
-   or the old build is put back.
+6. **The swap.** The swap script is fixed text that takes its paths as argv. The new build has 60 s to report healthy (its window
+   is shown and its renderer has loaded; the Bots' computer isn't waited for), or the old build is put back.
+   Health is judged on the window and the renderer only, so a crash after the renderer has loaded isn't rolled back;
+   a version that is rolled back is skipped until a newer one is out.
 
 ### The GitHub feed
 
@@ -99,7 +101,7 @@ Both sources are checked: the local release folder first, then the GitHub feed.
 
 ### The Bots' computer after an update
 
-Once the new build reports healthy (`markHealthy`), the app first runs the box re-provision check
+Once the new build is connected to the Bots' computer, the app first runs the box re-provision check
 (`reprovisionIfChanged`: the bundle's provision version against the box's). If that did nothing, it runs the host
 check (`redeployHostIfChanged`: the bundled `host/dist/build-id.txt` against the box's `/health` `hostBuild`). Both
 wait until no Bot is working, and they never force. Log: `~/Library/Logs/Synapse/update.log`. Tests:

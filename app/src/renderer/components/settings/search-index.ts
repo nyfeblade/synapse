@@ -23,7 +23,6 @@ export function settingEntries(): SettingEntry[] {
     e("general", STR.theme, ["appearance", "dark", "light", "mode"]),
     e("general", STRG.connectedAccounts, ["google", "gmail", "calendar", "drive"]),
     e("general", STR5.memory, ["remember", "recall"]),
-    e("general", STR5.useSecurityKeys, ["yubikey", "security key", "passkey"]),
     // Account
     e("account", STR_AUTH.keyLabel, ["api", "key", "anthropic", "sign in", "login"]),
     e("account", STR_COST.apiSpend, ["usage", "spend", "billing", "cost"]),
@@ -58,7 +57,6 @@ export function settingEntries(): SettingEntry[] {
     e("schedules", STRS.quietHours, ["do not disturb", "night"]),
     // System
     e("system", STR5.automaticUpdates, ["update", "version", "upgrade"]),
-    e("system", STR5.updateTrack, ["beta", "channel", "track"]),
     e("system", STRO.autoBackup, ["backup", "restore", "recovery"]),
     e("system", STRO.keepLast, ["backups", "archives"]),
     e("system", STRO.diagnostics, ["logs", "crash", "report", "problems"]),

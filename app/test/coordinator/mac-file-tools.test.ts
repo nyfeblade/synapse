@@ -42,6 +42,15 @@ describe("edit-file (exact-string replace, like Claude Code's Edit)", () => {
     await run("edit-file", { path: "code.ts", oldString: "x", newString: "y", replaceAll: true });
     expect(fs.readFileSync(f, "utf8")).toBe("y\ny\n");
   });
+
+  it("writes the new text literally: $&, $1, $$, $` and $' are not replace patterns", async () => {
+    fs.mkdirSync(path.join(home, "proj"), { recursive: true });
+    const f = path.join(home, "proj", "price.sh");
+    const next = "echo \"$$ $& $1 $` $'\" # cost: $5";
+    fs.writeFileSync(f, "before\nOLD\nafter\n");
+    await run("edit-file", { path: "price.sh", oldString: "OLD", newString: next });
+    expect(fs.readFileSync(f, "utf8")).toBe(`before\n${next}\nafter\n`);
+  });
 });
 
 describe("glob and grep", () => {

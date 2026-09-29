@@ -38,7 +38,7 @@ const IMPLEMENTED: Record<CommandName, true> = {
   setLocalComputer: true, registerLocalComputer: true, localExecHeartbeat: true, localExecOutput: true, localExecDone: true,
   localExecUpload: true, readLocalFile: true, resolveLocalToolPermission: true, getNetworkStats: true, generateAgentAvatar: true,
   setAgentAvatarBytes: true, getAgentAvatar: true, clearAgentAvatar: true, setAgentVoice: true, noteVoiceCall: true, startCall: true, addToCall: true, removeFromCall: true, endCall: true, getOnboarding: true,
-  completeOnboarding: true, listCodingAgents: true, setMemoryMode: true, setHardwareSecurityKeys: true,
+  completeOnboarding: true, listCodingAgents: true, setMemoryMode: true,
   setAgentFollowups: true, setAgentEngineeringMode: true, setAgentPermMode: true, setAgentNoLimits: true, setAgentSaveUsage: true, setAgentComputerPerception: true, getPhase5Settings: true,
   // Built-in Google connector:
   getGoogleStatus: true, setGoogleClient: true, startGoogleAuth: true, disconnectGoogle: true, setAgentGoogle: true,

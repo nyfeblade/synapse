@@ -77,7 +77,7 @@ describe("coding agent git runs as box with a minimal env (C2)", () => {
       await prepareWorktree({ git: async (args) => { calls.push(args); return ""; }, workspace: ws, source: "p5demo", branch: "bots/x", agentId: "coding-9" });
       const ws2 = fs.mkdtempSync(path.join(os.tmpdir(), "c2-perm2-"));
       await prepareWorktree({ git: async () => "", workspace: ws2, source: "owner/repo", branch: "bots/y", agentId: "coding-10" });
-      expect(calls.at(-1)).toEqual(["worktree", "add", "-b", "bots/x", path.join(ws, "repos", "p5demo.worktrees", "coding-9")]);
+      expect(calls.at(-1)).toEqual(["worktree", "add", "--no-track", "-b", "bots/x", path.join(ws, "repos", "p5demo.worktrees", "coding-9"), "HEAD"]);
       for (const d of [path.join(ws2, "repos"), path.join(ws, "repos", "p5demo.worktrees"), path.join(ws2, "repos", "repo.worktrees")]) {
         if (fs.existsSync(d)) expect((fs.statSync(d).mode & 0o070).toString(8), d).toBe("70");
       }

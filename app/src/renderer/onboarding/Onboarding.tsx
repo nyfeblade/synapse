@@ -4,15 +4,12 @@ import { useAsync } from "../async-resource";
 import { call, callQuiet } from "../bridge";
 import { Async } from "../components/Async";
 import { ShapeAvatar } from "../components/ShapeAvatar";
-import { nativeCall } from "../native";
 import { AccountPanel } from "../components/settings/AccountSection";
 import { ONBOARDING_TOOLS } from "./tools";
 import { noteIfSlow, SIGN_IN_TIMEOUT_MS } from "../within-time";
 import mark from "../assets/synapse-mark.png";
 
 type Step = "splash" | "setup" | "tour" | "tools" | "new-bot";
-/** ONB-01: the clone's own terms/readme. Change this one constant when the repository has a public URL. */
-export const TERMS_URL = "https://github.com/";
 
 export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN_TIMEOUT_MS }: {
   onDone(botId: string): void; initialStep?: Step;
@@ -80,7 +77,6 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
       <button type="button" className="pill-light" disabled={busy}
         onClick={() => void once(async () => { const o = await noteIfSlow(call("getOnboarding", {}), timeoutMs, () => setError(STR.hostTimeout)); setError(null); setStep(o.tokenConfigured || tokenOk ? "tour" : "setup"); })}>{STR5.signIn}</button>
       {error && <span className="error" role="alert">{error}</span>}
-      <p className="onb-foot">{STR5.termsFooterBefore}<a href="#" onClick={(e) => { e.preventDefault(); void nativeCall("openExternal", { url: TERMS_URL }); }}>{STR5.termsLink}</a>.</p>
     </main>
   );
   if (step === "setup") return (

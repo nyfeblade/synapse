@@ -178,13 +178,17 @@ export class UpdateService {
     bundleVersion?: (app: string) => string | null;
     /** The zip download's size cap (Content-Length and the streamed body); default DEFAULT_MAX_DOWNLOAD_BYTES. */
     maxDownloadBytes?: number;
+    /** A version the swap script rolled back (skippedVersion): never offered or downloaded again until a newer one is out. */
+    skipped?(): string | null;
   }) {
     this.st = { version: o.current, track: "stable", auto: !!o.auto, feed: o.feed(), status: "idle", latest: null, error: null };
   }
 
   state(): UpdateState { return { ...this.st, feed: this.o.feed() }; }
   /** The swap script rolled a new build back (it never reported healthy): say so on the old build. */
-  noteRolledBack(): UpdateState { return this.set({ status: "error", error: "The last update didn't start correctly within a minute, so Synapse went back to this version." }); }
+  noteRolledBack(version?: string | null): UpdateState { return this.set({ status: "error", latest: version ?? this.st.latest, error: rolledBackMessage(version ?? null) }); }
+  /** The rolled-back version, when `v` is it: it stays off offer (with the message on screen) until a newer one is out. */
+  private isSkipped(v: string): boolean { const s = this.o.skipped?.(); return !!s && s === v; }
   setAuto(on: boolean): UpdateState { return this.set({ auto: on }); }
   /** After a network error or rate limit: how long to wait before checking again (null: nothing to retry). */
   retryAfterMs(): number | null { return this.retryMs; }
@@ -192,6 +196,9 @@ export class UpdateService {
   /** A transient failure: back to a quiet state (no error line), and remember when to retry. */
   private quiet(e: TransientError): UpdateState {
     this.retryMs = e.retryMs;
+    // A rollback note stays on screen through a network hiccup.
+    const skipped = this.o.skipped?.();
+    if (skipped && this.st.error === rolledBackMessage(skipped)) return this.state();
     return this.set({ status: "idle", error: null });
   }
 
@@ -236,6 +243,10 @@ export class UpdateService {
     try {
       const l = this.readLocal();
       if (l) {
+        if (newer(l.version, this.o.current) && this.isSkipped(l.version)) {
+          this.assets = null;
+          return this.set({ status: "error", latest: l.version, error: rolledBackMessage(l.version) });
+        }
         if (newer(l.version, this.o.current)) {
           this.local = l; this.assets = null;
           if (!this.publicKey()) return this.set({ status: "not-configured", latest: l.version, error: NOT_CONFIGURED });
@@ -272,6 +283,7 @@ export class UpdateService {
         .sort((a, b) => compareSemver(b.v, a.v))[0];
       if (!best || !newer(best.v, this.o.current)) { this.assets = null; return this.set({ status: "none", latest: best?.v ?? null, error: null }); }
       const v = best.v;
+      if (this.isSkipped(v)) { this.assets = null; return this.set({ status: "error", latest: v, error: rolledBackMessage(v) }); }
       // By exact name only: a look-alike (another arch, the DMG, an old "Bots-" name) is never downloaded.
       const name = releaseZipName(v);
       const zip = best.assets.find((a) => a.name === name);
@@ -304,6 +316,7 @@ export class UpdateService {
     const assets = this.assets ? { ...this.assets } : null;
     const version = this.st.latest;
     if (!assets || !version) return this.state();
+    if (this.isSkipped(version)) return this.set({ status: "error", error: rolledBackMessage(version) });
     // Final secfix item 11: never a downgrade (or a reinstall of the running version).
     if (!newer(version, this.o.current)) return this.set({ status: "error", error: "That release isn't newer than this version, so it wasn't installed." });
     this.set({ status: "downloading" });
@@ -362,6 +375,7 @@ export class UpdateService {
     const key = this.publicKey();
     if (!key) return this.set({ status: "not-configured", error: NOT_CONFIGURED });
     if (!newer(l.version, this.o.current)) return this.set({ status: "error", error: "That release isn't newer than this version, so it wasn't installed." });
+    if (this.isSkipped(l.version)) return this.set({ status: "error", error: rolledBackMessage(l.version) });
     this.set({ status: "downloading" });
     this.staged = null;
     // The release folder is user-writable: copy the zip into the 0700 stage dir FIRST, then hash, verify and
@@ -399,14 +413,16 @@ export class UpdateService {
 
   /** There is no paid Developer ID, so the app replaces its own bundle after quitting.
    *  I8: the script is fixed text; everything comes in as argv, never interpolated:
-   *  $1 pid, $2 app, $3 staged, $4 health marker, $5 rollback note, $6 health timeout (s).
+   *  $1 pid, $2 app, $3 staged, $4 health marker, $5 rollback note, $6 health timeout (s), $7 the version being installed
+   *  (written into the rollback note, so the old build can skip it).
    *  The new bundle is copied next to the old one first, then two renames swap them, so there is
-   *  never a moment without an app. The new build writes $4 once it is up and connected
-   *  (markHealthy); if it doesn't within $6 seconds it is stopped and the old build goes back. */
+   *  never a moment without an app. The new build writes $4 once its window is up and its
+   *  renderer loaded (launchHealth → markHealthy); if it doesn't within $6 seconds it is stopped and the old build goes back. */
   swapScript(): string {
     return [
       "#!/bin/sh",
-      'pid="$1"; app="$2"; staged="$3"; marker="$4"; rolled="$5"; wait_s="${6:-60}"',
+      'pid="$1"; app="$2"; staged="$3"; marker="$4"; rolled="$5"; wait_s="${6:-60}"; ver="${7:-}"',
+      'case "$ver" in *[!0-9A-Za-z.+-]*) ver="";; esac',
       'case "$pid" in ""|*[!0-9]*) exit 2;; esac',
       'case "$wait_s" in ""|*[!0-9]*) exit 2;; esac',
       '[ -n "$app" ] && [ -n "$staged" ] && [ -n "$marker" ] && [ -n "$rolled" ] || exit 2',
@@ -423,7 +439,7 @@ export class UpdateService {
       'if [ -f "$marker" ]; then rm -rf "$app.old"; exit 0; fi',
       'pkill -TERM -f "$app/Contents/MacOS/"; sleep 3; pkill -KILL -f "$app/Contents/MacOS/"',
       'rm -rf "$app.failed"; mv "$app" "$app.failed" && mv "$app.old" "$app" && rm -rf "$app.failed"',
-      'printf \'{"rolledBackAt":%s}\\n\' "$(date +%s)" > "$rolled"',
+      'printf \'{"rolledBackAt":%s,"version":"%s"}\\n\' "$(date +%s)" "$ver" > "$rolled"',
       'open "$app"',
       "exit 3",
     ].join("\n");
@@ -436,7 +452,7 @@ export class UpdateService {
 
   swapArgs(pid: number, waitS = 60): string[] {
     const m = this.markers();
-    return [String(Math.trunc(pid)), this.o.appPath, this.staged ?? "", m.marker, m.rolled, String(Math.trunc(waitS))];
+    return [String(Math.trunc(pid)), this.o.appPath, this.staged ?? "", m.marker, m.rolled, String(Math.trunc(waitS)), this.st.latest ?? ""];
   }
 
   restart(pid: number): void {
@@ -478,18 +494,67 @@ function run(cmd: string, args: string[]): Promise<void> {
 export const updateMarkerDir = (userData: string) => path.join(userData, "updates");
 
 /**
- * Called by the new build once its window is up and its host answered /health: the swap script is
+ * Called by the new build once its window is up and its renderer has loaded (launchHealth): the swap script is
  * waiting for this file and rolls back without it. Also returns (and clears) a rollback note the
  * swap script left, so the old build can say the update didn't take.
  */
-export function markHealthy(userData: string, version: string): { rolledBack: boolean } {
+export function markHealthy(userData: string, version: string): { rolledBack: boolean; version: string | null } {
   const dir = updateMarkerDir(userData);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(dir, `healthy-${version}`), `${Date.now()}\n`, { mode: 0o600 });
   const rolled = path.join(dir, "rolled-back.json");
   const rolledBack = fs.existsSync(rolled);
+  const failed = rolledBack ? rolledBackVersion(rolled) : null;
+  // The failed version stays skipped after the note is cleared (skippedVersion), until a newer one is out.
+  if (failed) fs.writeFileSync(path.join(dir, "skip-version.json"), JSON.stringify({ version: failed }), { mode: 0o600 });
   fs.rmSync(rolled, { force: true });
-  return { rolledBack };
+  return { rolledBack, version: failed };
+}
+
+const VERSION_RE = /^[0-9A-Za-z.+-]{1,64}$/;
+function rolledBackVersion(file: string): string | null {
+  try { const v = (JSON.parse(fs.readFileSync(file, "utf8")) as { version?: unknown }).version; return typeof v === "string" && VERSION_RE.test(v) ? v : null; } catch { return null; }
+}
+/** The version the swap script last rolled back (a pending note, or one markHealthy remembered); null for none. */
+export function skippedVersion(userData: string): string | null {
+  const dir = updateMarkerDir(userData);
+  return rolledBackVersion(path.join(dir, "rolled-back.json")) ?? rolledBackVersion(path.join(dir, "skip-version.json"));
+}
+/** Stays on screen while the rolled-back version is the newest there is. */
+export function rolledBackMessage(v: string | null): string {
+  return v
+    ? `Synapse ${v} didn't start correctly within a minute, so Synapse went back to this version. It won't be installed again; a newer version will be.`
+    : "The last update didn't start correctly within a minute, so Synapse went back to this version.";
+}
+
+/**
+ * One background check (launch, every 6 hours, and a retry after a rate limit). It always checks, so an update
+ * is always shown; the Automatic Updates switch decides only whether it's downloaded and made ready by itself.
+ */
+export async function backgroundCheck(svc: Pick<UpdateService, "check" | "download">, auto: boolean): Promise<UpdateState> {
+  const s = await svc.check();
+  return s.status === "available" && auto ? svc.download() : s;
+}
+
+/**
+ * When a freshly swapped-in build counts as healthy: its window is shown AND its renderer finished loading, in
+ * either order, once per launch. Not the box: a slow Bots' computer used to get a good update rolled back
+ * (code audit 2026-09-29 §7.2). A rollback the swap script left is reported to onRolledBack listeners.
+ */
+export function launchHealth(mark: () => { rolledBack: boolean; version?: string | null }) {
+  let shown = false, loaded = false, done = false, rolled = false, failed: string | null = null;
+  const waiting: ((version: string | null) => void)[] = [];
+  const maybe = () => {
+    if (done || !shown || !loaded) return;
+    done = true;
+    try { const m = mark(); rolled = m.rolledBack; failed = m.version ?? null; } catch (e) { console.error(`[updates] couldn't mark this build healthy: ${(e as Error).message}`); }
+    if (rolled) for (const f of waiting.splice(0)) f(failed);
+  };
+  return {
+    windowShown() { shown = true; maybe(); },
+    rendererLoaded() { loaded = true; maybe(); },
+    onRolledBack(cb: (version: string | null) => void) { if (rolled) cb(failed); else if (!done) waiting.push(cb); },
+  };
 }
 
 export const defaultReleaseDir = () => path.join(os.homedir(), "Library", "Application Support", APP_DATA_NAME, "releases");
@@ -498,7 +563,7 @@ export function registerUpdater(o: { app: Electron.App; feed(): string | null; f
   const svc = new UpdateService({
     current: o.app.getVersion(), feed: o.feed, folder: o.folder, packaged: o.app.isPackaged, auto: o.auto(), token: o.token,
     appPath: path.resolve(o.app.getPath("exe"), "../../.."), stageDir: fs.mkdtempSync(path.join(os.tmpdir(), "synapse-update-")), emit: (s) => emit("updates", s),
-    markerDir: updateMarkerDir(o.app.getPath("userData")),
+    markerDir: updateMarkerDir(o.app.getPath("userData")), skipped: () => skippedVersion(o.app.getPath("userData")),
   });
   reg("updates.folder", () => ({ folder: o.folder?.() ?? null, defaultFolder: defaultReleaseDir() }));
   reg("updates.chooseFolder", async () => { const d = await o.chooseFolder?.(); if (d) o.setFolder?.(d); return { folder: o.folder?.() ?? null, defaultFolder: defaultReleaseDir() }; });
@@ -520,15 +585,17 @@ export function registerUpdater(o: { app: Electron.App; feed(): string | null; f
   reg("updates.restart", () => { svc.restart(process.pid); setTimeout(() => o.app.quit(), 200); return svc.state(); });
   // A network error or rate limit is quiet (no error line): check again once GitHub says it may, and
   // download only when auto-update is on (a manual check that hit a limit just checks again).
+  reg("updates.download", async () => svc.download());
   let retry: ReturnType<typeof setTimeout> | null = null;
   const retryLater = () => {
     const ms = svc.retryAfterMs();
     if (ms === null || retry) return;
-    retry = setTimeout(() => { retry = null; void (async () => { const s = await svc.check(); if (s.status === "available" && o.auto()) await svc.download(); retryLater(); })(); }, ms);
+    retry = setTimeout(() => { retry = null; void (async () => { await backgroundCheck(svc, o.auto()); retryLater(); })(); }, ms);
     retry.unref?.();
   };
   reg("updates.check", async () => { const s = await svc.check(); const r = s.status === "available" ? await svc.download() : s; retryLater(); return r; });
-  const tick = async () => { if (o.auto()) { const s = await svc.check(); if (s.status === "available") await svc.download(); retryLater(); } };
+  // Always checks (code audit 2026-09-29 §7.1): the switch only decides whether the update is also downloaded.
+  const tick = async () => { await backgroundCheck(svc, o.auto()); retryLater(); };
   setInterval(() => void tick(), 6 * 3600_000).unref();
   void tick();
   return svc;

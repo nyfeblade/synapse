@@ -7,7 +7,7 @@ import { GatewayError } from "../gateway/errors";
 import type { ShellSpawner } from "../background/shell-spawner";
 import { createTerminalFile, envFileText, parseTerminal, terminalDirFor, terminalFileFor } from "../background/shells";
 import { botCodeDir, botOsUser } from "../walls/bot-uid";
-import { cloneUrl, GIT_SAFE_FLAGS, repoName } from "./coding-agents";
+import { cloneUrl, GIT_SAFE_FLAGS, repoName, staleBaseNote } from "./coding-agents";
 
 const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
@@ -29,11 +29,12 @@ export function homeWorktreeScript(o: { codeDir: string; source: string; names: 
     `[ -d ${q(o.codeDir)} ] || mkdir -m 700 ${q(o.codeDir)}`,
     `cd -P -- ${q(o.codeDir)}`,
     `url=${q(cloneUrl(o.source))}`,
-    'pick=""',
+    'pick=""; reused=0',
     `for n in ${o.names.map(q).join(" ")}; do`,
     '  if [ -e "$n" ] || [ -L "$n" ]; then',
     `    if [ ! -L "$n" ] && [ -d "$n/.git" ] && [ ! -L "$n/.git" ] && [ "$(${g} -C "$n" config --get remote.origin.url 2>/dev/null || true)" = "$url" ]; then`,
-    `      ${g} -C "$n" fetch --all --prune || true; pick="$n"; break`,
+    // Code audit 2026-09-29 §2.1: a failed fetch stops here instead of branching from stale code.
+    '      pick="$n"; reused=1; break',
     "    fi",
     "    continue",
     "  fi",
@@ -41,8 +42,22 @@ export function homeWorktreeScript(o: { codeDir: string; source: string; names: 
     "done",
     '[ -n "$pick" ] || { echo "no free folder in ~/code for this repo" >&2; exit 3; }',
     'mkdir -p "$pick.worktrees"',
+    // origin only (never --all: one dead remote failed every launch). Offline, the last fetch is used, and said.
+    'fetched=1; has_origin=0',
+    `if ${g} -C "$pick" remote | grep -qx origin; then has_origin=1; fi`,
+    `if [ "$reused" = 1 ] && [ "$has_origin" = 1 ]; then ${g} -C "$pick" fetch --prune origin >/dev/null 2>&1 || fetched=0; fi`,
+    // The base (same rules as coding-agents.ts freshBase): origin's default branch, read with ls-remote so the clone's
+    // own origin/HEAD is never rewritten; the local default branch when it is ahead (unpushed commits); else HEAD.
+    'base=HEAD; def=""',
+    `if [ "$has_origin" = 1 ] && [ "$fetched" = 1 ]; then def="$(${g} -C "$pick" ls-remote --symref origin HEAD 2>/dev/null | awk '$1 == "ref:" && $3 == "HEAD" { sub("^refs/heads/", "", $2); print $2; exit }')"; fi`,
+    `if [ "$has_origin" = 1 ] && [ -z "$def" ]; then def="$(${g} -C "$pick" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null | sed 's|^refs/remotes/origin/||')"; fi`,
+    `if [ -n "$def" ] && ${g} -C "$pick" rev-parse --verify --quiet "refs/remotes/origin/$def^{commit}" >/dev/null; then`,
+    '  base="refs/remotes/origin/$def"',
+    `  if ${g} -C "$pick" rev-parse --verify --quiet "refs/heads/$def^{commit}" >/dev/null && [ "$(${g} -C "$pick" rev-parse "refs/heads/$def")" != "$(${g} -C "$pick" rev-parse "$base")" ] && ${g} -C "$pick" merge-base --is-ancestor "$base" "refs/heads/$def"; then base="refs/heads/$def"; fi`,
+    'fi',
+    `if [ "$fetched" = 0 ]; then echo "SYNAPSE_NOTE=$(${g} -C "$pick" log -1 --format='%h, committed %cr' "$base")"; fi`,
     // The worktree path is absolute: `git -C <repo>` reads a relative one from inside the clone.
-    `${g} -C "$pick" worktree add -b ${q(o.branch)} ${q(o.codeDir)}/"$pick.worktrees"/${q(o.agentId)}`,
+    `${g} -C "$pick" worktree add --no-track -b ${q(o.branch)} ${q(o.codeDir)}/"$pick.worktrees"/${q(o.agentId)} "$base"`,
     'echo "SYNAPSE_REPO_DIR=$pick"',
     "",
   ].join("\n");
@@ -65,7 +80,7 @@ export function repoDirNames(source: string): string[] {
  * caller keeps the shared /workspace/repos, where every Bot is uid box anyway).
  */
 export function homeWorktreePrep(d: { cfg: HostConfig; run: RunAsBot; timeoutMs?: number }) {
-  return async (botId: string, a: { source: string; branch: string; agentId: string }): Promise<{ repoDir: string; worktree: string } | null> => {
+  return async (botId: string, a: { source: string; branch: string; agentId: string }): Promise<{ repoDir: string; worktree: string; note: string | null } | null> => {
     if (!botOsUser(d.cfg, botId)) return null;
     const codeDir = botCodeDir(d.cfg, botId);
     const names = repoDirNames(a.source);
@@ -73,7 +88,8 @@ export function homeWorktreePrep(d: { cfg: HostConfig; run: RunAsBot; timeoutMs?
     if (r.code !== 0) throw new GatewayError("GIT_FAILED", `Couldn't set up the repo in ~/code: ${r.output.trim().split("\n").slice(-3).join(" ").slice(0, 300)}`);
     const picked = /(?:^|\n)SYNAPSE_REPO_DIR=([^\n]*)\s*$/.exec(r.output)?.[1];
     if (!picked || !names.includes(picked)) throw new GatewayError("GIT_FAILED", "Couldn't set up the repo in ~/code.");
-    return { repoDir: path.posix.join(codeDir, picked), worktree: path.posix.join(codeDir, `${picked}.worktrees`, a.agentId) };
+    const stale = /(?:^|\n)SYNAPSE_NOTE=([^\n]*)/.exec(r.output)?.[1]?.trim();
+    return { repoDir: path.posix.join(codeDir, picked), worktree: path.posix.join(codeDir, `${picked}.worktrees`, a.agentId), note: stale ? staleBaseNote(stale) : null };
   };
 }
 

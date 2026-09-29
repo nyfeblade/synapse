@@ -65,7 +65,6 @@ const NOT_A_UI_WRITER: Record<string, string> = {
   listSnapshots: "main snapshot-sink lists them for Update/Reset; no Settings snapshot browser.",
   readAttachmentChunk: "file preview / download path in main, not a renderer button.",
   readLocalFile: "local-exec daemon protocol, not a renderer control.",
-  setHardwareSecurityKeys: "the switch is disabled and labelled Coming later — WebAuthn proxy is out of v1, so this is not a silent no-op.",
   uninstallPlugin: "Manage plugins Remove calls removeMcpServer, which is the installed-row action.",
   openComputerApp: "the terminal, files and browser live on the box dock after Take over — not as Synapse title-bar controls.",
   setAgentComputerPerception: "Live perception is shelved (decisions.md 2026-09-21): the Screenshots / Live row was removed and every Bot runs Screenshots; the bench still sets it.",

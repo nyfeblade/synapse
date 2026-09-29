@@ -127,7 +127,7 @@
 
       <h2 id="settings">Settings at a glance</h2>
       <table>
-        <tr><th>General</th><td>Appearance (theme, launch animation and sound), memory, security key.</td></tr>
+        <tr><th>General</th><td>Appearance (theme, launch animation and sound) and memory.</td></tr>
         <tr><th>Account</th><td>Your API key, usage and budgets.</td></tr>
         <tr><th>Voice</th><td>Voices and call sounds.</td></tr>
         <tr><th>Computer</th><td>The Bots' computer and what Bots may do on your Mac.</td></tr>
@@ -136,7 +136,7 @@
       </table>
 
       <h2 id="updates">Updates</h2>
-      <p>Synapse checks for new versions itself. You can also check in <b>Settings → System → Updates</b>. Before installing an update, Synapse verifies it was signed with the Synapse release key and signed by the same developer as the app you have. If either check fails, it refuses the update.</p>
+      <p>Synapse checks for new versions itself. You can also check in <b>Settings → System → Updates</b>. With <b>Automatic Updates</b> on (the default), it downloads a new version and asks you to restart. With it off, the new version waits in <b>Settings → System → Updates</b> until you download it. Before installing an update, Synapse verifies it was signed with the Synapse release key and signed by the same developer as the app you have. If either check fails, it refuses the update.</p>
 
       <h2 id="backups">Backups</h2>
       <p><b>Settings → System → Backups</b> saves your Bots, their memory and settings, and restores them later.</p>
@@ -158,7 +158,7 @@
       <h3>My API key doesn't work</h3>
       <p>Use <b>Check</b> in <b>Settings → Account</b>. It tells you whether the key is wrong, the account is out of credit, or you've hit a rate limit. Make sure the key starts with <span class="path">sk-ant-</span> and has credit in the Anthropic Console.</p>
       <h3>Synapse in two macOS accounts on the same Mac</h3>
-      <p>Not supported yet: two copies running at once clash. Fixed in the next version; until then, run Synapse in one account at a time.</p>
+      <p>Supported from version 0.1.1. Each account has its own Bots' computer and its own connection to it. If Synapse ever reaches another account's Bots' computer instead, it tells you.</p>
       <h3>Something else</h3>
       <p><a href="https://github.com/nyfeblade/synapse/issues">Open an issue</a> with what you did and what happened. <b>Settings → System → Diagnostics</b> shows recent errors, and the logs are in <span class="path">~/Library/Logs/Synapse</span>.</p>
 

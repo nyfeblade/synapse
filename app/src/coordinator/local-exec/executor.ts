@@ -489,7 +489,7 @@ export class LocalExecutor {
         const count = old === "" ? 0 : text.split(old).length - 1;
         if (count === 0) throw new Error("The exact text to replace was not found in the file.");
         if (count > 1 && !req.replaceAll) throw new Error(`The text to replace appears ${count} times; pass replace_all or make it unique.`);
-        const out = req.replaceAll ? text.split(old).join(next) : text.replace(old, next);
+        const out = req.replaceAll ? text.split(old).join(next) : text.replace(old, () => next); // a function: `$&` in the new text stays literal
         if (Buffer.byteLength(out) > max) throw new Error(STR5.localTooLarge);
         fs.writeFileSync(p, out);
         return { exitCode: 0, result: `Edited ${p} (${count} replacement${count === 1 ? "" : "s"}).` };

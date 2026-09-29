@@ -16,10 +16,9 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Settings → Updates (SET-12)", () => {
-  it("shows track, automatic updates (off), version and Check for Updates", async () => {
+  it("shows automatic updates (off), version and Check for Updates", async () => {
     render(<UpdatesSection />);
     expect(await screen.findByText("Version 0.2.0")).toBeTruthy();
-    expect((screen.getByRole("combobox", { name: "Update Track" }) as HTMLSelectElement).options[0]!.textContent).toBe("Stable");
     expect(screen.getByRole("switch", { name: "Automatic Updates" }).getAttribute("aria-checked")).toBe("false");
     fireEvent.click(screen.getByRole("button", { name: "Check for Updates" }));
     await vi.waitFor(() => expect(invoked).toContain("updates.check"));
@@ -31,6 +30,34 @@ describe("Settings → Updates (SET-12)", () => {
     expect(await screen.findByText("Synapse 0.3.0 is ready. Restart to apply.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Restart to Update" }));
     await vi.waitFor(() => expect(invoked).toContain("updates.restart"));
+  });
+
+  // Code audit 2026-09-29 §7.1: with automatic updates off, an available update is shown and offered, not
+  // stuck on "Downloading…".
+  it("shows an available update and downloads it on request", async () => {
+    state = { ...state, status: "available", latest: "0.3.0" };
+    render(<UpdatesSection />);
+    expect(await screen.findByText("Synapse 0.3.0 is available.")).toBeTruthy();
+    expect(screen.queryByText("Downloading…")).toBeNull();
+    state = { ...state, status: "ready", latest: "0.3.0" };
+    fireEvent.click(screen.getByRole("button", { name: "Download Update" }));
+    await vi.waitFor(() => expect(invoked).toContain("updates.download"));
+    // The button's answer is shown: the update is ready to install.
+    expect(await screen.findByRole("button", { name: "Restart to Update" })).toBeTruthy();
+    expect(invoked.filter((n) => n === "updates.check")).toHaveLength(0);
+  });
+
+  it("a rolled-back version shows its message and no Download button", async () => {
+    state = { ...state, status: "error", latest: "0.3.0", error: "Synapse 0.3.0 didn't start correctly within a minute, so Synapse went back to this version. It won't be installed again; a newer version will be." };
+    render(<UpdatesSection />);
+    expect(await screen.findByText(/0\.3\.0 didn't start correctly/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Download Update" })).toBeNull();
+  });
+
+  it("the account menu says so when an update is available, not only once it's downloaded", () => {
+    const labels = () => accountMenuItems().filter((i) => "label" in i).map((i) => i.label);
+    useUpdates.setState({ state: { version: "0.2.0", track: "stable", auto: false, feed: "alex/bots", status: "available", latest: "0.4.0", error: null } });
+    expect(labels()).toContain("New update available");
   });
 
   // Fix round 1, finding 2: the account-menu badge must reflect a background auto-check/download

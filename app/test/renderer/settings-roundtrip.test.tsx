@@ -80,7 +80,7 @@ const host: Record<string, (a: Record<string, unknown>) => unknown> = {
   setLocalBrowserAllowed: (a) => { if (a.allowed) saved.grants.add("browser"); else saved.grants.delete("browser"); return { allowed: saved.grants.has("browser") }; },
   getLocalMacAppAllowed: () => ({ allowed: saved.grants.has("mac-app") }),
   setLocalMacAppAllowed: (a) => { if (a.allowed) saved.grants.add("mac-app"); else saved.grants.delete("mac-app"); return { allowed: saved.grants.has("mac-app") }; },
-  getPhase5Settings: () => ({ memoryMode: saved.memoryMode, useHardwareSecurityKeys: false, hasSeenOnboarding: true, advancedEnabled: saved.settings.advancedEnabled }),
+  getPhase5Settings: () => ({ memoryMode: saved.memoryMode, hasSeenOnboarding: true, advancedEnabled: saved.settings.advancedEnabled }),
   setMemoryMode: (a) => { saved.memoryMode = a.mode as string; return host.getPhase5Settings!({}); },
   getStandup: () => ({ settings: saved.standup, latest: null }),
   setStandupSettings: (a) => { saved.standup = { ...saved.standup, ...a }; return host.getStandup!({}); },

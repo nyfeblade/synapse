@@ -22,7 +22,7 @@ export function createCodingAgentTool(d: { botId: string; slot(): TurnSlot | nul
             const agent = await d.agents.launch(d.botId, { repo: String(a.repo), task: String(a.task), title: a.title as string | undefined });
             const slot = d.slot();
             if (slot) d.cardIds.set(agent.id, { botId: d.botId, entryId: postCard({ bots: d.bots, now: d.now }, d.botId, slot, { kind: "coding-agent", agent }) });
-            return { text: `Launched coding agent ${agent.id} on ${agent.repo}, branch ${agent.branch}. You'll be woken when it finishes.` };
+            return { text: `Launched coding agent ${agent.id} on ${agent.repo}, branch ${agent.branch}.${agent.note ? ` ${agent.note}` : ""} You'll be woken when it finishes.` };
           }
           case "list": return { text: d.agents.list(d.botId).map((x) => `- ${x.id} "${x.title}" ${x.status} (${x.repo}, ${x.branch})`).join("\n") || "No coding agents." };
           case "get": { const x = d.agents.get(id); return own(x) ? { text: JSON.stringify(x, null, 2) } : err(`No coding agent ${id}.`); }

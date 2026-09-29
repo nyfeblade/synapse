@@ -5,6 +5,7 @@
  *
  * Rules kept here, not in the caller:
  *   - every value the Bot supplied is interpolated as JSON (JXA) or through `asStr` (AppleScript), never raw;
+ *   - a value that reaches a shell goes through `sq` (single quotes), never JSON: `$()` and backticks run inside double quotes;
  *   - every script's last expression is a JSON string, so one `osascript` run answers with one parseable line;
  *   - nothing polls: a script asks the app once and returns.
  */
@@ -37,6 +38,7 @@ function ISO(d){ try { return d ? new Date(d).toISOString() : null; } catch(e){ 
 function cut(s,n){ s = s == null ? "" : String(s); return s.length > n ? s.slice(0,n-1) + "\\u2026" : s; }
 function ok(o){ return JSON.stringify(o); }
 function first(a){ return a && a.length ? a[0] : null; }
+function sq(s){ return "'" + String(s).replace(/'/g, "'\\\\''") + "'"; }
 `.trim();
 
 const js = (app: string, body: string, timeoutMs = FAST): MacScript => ({ lang: "js", app, timeoutMs, source: `${PRE}\n(function(){\n${body}\n})()` });
@@ -299,13 +301,20 @@ export function buildScript(a: MacAppArgs, ctx: { home: string }): MacScript | n
         var moved = F.move(Path(src), { to: Path(dst) });
         return ok({ moved: src, to: dst, now: String(moved.url ? moved.url() : dst) });
       `);
-    case "finder.tag":
+    case "finder.tag": {
+      // No shell: the tag list is read and written through Foundation, so any name or path stays plain text.
+      // A newline would split a tag into name and colour, so it becomes a space. Existing tags are kept.
+      const tag = String(a.value ?? "").replace(/[\r\n]+/g, " ");
       return js("Finder", `
-        var app = Application.currentApplication(); app.includeStandardAdditions = true;
-        var p = ${j(expand(a.target ?? "", ctx.home))}, tag = ${j(a.value ?? "")};
-        app.doShellScript("/usr/bin/xattr -w com.apple.metadata:_kMDItemUserTags " + JSON.stringify("(" + JSON.stringify(tag) + ")") + " " + JSON.stringify(p));
-        return ok({ tagged: p, tag: tag });
+        ObjC.import("Foundation");
+        var p = ${j(expand(a.target ?? "", ctx.home))}, tag = ${j(tag)};
+        function tagsOf(path){ var r = Ref(); $.NSURL.fileURLWithPath(path).getResourceValueForKeyError(r, $.NSURLTagNamesKey, null); var v = r[0]; return v && !v.isNil() ? ObjC.deepUnwrap(v) || [] : []; }
+        var tags = tagsOf(p);
+        if (tags.indexOf(tag) < 0) tags.push(tag);
+        if (!$.NSURL.fileURLWithPath(p).setResourceValueForKeyError($(tags), $.NSURLTagNamesKey, null)) throw new Error("Couldn't tag " + p);
+        return ok({ tagged: p, tag: tag, tags: tags });
       `);
+    }
     case "tabs": {
       const browser = /chrome/i.test(a.app ?? "") ? "Google Chrome" : "Safari";
       const v = (a.value ?? "list").trim();
@@ -326,7 +335,7 @@ export function buildScript(a: MacAppArgs, ctx: { home: string }): MacScript | n
         var name = ${j(a.title ?? a.target ?? "")};
         if (!name) return ok({ shortcuts: app.doShellScript("/usr/bin/shortcuts list").split("\\r").slice(0, ${limit(40, 100)}) });
         var input = ${j(a.text ?? "")};
-        var cmd = "/usr/bin/shortcuts run " + JSON.stringify(name) + (input ? " <<< " + JSON.stringify(input) : "");
+        var cmd = "/usr/bin/shortcuts run -- " + sq(name) + (input ? " <<< " + sq(input) : "");
         return ok({ ran: name, output: cut(app.doShellScript(cmd), 2000) });
       `, SLOW);
 

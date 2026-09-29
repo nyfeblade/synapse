@@ -8,7 +8,6 @@ import { PrivateSkills } from "../../src/renderer/components/PrivateSkills";
 import { ThreadPanel } from "../../src/renderer/components/ThreadPanel";
 import { GeneralSection } from "../../src/renderer/components/settings/GeneralSection";
 import { MemoryBlock } from "../../src/renderer/components/settings/MemoryBlock";
-import { SecurityKeyBlock } from "../../src/renderer/components/settings/SecurityKeyBlock";
 import { MarketplaceModal } from "../../src/renderer/marketplace/MarketplaceModal";
 import { useMarketplace } from "../../src/renderer/marketplace/store";
 import { Onboarding } from "../../src/renderer/onboarding/Onboarding";
@@ -95,14 +94,6 @@ describe("Settings → General → Memory (MemoryBlock)", () => {
     installFakeBridge({ getPhase5Settings: { memoryMode: "standard" } });
     render(<MemoryBlock />);
     expect(await screen.findByLabelText("Memory")).toBeTruthy();
-  });
-});
-
-describe("Settings → General → Security key (SecurityKeyBlock)", () => {
-  it("a failed read shows the reason instead of making the whole block disappear", async () => {
-    bridgeFailing(["getPhase5Settings"]);
-    render(<SecurityKeyBlock />);
-    expect((await screen.findByRole("alert")).textContent).toContain(FAIL);
   });
 });
 

@@ -3,6 +3,17 @@
 Every version of Synapse. The website's Changelog page is built from this file.
 Newest first. A version headed `Unreleased` shows as "in progress".
 
+## 0.1.2 — 2026-09-29
+
+- **Updates are always checked.** Synapse looks for a new version by itself and shows it when there is one. The Automatic Updates switch now only decides whether it's downloaded for you; it's on unless you turned it off.
+- **Good updates stay installed.** A new version counts as working once its window opens, so a slow Bots' computer no longer makes Synapse go back to the old one.
+- **Coding agents start from the latest code.** They branch from the repo's current default branch, and say so if they can't fetch it instead of starting on old code.
+- **Moving a file to the Trash asks first**, like any other delete.
+- **Mac control handles unusual file names and inputs safely.** Adding a Finder tag keeps the file's other tags.
+- **Editing a file on your Mac keeps `$` signs as written.**
+- **No more settings that do nothing.** The security key switch, the Update Track menu and the placeholder Terms link are gone.
+- **The docs are up to date** on running Synapse in two macOS accounts and on how updates work.
+
 ## 0.1.1 — 2026-09-29
 
 - **Synapse in two macOS accounts on one Mac.** Each account gets its own connection to its own Bots' computer, and Synapse tells you clearly if it ever reaches another account's instead.

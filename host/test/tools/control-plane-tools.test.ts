@@ -187,7 +187,6 @@ describe("update_state settings and account_settings (TOOL-15, ORIG-17)", () => 
     expect(await h(s.me, s.slot, { target: "account_settings", action: "set", auto_review_enabled: false })).toEqual({ text: STR.userOnly("Auto-review"), isError: true });
     expect(await h(s.me, s.slot, { target: "account_settings", action: "set", allow_instructions: ["everything"] })).toEqual({ text: STR.userOnly("Auto-review"), isError: true });
     expect(await h(s.me, s.slot, { target: "account_settings", action: "set", local_execution: "always" })).toEqual({ text: STR.userOnly("Local execution"), isError: true });
-    expect(await h(s.me, s.slot, { target: "account_settings", action: "set", use_hardware_security_keys: true })).toEqual({ text: STR.userOnly("Security keys"), isError: true });
     expect(s.settings.get().autoReviewEnabled).toBe(true);
   });
 });

@@ -74,7 +74,8 @@ function StatusLine({ s }: { s: UpdateState }) {
   if (s.status === "none") return <span className="muted">{STR5.upToDate}</span>;
   if (s.status === "no-feed") return <span className="muted">{STR5.noUpdateSource}</span>;
   if (s.status === "checking") return <span className="muted">{STR5.checking}</span>;
-  if (s.status === "downloading" || s.status === "available") return <span className="muted">{STR5.downloading}</span>;
+  if (s.status === "available" && s.latest) return <span className="muted">{STR5.updateAvailable(s.latest)}</span>;
+  if (s.status === "downloading") return <span className="muted">{STR5.downloading}</span>;
   return null;
 }
 
@@ -103,15 +104,13 @@ export function UpdatesSection() {
       </>
     );
   }
-  const downloading = s.status === "downloading" || s.status === "available";
+  const downloading = s.status === "downloading";
   return (
     <>
       {/* UI polish pass (brief 2): two labelled groups of at most seven controls — the app itself, then
           where releases come from — instead of one "App" block holding both. */}
       <h3>{STR5.updates}</h3>
       <div className="settings-card">
-        <div className="settings-row"><label htmlFor="update-track" style={{ flexGrow: 1 }}>{STR5.updateTrack}</label>
-          <select id="update-track" className="dropdown" value="stable" onChange={() => {}}><option value="stable">{STR5.stable}</option></select></div>
         <div className="settings-row"><span style={{ flexGrow: 1 }}>{STR5.automaticUpdates}</span>
           <button type="button" role="switch" aria-checked={s.auto} aria-label={STR5.automaticUpdates} className={s.auto ? "switch on" : "switch"}
             // settings-persist: this save had no failure path at all — a refused write was a click that did nothing.
@@ -125,6 +124,8 @@ export function UpdatesSection() {
           </span>
           {s.status === "ready"
             ? <button type="button" className="btn-primary" onClick={() => void nativeCall("updates.restart")}>{STR5.restartToUpdate}</button>
+            : s.status === "available"
+            ? <button type="button" className="btn-primary" onClick={() => void nativeCall<UpdateState>("updates.download").then((v) => useUpdates.setState({ state: v }))}>{STR5.downloadUpdate}</button>
             : <button type="button" className="btn-outline small" disabled={s.status === "checking" || downloading} onClick={() => void nativeCall<UpdateState>("updates.check").then((v) => useUpdates.setState({ state: v }))}>{s.status === "checking" ? STR5.checking : downloading ? STR5.downloading : STR5.checkForUpdates}</button>}
         </div>
       </div>
@@ -155,5 +156,5 @@ registerSectionBlock("system", "setup", 5, SetupBlock);
 // Updates was never mounted (Fix round 1, finding 2 / UI-03).
 registerAccountItem("update", 10, () => {
   const st = useUpdates.getState().state;
-  return st?.status === "ready" && st.latest ? { label: STR5.newUpdate, onSelect: () => useUi.getState().openSettings("updates") } : null;
+  return (st?.status === "ready" || st?.status === "available") && st.latest ? { label: STR5.newUpdate, onSelect: () => useUi.getState().openSettings("updates") } : null;
 });

@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LocalToolCardView } from "@synapse/shared";
 import { LocalToolCard } from "../../src/renderer/components/cards/LocalToolCard";
 import { ComputerSection } from "../../src/renderer/components/settings/ComputerSection";
-import { SecurityKeyBlock } from "../../src/renderer/components/settings/SecurityKeyBlock";
 
 const calls: [string, unknown][] = [];
 const computer = { computerId: "mac", label: "Alex's MacBook", isCurrent: true, executionPolicy: "ask", localRoot: "/Users/alex" };
@@ -103,15 +102,3 @@ describe("Settings → Computer (Settings.dc.html)", () => {
   });
 });
 
-describe("Security Key (SET-07, D15-B)", () => {
-  // P5 review minor: a toggle that enforces nothing renders disabled, "Coming later".
-  it("renders disabled with Coming later and never saves a setting that does nothing", async () => {
-    render(<SecurityKeyBlock />);
-    const sw = await screen.findByRole("switch", { name: "Use hardware security keys" });
-    expect((sw as HTMLButtonElement).disabled).toBe(true);
-    expect(sw.getAttribute("aria-checked")).toBe("false");
-    fireEvent.click(sw);
-    expect(calls.some(([c]) => c === "setHardwareSecurityKeys")).toBe(false);
-    expect(await screen.findByText("Coming later")).toBeTruthy();
-  });
-});

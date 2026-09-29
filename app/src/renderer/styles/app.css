@@ -1012,7 +1012,7 @@ select.field-input {
 .usage-footer { margin-top: 12px; }
 .text-input.narrow { width: 110px; }
 
-/* ---- Task 17: LOC-04 local card, Settings → Computer, Security Key ---- */
+/* ---- Task 17: LOC-04 local card, Settings → Computer ---- */
 .local-card .card-command { display: block; padding: 8px 10px; border-radius: var(--radius-control); background: var(--fill-soft); font-size: var(--type-small); white-space: pre-wrap; word-break: break-all; }
 .card-outcome { font-size: var(--type-ui); color: var(--ink-muted); }
 
@@ -1174,8 +1174,6 @@ select.dropdown { flex-shrink: 1; min-width: 0; max-width: 100%; overflow: hidde
 .wordmark { font-size: 28px; font-weight: 600; }
 .tagline { font-size: 20px; line-height: 1.4; margin: 8px 0 18px; }
 .pill-light { height: 40px; padding: 0 22px; border-radius: 999px; border: none; background: var(--splash-ink); color: var(--splash-bg); font-size: 15px; }
-.onb-foot { position: absolute; bottom: 24px; font-size: var(--type-small); color: var(--splash-ink-muted); }
-.onb-foot a { color: inherit; }
 .onb-nav { display: flex; gap: 8px; align-items: center; }
 /* Back and Next were two button styles of different heights side by side; in the setup and tour
    screens every button in the row is the same size. */

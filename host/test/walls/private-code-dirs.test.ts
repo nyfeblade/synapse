@@ -142,7 +142,7 @@ describe("bug 231: a coding agent works in the Bot's own ~/code", () => {
     const s = homeWorktreeScript({ codeDir: "/home/bots/x/code", source: "https://example.com/a'b/r.git", names: ["r", "a'b-r"], branch: "bots/fix-1", agentId: "coding-1" });
     expect(s).toContain("url='https://example.com/a'\\''b/r.git'");
     expect(s).toContain("for n in 'r' 'a'\\''b-r'; do");
-    expect(s).toContain("worktree add -b 'bots/fix-1' '/home/bots/x/code'/\"$pick.worktrees\"/'coding-1'");
+    expect(s).toContain("worktree add --no-track -b 'bots/fix-1' '/home/bots/x/code'/\"$pick.worktrees\"/'coding-1' \"$base\"");
   });
 
   it("round 1, item 6: reuses ~/code/<name> only when its origin is the same URL, else takes the next name", async () => {

@@ -86,6 +86,28 @@ describe("the consequential classifier", () => {
     expect(macAppConsequence(A({ action: "finder.move", target: "~/Documents/archive" }))).toBe(null);
   });
 
+  it("a Shortcut is judged on the name the script runs (title, else target)", () => {
+    expect(macAppConsequence(A({ action: "shortcut", target: "Delete old photos" }))).toBe("destruction");
+    expect(macAppConsequence(A({ action: "shortcut", title: "Send invoice" }))).toBe("send");
+    expect(macAppConsequence(A({ action: "shortcut", target: "Morning" }))).toBe(null);
+    expect(macAppSummary(A({ action: "shortcut", target: "Delete old photos" }))).toContain("Delete old photos");
+  });
+
+  it("a move INTO any Trash folder is a delete (the destination is `value`, or `list`)", () => {
+    const into = (dst: string, key: "value" | "list" = "value") =>
+      macAppConsequence(A({ action: "finder.move", target: "~/Documents/Plan.pdf", [key]: dst }));
+    expect(into("~/.Trash")).toBe("destruction");
+    expect(into("/Users/alex/.Trash/")).toBe("destruction");
+    expect(into("Trash")).toBe("destruction");
+    expect(into("/Volumes/Backup/.Trashes/501")).toBe("destruction");
+    expect(into("~/Library/Mobile Documents/com~apple~CloudDocs/.Trash")).toBe("destruction");
+    expect(into("~/.Trash", "list")).toBe("destruction");
+    expect(into("~/.Trash ")).toBe("destruction");
+    expect(into("~/.Trash\n")).toBe("destruction");
+    expect(into("~/Documents/archive")).toBe(null);
+    expect(into("~/Documents/trashy-novels")).toBe(null);
+  });
+
   it("opening a credential store is a security action", () => {
     expect(macAppConsequence(A({ action: "open", app: "Keychain Access" }))).toBe("security");
     expect(macAppConsequence(A({ action: "open", app: "Passwords" }))).toBe("security");

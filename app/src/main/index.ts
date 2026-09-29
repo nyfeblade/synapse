@@ -55,7 +55,7 @@ import { guardNavigation, registerExternal } from "./native/external";
 import { allowDroppedPath, registerFiles } from "./native/files";
 import { fetchLogoDataUrl } from "./native/logo";
 import { installAppMenu } from "./native/menu";
-import { defaultReleaseDir, markHealthy, registerUpdater, validFeed } from "./native/updater";
+import { defaultReleaseDir, launchHealth, markHealthy, registerUpdater, validFeed } from "./native/updater";
 import { bundledHostBuild, redeployHostIfChanged } from "./native/host-redeploy";
 import { applyNativeTheme } from "./native-theme";
 import { registerBackups } from "./backup/wire";
@@ -302,7 +302,10 @@ async function start(): Promise<void> {
     titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 18 }, show: false,
     webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: false },
   });
-  win.once("ready-to-show", () => win.show());
+  // An update's swap script waits for this build to say it's healthy: window shown and renderer loaded, not
+  // the box (a slow box used to roll a good update back). Unpackaged and fuzz runs never mark.
+  const launch = launchHealth(() => (app.isPackaged && process.env.FUZZ !== "1" ? markHealthy(app.getPath("userData"), app.getVersion()) : { rolledBack: false }));
+  win.once("ready-to-show", () => { win.show(); launch.windowShown(); });
   // Settings → Diagnostics (local only). Installed first so every later failure is seen.
   let lastHostVersion: string | null = null;
   let gatewayToken: string | null = null;
@@ -398,7 +401,7 @@ async function start(): Promise<void> {
     coordinator.postMessage({ type: "renderer-port" }, [port1]);
     postToRenderer(win, "coordinator-port", null, [port2]);
   };
-  win.webContents.on("did-finish-load", () => { windowLoaded = true; wirePort(); });
+  win.webContents.on("did-finish-load", () => { windowLoaded = true; wirePort(); launch.rendererLoaded(); });
   // Start-up timing marks from the renderer (renderer/launch/trace.ts) go into main.log.
   win.webContents.on("console-message", (e) => { const m = (e as unknown as { message?: string }).message ?? ""; if (m.startsWith("[launch] ")) console.log(m); });
   win.once("ready-to-show", () => console.log("[launch] window shown (main)"));
@@ -743,7 +746,7 @@ async function start(): Promise<void> {
       setFeed: (f) => writeUpdateSource(app.getPath("userData"), { feed: f }),
       setToken: (t) => writeUpdateSource(app.getPath("userData"), { token: t }),
       hasToken: () => readUpdateSource(app.getPath("userData")).token !== null,
-      auto: () => readAppSettings(app.getPath("userData"), app.getAppPath(), appRuntime()).autoUpdate ?? false,
+      auto: () => readAppSettings(app.getPath("userData"), app.getAppPath(), appRuntime()).autoUpdate ?? true, // on unless the user turned it off; checking happens either way
       setAuto: (on) => writeAppSettings(app.getPath("userData"), { autoUpdate: on }),
       // Never plaintext AppSettings — the private repo's releases/latest and asset endpoints both 404
       // unauthenticated (Fix round 1, finding 1).
@@ -752,6 +755,7 @@ async function start(): Promise<void> {
     registerNative,
     emitNative,
   );
+  launch.onRolledBack((v) => updater.noteRolledBack(v));
 
   let handle: GatewayHandle | null = null;
   /** The last connect() reached the host (setup's "connect" step reads it). */
@@ -873,9 +877,8 @@ async function start(): Promise<void> {
     lock: boxLock,
   });
 
-  // Updates, once per launch after the first good connection: tell a waiting swap script this build
-  // is healthy (window up, host answering /health), then bring the box's host up to the build this
-  // app ships, once no Bot is working.
+  // Updates, once per launch after the first good connection: bring the box's host up to the build this
+  // app ships, once no Bot is working. (The swap script's health marker is written at window + renderer load.)
   // Diagnostics: a host whose previous run ended without close() crashed; its journal tail (cut
   // to time, level and message in the crash store) goes with the report.
   const checkHost = async () => {
@@ -896,7 +899,6 @@ async function start(): Promise<void> {
     if (!(await health())) return;
     afterUpdateDone = true;
     if (!app.isPackaged || process.env.FUZZ === "1") return;
-    if (markHealthy(app.getPath("userData"), app.getVersion()).rolledBack) updater.noteRolledBack();
     const boxDir = process.env.APP_BOX_DIR ?? defaultBoxDir(app.getAppPath(), appRuntime());
     const ops = new OrbBoxOps({ exec: execCommand, boxDir, machine: boxMachine(), health: async () => !!(await health()) });
     const updateLog = createRotatingLog({ dir: logsDir(), name: "update.log", maxBytes: 256 * 1024, keep: 2 });

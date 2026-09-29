@@ -34,7 +34,7 @@ export const SPEC_GATEWAY_COMMANDS: readonly string[] = [
   "setWeeklyBudget", "setBudget", "approveBudget", "clearTaskAlert", "dismissBudgetPrompt", "setMonthlyBudget", "recordMacUsage", "addMcpServer", "removeMcpServer", "renameMcpAccount", "setMcpInstructions", "restartMcpServers", "setMcpServerEnabled", "setMcpServerTrusted", "setMcpServerHeader", "setOAuthLoopbackPort",
   "addPluginMarketplace", "removePluginMarketplace", "draftTemplate", "setLocalComputer", "setLocalBrowserAllowed", "setLocalMacAppAllowed", "resetLocalPolicy", "restoreLocalBotModes", "dismissLocalPolicyReset", "registerLocalComputer",
   "localExecHeartbeat", "localExecOutput", "localExecDone", "localExecUpload", "clearAgentAvatar", "setAgentVoice", "noteVoiceCall", "startCall", "addToCall", "removeFromCall", "endCall", "getCallGreetings", "wrapUpCall", "voiceSpeculate", "voiceSpeculateCancel",
-  "completeOnboarding", "setMemoryMode", "setHardwareSecurityKeys", "setAgentFollowups", "setAgentEngineeringMode", "setAgentPermMode", "setAgentNoLimits", "setAgentSaveUsage", "setAgentComputerPerception",
+  "completeOnboarding", "setMemoryMode", "setAgentFollowups", "setAgentEngineeringMode", "setAgentPermMode", "setAgentNoLimits", "setAgentSaveUsage", "setAgentComputerPerception",
   // Settings → Account (the API key)
   "setApiKey", "clearApiKey", "testAuthConnection", "checkApiKey",
   "answerBotCall", "setBotCallPermission",
@@ -190,7 +190,6 @@ export const PARITY: Record<string, ParityEntry> = {
   answerBotCall: { userOnly: "answering a Bot's call" },
   setBotCallPermission: { userOnly: "which Bots may call the user" },
   setMemoryMode: { userOnly: "memory settings" },
-  setHardwareSecurityKeys: { userOnly: "security keys" },
   setAgentFollowups: { userOnly: "follow-up settings" },
   setAgentEngineeringMode: { userOnly: "engineering mode" },
   setAgentPermMode: { userOnly: "permission mode" },

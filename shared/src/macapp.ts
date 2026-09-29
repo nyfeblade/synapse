@@ -92,7 +92,11 @@ export type MacAppConsequence = "send" | "destruction" | "money" | "security" | 
 
 /** Apps that hold credentials: opening or driving one is a security action, whatever the mode. */
 const CREDENTIAL_APPS = /^(keychain access|passwords|1password|bitwarden|dashlane|lastpass|authy|secretive)\b/i;
-const TRASH = /(^|\/)\.?trash\b/i;
+/** ~/.Trash, a volume's .Trashes, iCloud's .Trash, or just "Trash": any path segment that is a Trash folder. */
+const TRASH = /(^|\/)\.?trash(es)?(\/|$)/i;
+/** A path (as the Finder script will use it: trimmed) that is, or is inside, a Trash folder. The Mac side also
+ *  judges the expanded, resolved and symlink-followed path (controller.movesTrash). */
+export const isTrashPath = (p: string): boolean => TRASH.test(String(p ?? "").trim());
 
 const SEND_WORDS = /\b(send|reply|post|publish|share|invite|submit|tweet|message)\b/i;
 const DELETE_WORDS = /\b(delete|remove|erase|trash|discard|destroy|wipe|unsend|revoke|archive all)\b/i;
@@ -122,7 +126,7 @@ export function macAppLabelConsequence(label: string): MacAppConsequence {
  * belongs to the reviewer layer, not here. Same words, same meanings, so the two cannot drift and a merge that
  * swaps this for `fullAutoAsk()` changes behaviour nowhere.
  */
-export function macAppConsequence(a: Pick<MacAppArgs, "action" | "app" | "target" | "value" | "people" | "title">): MacAppConsequence {
+export function macAppConsequence(a: Pick<MacAppArgs, "action" | "app" | "target" | "value" | "list" | "people" | "title">): MacAppConsequence {
   const app = a.app ?? "";
   if (CREDENTIAL_APPS.test(app)) return "security";
   switch (a.action) {
@@ -136,7 +140,8 @@ export function macAppConsequence(a: Pick<MacAppArgs, "action" | "app" | "target
       // Attendees mean invitations (or an update) leave the Mac; a private event does not.
       return (a.people ?? "").trim() ? "send" : null;
     case "finder.move":
-      return TRASH.test(a.target ?? "") ? "destruction" : null;
+      // A move into the Trash is a delete: the destination (value, or list, as the script reads it) counts too.
+      return isTrashPath(a.target ?? "") || isTrashPath(a.value ?? a.list ?? "") ? "destruction" : null;
     case "open":
       return CREDENTIAL_APPS.test(a.target ?? "") ? "security" : null;
     case "ui.menu":
@@ -149,7 +154,8 @@ export function macAppConsequence(a: Pick<MacAppArgs, "action" | "app" | "target
     case "ui.key":
       return keyConsequence(a.value ?? "");
     case "shortcut":
-      return macAppLabelConsequence(a.title ?? "");
+      // The same name the script runs (scripts.ts: title ?? target), so a name in `target` can't skip the card.
+      return macAppLabelConsequence(a.title ?? a.target ?? "");
     default:
       return null;
   }
@@ -214,7 +220,7 @@ export function macAppSummary(a: MacAppArgs): string {
     case "ui.press": return `Press ${a.ref ?? ""}${a.value ? ` (“${short(a.value, 80)}”)` : ""} in ${a.app ?? "the front app"}`;
     case "ui.menu": return `Choose ${JSON.stringify(a.value ?? "")} in ${a.app ?? "the front app"}`;
     case "ui.key": return `Press ${a.value ?? ""} in ${a.app ?? "the front app"}`;
-    case "shortcut": return `Run the Shortcut ${JSON.stringify(a.title ?? "")}`;
+    case "shortcut": return `Run the Shortcut ${JSON.stringify(a.title ?? a.target ?? "")}`;
     default: return `${a.action}${who ? ` · ${who}` : ""}${a.title ? ` · ${short(a.title, 80)}` : ""}`;
   }
 }

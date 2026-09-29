@@ -60,14 +60,15 @@ describe("an app update with a newer bundled host build", () => {
     expect(running).toBe("cccccccccccccccc");
   });
 
-  it("the packaged app runs it (after the re-provision check) once the updated build is healthy", () => {
+  it("the packaged app runs it after the re-provision check, once connected (the health marker no longer waits for the box)", () => {
     const src = fs.readFileSync(path.resolve(__dirname, "../../src/main/index.ts"), "utf8");
     const after = src.slice(src.indexOf("const afterConnected = async"));
     const body = after.slice(0, after.indexOf("retryBoxUpdate = runReprovision;"));
-    // markHealthy (the swap script's health marker) → reprovisionIfChanged → redeployHostIfChanged with the bundled build.
-    const i = [body.indexOf("markHealthy("), body.indexOf("reprovisionIfChanged("), body.indexOf("redeployHostIfChanged(")];
+    // Code audit 2026-09-29 §7.2: markHealthy runs at window + renderer load (launchHealth), not here.
+    expect(body).not.toContain("markHealthy(");
+    const i = [body.indexOf("reprovisionIfChanged("), body.indexOf("redeployHostIfChanged(")];
     expect(i.every((x) => x > 0)).toBe(true);
-    expect(i[0]! < i[1]! && i[1]! < i[2]!).toBe(true);
+    expect(i[0]! < i[1]!).toBe(true);
     expect(body).toContain("bundledBuild: () => bundledHostBuild(process.resourcesPath)");
   });
 });

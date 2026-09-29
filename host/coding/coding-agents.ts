@@ -80,17 +80,52 @@ function mkdirForBoxGit(dir: string): void {
   }
 }
 
-export async function prepareWorktree(o: { git: Git; workspace: string; source: string; branch: string; agentId: string }): Promise<{ repoDir: string; worktree: string }> {
+/** The line an agent's launch shows when origin couldn't be fetched. */
+export const staleBaseNote = (shaAndAge: string) => `Couldn't fetch the latest from origin; starting from ${shaAndAge}.`;
+
+/**
+ * What a new agent branches from (code audit 2026-09-29 §2.1 and its review):
+ *  - the remote's default branch, read with `ls-remote --symref` (so a renamed default is followed) without rewriting
+ *    the clone's own origin/HEAD; after a failed fetch, or when that fails, the existing origin/HEAD;
+ *  - the local default branch instead when it is AHEAD of origin's (unpushed commits are kept);
+ *  - with no origin, or no such branch, the clone's HEAD.
+ */
+async function freshBase(git: Git, repo: string, fetched: boolean): Promise<string> {
+  const ok = (args: string[]) => git(args, repo).then(() => true, () => false);
+  if (!(await git(["remote"], repo)).split("\n").map((x) => x.trim()).includes("origin")) return "HEAD";
+  let def = "";
+  if (fetched) {
+    const out = await git(["ls-remote", "--symref", "origin", "HEAD"], repo).catch(() => "");
+    def = /^ref:\s+refs\/heads\/(\S+)\s+HEAD$/m.exec(out)?.[1] ?? "";
+  }
+  if (!def) def = (await git(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], repo).catch(() => "")).trim().replace(/^refs\/remotes\/origin\//, "");
+  const remote = `refs/remotes/origin/${def}`;
+  if (!def || !(await ok(["rev-parse", "--verify", "--quiet", `${remote}^{commit}`]))) return "HEAD";
+  const local = `refs/heads/${def}`;
+  if (await ok(["rev-parse", "--verify", "--quiet", `${local}^{commit}`])) {
+    const [l, r] = await Promise.all([git(["rev-parse", local], repo), git(["rev-parse", remote], repo)]);
+    if (l.trim() !== r.trim() && (await ok(["merge-base", "--is-ancestor", remote, local]))) return local;
+  }
+  return remote;
+}
+
+export async function prepareWorktree(o: { git: Git; workspace: string; source: string; branch: string; agentId: string }): Promise<{ repoDir: string; worktree: string; note: string | null }> {
   const repos = path.join(o.workspace, "repos");
   mkdirForBoxGit(repos);
   const local = path.join(repos, repoName(o.source));
+  let fetched = true;
   if (!fs.existsSync(path.join(local, ".git"))) await o.git(["clone", cloneUrl(o.source), local], repos);
-  else await o.git(["fetch", "--all", "--prune"], local).catch(() => "");
+  else if ((await o.git(["remote"], local)).split("\n").map((x) => x.trim()).includes("origin")) {
+    // origin only (never --all: one dead remote failed every launch). Offline, the last fetch is used, and said.
+    fetched = await o.git(["fetch", "--prune", "origin"], local).then(() => true, () => false);
+  }
   await o.git(["config", "core.sharedRepository", "group"], local);
   const worktree = path.join(repos, `${repoName(o.source)}.worktrees`, o.agentId);
   mkdirForBoxGit(path.dirname(worktree));
-  await o.git(["worktree", "add", "-b", o.branch, worktree], local);
-  return { repoDir: local, worktree };
+  const base = await freshBase(o.git, local, fetched);
+  const note = fetched ? null : staleBaseNote((await o.git(["log", "-1", "--format=%h, committed %cr", base], local)).trim());
+  await o.git(["worktree", "add", "--no-track", "-b", o.branch, worktree, base], local);
+  return { repoDir: local, worktree, note };
 }
 
 export interface CodingChild { push(text: string): void; interrupt(): Promise<void>; close(): void; messages: AsyncIterable<{ type: string; [k: string]: unknown }> }
@@ -108,7 +143,7 @@ export class CodingAgents {
    *  its own yet, so the shared /workspace/repos below. */
   constructor(private d: { workspace: string; registryFile: string; now(): number; git: Git; child: ChildFactory; model(botId: string): string; onChange(a: CodingAgentView): void; onDone(a: CodingAgentView): void; wallClockMs?: number; maxPerBot?: number; maxTotal?: number;
     ladder?(): { allowsBackground(kind: "coding"): boolean }; onUsage?(botId: string, model: string, u: TurnUsage): void;
-    prepare?(botId: string, a: { source: string; branch: string; agentId: string }): Promise<{ repoDir: string; worktree: string } | null> }) {
+    prepare?(botId: string, a: { source: string; branch: string; agentId: string }): Promise<{ repoDir: string; worktree: string; note?: string | null } | null> }) {
     for (const a of readJson<{ agents: CodingAgentView[] }>(d.registryFile, { agents: [] }).agents) this.agents.set(a.id, a);
   }
 
@@ -135,16 +170,20 @@ export class CodingAgents {
     const agent: CodingAgentView = { id, botId, title, repo: repoName(a.repo), branch, worktree: "", status: "running", startedAt: this.d.now(), endedAt: null, prUrl: null, summary: null };
     this.agents.set(id, agent);
     let worktree: string;
+    let note: string | null | undefined;
     try {
-      ({ worktree } = (await this.d.prepare?.(botId, { source: a.repo, branch, agentId: id }))
+      ({ worktree, note } = (await this.d.prepare?.(botId, { source: a.repo, branch, agentId: id }))
         ?? await prepareWorktree({ git: this.d.git, workspace: this.d.workspace, source: a.repo, branch, agentId: id }));
     } catch (e) {
       this.agents.delete(id);
       throw e;
     }
     agent.worktree = worktree;
+    // Couldn't fetch: the launch result, the card and the agent itself all say what it started from.
+    if (note) agent.note = note;
     this.save();
-    const child = this.d.child({ botId, cwd: worktree, model: this.d.model(botId), prompt: fillTemplate(loadPrompt("orig/coding-agent.md"), { task: a.task }) });
+    const task = note ? `${a.task}\n\n(${note})` : a.task;
+    const child = this.d.child({ botId, cwd: worktree, model: this.d.model(botId), prompt: fillTemplate(loadPrompt("orig/coding-agent.md"), { task }) });
     const wall = this.d.wallClockMs ?? LIMITS5.codingAgentWallClockMs;
     const timers = [
       setTimeout(() => child.push(STR5.steerTimeUp), Math.floor(wall * LIMITS5.steerAtFraction)),
