@@ -2,7 +2,7 @@
 // all it takes to update the site.
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error plain ESM build script, no types
 import { inline, parseChangelog, renderReleases, seoHead, sitemap, robots, SITE_URL, PAGES, build, botSvg, botDefs, expandBots, header, footer, EYE_INK } from "../../site/build.mjs";
 
@@ -134,6 +134,81 @@ describe("asset cache-busting", () => {
       expect(links.length).toBeGreaterThan(0);
       for (const l of links) expect(l).toMatch(/\?v=[0-9a-f]{10}$/);
     }
+  });
+});
+
+// The /feedback page: built with the shared pieces, linked from the footer and the docs, a plain form that works without JS.
+describe("site /feedback", () => {
+  let dist = "", html = "";
+  beforeAll(() => { dist = build("2026-09-29"); html = fs.readFileSync(path.join(dist, "feedback.html"), "utf8"); });
+
+  it("is built with the shared pieces, its own SEO tags and hashed assets", () => {
+    for (const p of ["<!--THEME-->", "<!--HEADER", "<!--FOOTER-->", "<!--SEO"]) expect(html).not.toContain(p);
+    expect(html).toContain('class="site-header"');
+    expect(html).toContain('class="site-footer"');
+    expect(html).toContain(`<link rel="canonical" href="${SITE_URL}/feedback">`);
+    expect(html).toMatch(/\/assets\/site\.css\?v=[0-9a-f]{10}/);
+    expect(html).toMatch(/\/assets\/feedback\.js\?v=[0-9a-f]{10}/);
+    expect(PAGES.feedback.path).toBe("/feedback");
+    expect(sitemap("2026-09-29")).toContain(`<loc>${SITE_URL}/feedback</loc>`);
+  });
+
+  it("is a plain POST form to /api/feedback with type, message and a hidden honeypot, and no email field", () => {
+    expect(html).toMatch(/<form[^>]*method="post"[^>]*action="\/api\/feedback"/);
+    for (const t of ["bug", "idea", "confusing", "love"]) expect(html).toContain(`name="type" value="${t}"`);
+    expect(html).toMatch(/<textarea name="message"[^>]*maxlength="5000"[^>]*required/);
+    expect(html).not.toContain('name="email"');
+    expect(html).toMatch(/<script type="module" src="\/assets\/feedback\.js\?v=/);
+    expect(fs.readFileSync(path.join(dist, "assets", "feedback.js"), "utf8")).toMatch(/from "\.\/feedback-content\.js\?v=[0-9a-f]{10}"/);
+    expect(fs.existsSync(path.join(dist, "assets", "feedback-content.js"))).toBe(true);
+    expect(html).toMatch(/<div class="fb-hp" aria-hidden="true">[\s\S]*name="website" tabindex="-1" autocomplete="off"/);
+    // Without JS the thank-you shows through :target after the redirect to /feedback?sent=1#sent.
+    expect(html).toContain('id="sent"');
+    expect(fs.readFileSync(path.join(dist, "assets", "site.css"), "utf8")).toContain(".fb-done:target");
+  });
+
+  it("is linked from the footer and the docs", () => {
+    expect(footer()).toContain('href="/feedback"');
+    expect(fs.readFileSync(path.join(dist, "docs.html"), "utf8")).toContain('href="/feedback"');
+  });
+});
+
+describe("vercel.json", () => {
+  it("still serves the built site with clean URLs; /api is served from the repo's api/ folder", () => {
+    const v = JSON.parse(fs.readFileSync(path.join(__dirname, "../../vercel.json"), "utf8"));
+    expect(v).toMatchObject({ buildCommand: "node site/build.mjs", outputDirectory: "site/dist", cleanUrls: true });
+    expect(fs.existsSync(path.join(__dirname, "../../api/feedback/index.js"))).toBe(true);
+    expect(JSON.stringify(v)).not.toMatch(/"\/api/);
+    expect(v.rewrites).toEqual([{ source: "/feedback/thread", destination: "/feedback-thread.html" }]);
+    expect(fs.existsSync(path.join(__dirname, "../../api/feedback/thread.js"))).toBe(true);
+  });
+});
+
+describe("site /feedback/thread (private replies)", () => {
+  let dist = "", html = "";
+  beforeAll(() => { dist = build("2026-09-29"); html = fs.readFileSync(path.join(dist, "feedback-thread.html"), "utf8"); });
+  it("is built with the shared pieces, not indexed and not in the sitemap", () => {
+    for (const p of ["<!--THEME-->", "<!--HEADER", "<!--FOOTER-->"]) expect(html).not.toContain(p);
+    expect(html).toContain('<meta name="robots" content="noindex, nofollow">');
+    expect(sitemap("2026-09-29")).not.toContain("/feedback/thread");
+    expect(html).toMatch(/\/assets\/feedback-thread\.js\?v=[0-9a-f]{10}/);
+  });
+  it("says plainly what the link is, and sends the code only as a header", () => {
+    expect(html).toContain("Keep this link to see replies. Anyone with it can read this thread.");
+    const js = fs.readFileSync(path.join(dist, "assets", "feedback-thread.js"), "utf8");
+    expect(js).toContain('"x-feedback-code": code');
+    expect(js).not.toMatch(/fetch\([^)]*\$\{code\}/);
+    expect(js).toMatch(/textContent = m\.text/);
+    expect(js).not.toContain("innerHTML");
+    expect(fs.readFileSync(path.join(dist, "assets", "feedback.js"), "utf8")).toContain("/feedback/thread?sent=1#${j.thread}");
+    expect(html).toContain("No replies yet");
+    expect(js).toContain('localStorage.getItem(`synapse-feedback:${code}`)');
+    expect(js).toContain("Couldn't load replies yet. Try again later.");
+    expect(js).toMatch(/\[1-9\]\\d\{0,9\}\\\.\[A-Za-z0-9_-\]\{22\}/);
+    for (const f of ["feedback.js", "feedback-thread.js"]) expect(fs.readFileSync(path.join(dist, "assets", f), "utf8")).toContain("spamReason(");
+  });
+  it("has no email field or reply-by-email copy anywhere", () => {
+    for (const f of ["feedback.html", "feedback-thread.html"]) expect(fs.readFileSync(path.join(dist, f), "utf8")).not.toMatch(/type="email"|reply by email|email for a reply/i);
   });
 });
 

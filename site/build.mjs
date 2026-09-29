@@ -58,6 +58,7 @@ export const PAGES = {
   home: { file: "index.html", path: "/", title: "Synapse: a team of AI agents for your Mac", description: "Synapse is a free, open-source Mac app with a team of AI agents that chat, write code, take voice calls and use your Mac, powered by your own Anthropic API key." },
   docs: { file: "docs.html", path: "/docs", title: "Synapse Docs: install, API key and using your AI agents", description: "How to install Synapse on your Mac, add your Anthropic API key, work with your AI agents, and fix common problems." },
   changelog: { file: "changelog.html", path: "/changelog", title: "Synapse Changelog: what's new in each version", description: "Every version of Synapse, the open-source Mac app for a team of AI agents: new features, fixes and known issues." },
+  feedback: { file: "feedback.html", path: "/feedback", title: "Send feedback about Synapse", description: "Report a bug, suggest an idea or tell us what you think of Synapse, the open-source Mac app for a team of AI agents." },
 };
 
 const attr = (s) => esc(s).replace(/"/g, "&quot;");
@@ -157,7 +158,7 @@ export function footer() {
   <div class="foot">
     <div class="foot-brand"><a class="brand" href="/"><img src="/assets/icon.png" alt="" width="26" height="26">Synapse</a></div>
     <div><h4>Product</h4><a href="${GH}/releases" data-dl>Download</a><a href="/#features">Features</a><a href="/#starters">Starter Bots</a><a href="/changelog">Changelog</a></div>
-    <div><h4>Help</h4><a href="/docs">Docs</a><a href="/docs#install">Install</a><a href="/docs#troubleshooting">Troubleshooting</a><a href="/docs#privacy">Privacy</a></div>
+    <div><h4>Help</h4><a href="/docs">Docs</a><a href="/docs#install">Install</a><a href="/docs#troubleshooting">Troubleshooting</a><a href="/docs#privacy">Privacy</a><a href="/feedback">Send feedback</a></div>
     <div><h4>Project</h4><a href="${GH}">GitHub</a><a href="${GH}/issues">Report an issue</a><a href="${GH}/blob/main/LICENSE">MIT licence</a></div>
   </div>
   <p class="legal">Synapse is open source and not affiliated with Anthropic. Claude is a trademark of Anthropic.</p>
@@ -206,6 +207,15 @@ export function build(today = new Date().toISOString().slice(0, 10)) {
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, "assets"), { recursive: true });
   for (const f of fs.readdirSync(path.join(here, "assets"))) fs.copyFileSync(path.join(here, "assets", f), path.join(dist, "assets", f));
+  // The feedback page's preview uses the same text checks as the app and /api/feedback: one file, copied in,
+  // imported by feedback.js with its content hash (so a new version is never paired with an old one).
+  const content = fs.readFileSync(path.join(here, "..", "shared", "src", "feedback-content.js"));
+  fs.writeFileSync(path.join(dist, "assets", "feedback-content.js"), content);
+  const contentV = crypto.createHash("sha256").update(content).digest("hex").slice(0, 10);
+  for (const f of ["feedback.js", "feedback-thread.js"]) {
+    const js = path.join(dist, "assets", f);
+    fs.writeFileSync(js, fs.readFileSync(js, "utf8").replace("./feedback-content.js", `./feedback-content.js?v=${contentV}`));
+  }
   const releases = parseChangelog(fs.readFileSync(path.join(here, "..", "CHANGELOG.md"), "utf8"));
   const version = releases.find((r) => !r.unreleased)?.version ?? null;
   const withSeo = (html, key) => bustAssets(partials(html, key).replace(`<!--SEO:${key}-->`, seoHead(key, version)));
@@ -213,6 +223,10 @@ export function build(today = new Date().toISOString().slice(0, 10)) {
   fs.writeFileSync(path.join(dist, "docs.html"), withSeo(fs.readFileSync(path.join(here, "docs.html"), "utf8"), "docs"));
   // A private-ish stats page: unlinked, noindex, not in the sitemap; public GitHub download counts only.
   fs.writeFileSync(path.join(dist, "stats.html"), bustAssets(fs.readFileSync(path.join(here, "stats.html"), "utf8")));
+  fs.writeFileSync(path.join(dist, "feedback.html"), withSeo(fs.readFileSync(path.join(here, "feedback.html"), "utf8"), "feedback"));
+  // The private conversation page (/feedback/thread, a rewrite in vercel.json, so /feedback stays a
+  // plain page and not a folder): not in the sitemap, not indexed.
+  fs.writeFileSync(path.join(dist, "feedback-thread.html"), bustAssets(partials(fs.readFileSync(path.join(here, "feedback-thread.html"), "utf8"), "feedback")));
   const { toc, body } = renderReleases(releases);
   const page = fs.readFileSync(path.join(here, "changelog.template.html"), "utf8").replace("<!--TOC-->", toc).replace("<!--RELEASES-->", body);
   fs.writeFileSync(path.join(dist, "changelog.html"), withSeo(page, "changelog"));

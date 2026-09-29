@@ -141,11 +141,12 @@
 
       <h2 id="privacy">Privacy and your data</h2>
       <ul>
-        <li><b>No Synapse account or server.</b> Synapse talks straight to Anthropic with your key.</li>
+        <li><b>No Synapse account or server.</b> Synapse talks straight to Anthropic with your key. The only thing that ever reaches us is feedback you choose to send.</li>
         <li><b>Your data stays on your Mac</b>, in <span class="path">~/Library/Application Support/Synapse</span>, and in the Bots' computer (an OrbStack machine called <span class="path">box</span>).</li>
         <li><b>Secrets are encrypted</b> with a key kept in the app's own data folder. Bots' sandboxed commands can't read it.</li>
-        <li><b>This website</b> counts visits with Vercel Web Analytics: no cookies, no personal data, nothing that identifies you. The app itself sends no analytics.</li>
         <li><b>Logs</b> are in <span class="path">~/Library/Logs/Synapse</span> and never leave your Mac unless you send them.</li>
+        <li><b>This website</b> counts visits with Vercel Web Analytics: no cookies, no personal data, nothing that identifies you. The app itself sends no analytics.</li>
+        <li><b>Feedback</b> leaves your Mac only when you press <b>Send privately</b> or <b>Post on GitHub</b>, and only what its preview shows. Logs are cleaned of keys, tokens, emails and your user name first, and phone numbers, card numbers and addresses in your message are hidden. Replies appear in the app under <b>Your feedback</b>, or at the private link the website gives you. 👍 and 👎 on replies stay on your Mac.</li>
       </ul>
 
       <h2 class="sec">Help</h2>
@@ -159,7 +160,7 @@
       <h3>Synapse in two macOS accounts on the same Mac</h3>
       <p>Supported from version 0.1.1. Each account has its own Bots' computer and its own connection to it. If Synapse ever reaches another account's Bots' computer instead, it tells you.</p>
       <h3>Something else</h3>
-      <p><a href="https://github.com/nyfeblade/synapse/issues">Open an issue</a> with what you did and what happened. <b>Settings → System → Diagnostics</b> shows recent errors, and the logs are in <span class="path">~/Library/Logs/Synapse</span>.</p>
+      <p><a href="/feedback">Send feedback</a> privately, or <a href="https://github.com/nyfeblade/synapse/issues">open an issue</a> in public, with what you did and what happened. In the app, use <b>Send feedback</b> in the account menu or the Help menu. <b>Settings → System → Diagnostics</b> shows recent errors, and the logs are in <span class="path">~/Library/Logs/Synapse</span>.</p>
 
       <h2 id="uninstall">Uninstall</h2>
       <ol>

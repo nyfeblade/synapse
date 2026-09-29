@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--THEME-->
+<!--SEO:feedback-->
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<!--HEADER:feedback-->
+<div class="wrap">
+  <article class="doc fb">
+    <p class="crumb">Feedback</p>
+    <h1>Send feedback</h1>
+    <p class="intro">Tell us what broke, what you'd like, or what you love. It goes to us privately. To post in public, <a href="https://github.com/nyfeblade/synapse/issues">open an issue on GitHub</a>.</p>
+
+    <div class="fb-done" id="sent" role="status" tabindex="-1">
+      <h2>Sent. Thank you.</h2>
+      <p><a href="/feedback">Send another</a></p>
+    </div>
+    <div class="fb-failed" id="failed" role="alert" tabindex="-1">
+      <p>It didn't send. Check the form and try again, or <a href="https://github.com/nyfeblade/synapse/issues">open an issue on GitHub</a>.</p>
+    </div>
+
+    <form class="fb-form" method="post" action="/api/feedback" data-feedback>
+      <fieldset class="fb-types">
+        <legend>Type</legend>
+        <label><input type="radio" name="type" value="bug" required> Bug</label>
+        <label><input type="radio" name="type" value="idea"> Idea</label>
+        <label><input type="radio" name="type" value="confusing"> Something confusing</label>
+        <label><input type="radio" name="type" value="love"> Love it</label>
+      </fieldset>
+      <label class="fb-field">
+        <span>Message</span>
+        <textarea name="message" rows="7" maxlength="5000" required placeholder="What's on your mind?"></textarea>
+      </label>
+      <p class="fb-hide" data-hide hidden></p>
+      <div class="fb-hp" aria-hidden="true">
+        <label>Leave this empty <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+      </div>
+      <input type="hidden" name="source" value="web">
+      <p class="fb-error" data-error hidden></p>
+      <button class="btn primary" type="submit">Send</button>
+    </form>
+  </article>
+</div>
+<!--FOOTER-->
+<script src="/assets/site.js"></script>
+<script src="/assets/latest.js"></script>
+<script type="module" src="/assets/feedback.js"></script>
+</body>
+</html>

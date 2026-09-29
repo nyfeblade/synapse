@@ -3,7 +3,7 @@
 :root{
   --bg:#FFFFFF; --surface:#F6F6F7; --surface-2:#EEEEF0; --card:#FFFFFF;
   --ink:#111110; --ink-2:#3E3E42; --muted:#6D6D72; --faint:#A3A3A8; --line:#E6E6E9; --line-2:#D9D9DD;
-  --btn:#111110; --btn-ink:#FFFFFF; --wordmark:#F1F1F3;
+  --btn:#111110; --btn-ink:#FFFFFF; --ground:#ECECEE; --wordmark:#F1F1F3;
   --spark:#ED712E; --green:#3F8F58; --red:#C8403F; --shadow:rgba(0,0,0,.22);
   --sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
   --ease:cubic-bezier(.22,1,.36,1);
@@ -13,7 +13,7 @@
   :root:not([data-theme="light"]){
     --bg:#0A0A0A; --surface:#141415; --surface-2:#1C1C1E; --card:#111112;
     --ink:#F2F2F2; --ink-2:#C9C9CD; --muted:#95959B; --faint:#5C5C61; --line:#232326; --line-2:#2E2E32;
-    --btn:#F2F2F2; --btn-ink:#0A0A0A; --wordmark:#141415;
+    --btn:#F2F2F2; --btn-ink:#0A0A0A; --ground:#1A1A1C; --wordmark:#141415;
     --green:#5BB374; --red:#E0625F; --shadow:rgba(0,0,0,.6);
     color-scheme:dark;
   }
@@ -21,7 +21,7 @@
 :root[data-theme="dark"]{
   --bg:#0A0A0A; --surface:#141415; --surface-2:#1C1C1E; --card:#111112;
   --ink:#F2F2F2; --ink-2:#C9C9CD; --muted:#95959B; --faint:#5C5C61; --line:#232326; --line-2:#2E2E32;
-  --btn:#F2F2F2; --btn-ink:#0A0A0A; --wordmark:#141415;
+  --btn:#F2F2F2; --btn-ink:#0A0A0A; --ground:#1A1A1C; --wordmark:#141415;
   --green:#5BB374; --red:#E0625F; --shadow:rgba(0,0,0,.6);
   color-scheme:dark;
 }
@@ -93,6 +93,7 @@ a.count:hover{color:var(--ink)}
 .fine{margin:16px 0 0; font:13px var(--mono); color:var(--muted)}
 .crew{display:flex; justify-content:center; align-items:flex-end; gap:clamp(12px,2.4vw,26px); height:92px}
 .mate{position:relative; width:62px; display:block; padding:0; border:0; background:none; color:inherit; font:inherit; animation:float 6s ease-in-out infinite; animation-delay:var(--d,0s)}
+.mate::after{content:""; position:absolute; left:20%; right:20%; bottom:-8px; height:5px; border-radius:50%; background:var(--ground); z-index:-1}
 .mate.lead{width:82px; cursor:pointer}
 .mate .bot{transition:transform .35s var(--ease)}
 .mate:hover .bot{transform:translateY(-4px)}
@@ -385,3 +386,37 @@ section.release{padding-block:32px 8px; margin-top:0}
   .wave i{transform:scaleY(.6)} .wave i:nth-child(odd){transform:scaleY(.9)}
   .v-team .orb{translate:0 0}
 }
+
+/* ---- /feedback ---- */
+.fb{max-width:620px; padding-block:24px 96px}
+.fb-form{display:flex; flex-direction:column; gap:22px; align-items:flex-start}
+.fb-types{border:0; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:8px}
+.fb-types legend{font-size:14px; color:var(--muted); margin-bottom:8px; padding:0}
+.fb-types label{display:inline-flex; align-items:center; gap:8px; height:38px; padding:0 14px; border:1px solid var(--line-2); border-radius:10px; font-size:15px; color:var(--ink-2); cursor:pointer; transition:border-color .15s, background-color .15s}
+.fb-types label:hover{border-color:var(--faint)}
+.fb-types label:has(input:checked){border-color:var(--ink); color:var(--ink); background:var(--surface)}
+.fb-types input{accent-color:var(--ink); margin:0}
+.fb-field{display:flex; flex-direction:column; gap:8px; width:100%}
+.fb-field span{font-size:14px; color:var(--muted)}
+.fb-field textarea,.fb-field input{width:100%; box-sizing:border-box; font:16px/1.5 var(--sans); color:var(--ink); background:var(--card); border:1px solid var(--line-2); border-radius:10px; padding:10px 12px; outline:none; transition:border-color .15s}
+.fb-field textarea{resize:vertical; min-height:150px}
+.fb-field textarea:focus,.fb-field input:focus{border-color:var(--ink)}
+.fb-hp{position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden}
+.fb-error{margin:0; color:var(--red); font-size:15px}
+.fb-done,.fb-failed{display:none; border:1px solid var(--line); background:var(--surface); border-radius:12px; padding:18px 20px; margin:0 0 28px; outline:none}
+.fb-done h2{border:0; padding:0; margin:0 0 6px; font-size:22px}
+.fb-done p,.fb-failed p{margin:0}
+.fb-done.on,.fb-failed.on,.fb-done:target,.fb-failed:target{display:block}
+.fb-done:target ~ .fb-form{display:none}
+.fb-hide{margin:-8px 0 0; font-size:14px; color:var(--muted)}
+.fb-keep{border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin:0 0 28px}
+.fb-keep p{margin:0}
+.fb-link{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:8px !important}
+.fb-link code{overflow-wrap:anywhere}
+.fb-msgs{list-style:none; padding:0; margin:0 0 28px; display:flex; flex-direction:column; gap:12px}
+.fb-msg{display:flex; flex-direction:column; gap:4px; max-width:90%; padding:12px 14px; border-radius:12px; background:var(--surface)}
+.fb-msg.you{align-self:flex-end; background:var(--surface-2)}
+.fb-msg-from{font-size:13px; color:var(--muted)}
+.fb-msg-text{white-space:pre-wrap; overflow-wrap:anywhere; color:var(--ink)}
+.fb-done[data-sent].on{display:block}
+.fb-empty{margin:-16px 0 28px; font-size:14px; color:var(--muted)}
