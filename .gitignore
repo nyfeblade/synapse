@@ -38,3 +38,7 @@ test-reports/voice-sentence-tail/preview-gap/before-sentences.wav
 update-signing.key
 *.key
 Synapse-release/
+
+# Vercel CLI link files (local only)
+.vercel
+.env*.local
