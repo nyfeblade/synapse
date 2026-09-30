@@ -1,3 +1,4 @@
+import { realOfDeepest } from "./linear-text";
 import { macFloorHits, macOpaque } from "./mac-floor";
 
 /**
@@ -73,14 +74,8 @@ const within = (p: string, dir: string): boolean => dir !== "/" && (p === dir ||
 
 /** The on-disk path of `abs`: realpath of its deepest existing ancestor, plus the missing tail. */
 function realOf(abs: string, realpath: (p: string) => string): string {
-  const tail: string[] = [];
-  let cur = abs;
-  for (;;) {
-    try { return macLexical([realpath(cur), ...tail].join("/"), "/"); } catch { /* missing: walk up */ }
-    if (cur === "/") return abs;
-    tail.unshift(cur.slice(cur.lastIndexOf("/") + 1));
-    cur = cur.slice(0, cur.lastIndexOf("/")) || "/";
-  }
+  const real = realOfDeepest(abs, realpath); // bug 433: linear on a deep hostile path
+  return real === null ? abs : macLexical(real, "/");
 }
 
 /** One absolute, lexically normal path: denied places first, then inside some root. */

@@ -2,6 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { readScriptCapped } from "./script-read";
 import { LIMITS5, appDataRoots, appDataWalls, MAC_CLAUDE_CONFIG_DIR, MAC_STARTUP_DIRS, MAC_STARTUP_FILES, MAC_TOOL_CONFIG_DIRS, MAC_TOOL_CONFIG_FILES, STR5, evaluateFixedRules, MAC_CLAUDE_API_KEY_MSG, MAC_CLAUDE_AUTH_UNKNOWN_MSG, MAC_CLAUDE_PROXY_DOWN_MSG, macUsesGitNetworkOrGh, macWrappedClaudeNeedsAuth, macExemptTool, macCredentialStore, macWrappedToolPrelude, macWrappedUsesClaude, macSafeGitConfigSet, macSandboxExemptSimple, macPlainUrlOpenArgs, macSandboxInteractive, macUnsandboxedHandoff, macPrivateStoreRules, macStandInStoreRules, macCaseFoldRe, macPrivateStorePath, macPrivateStoreRead, macQuietHandoff, type MacPrivateStoreRules, type LocalExecRequest, type MacClaudeAuth } from "@synapse/shared";
 import { macAllowedApp } from "./app-trust";
 import type { MacKeyGrantResult, MacKeyGrantor } from "./mac-key-proxy";
@@ -18,7 +19,12 @@ type IO = {
   openBridge?: boolean;
   /** Bug 258: the Bot is in No limits: the sandbox drops the private-store rules; the app's data and keychain stay. */
   noLimits?: boolean;
+  /** Bug 441: the real path the policy judged for a file write; the write goes there or nowhere. */
+  target?: string;
 };
+
+/** Bug 441: the refusal when a file's real location moved between the check and the write. */
+export const WRITE_MOVED = "The file's location changed between the check and the write, so nothing was written. Try again.";
 
 /** P5 review I4: the Mac exec env is a minimal allowlist — never the app's own env (tokens, Electron vars). */
 export const MAC_EXEC_ENV_KEYS = ["HOME", "USER", "PATH", "LANG", "TERM", "SHELL", "TMPDIR"] as const;
@@ -385,15 +391,17 @@ export class LocalExecutor {
     return !macCredentialStore(baseDir, home) && macCredentialStore(full, home);
   }
 
-  /** A glob like `**​/*.ts` under a base dir, protected paths skipped, capped. Returns newest-first paths. */
-  private glob(req: LocalExecRequest, _max: number, o: FileOpts = {}): { exitCode: number; result: string } {
+  /** A glob like `**​/*.ts` under a base dir, protected paths skipped, capped. Returns newest-first paths.
+   *  0.1.4 first-run (code audit 3.4): async, so a search of a big folder never stops the coordinator's thread (every
+   *  chat stream goes through it). */
+  private async glob(req: LocalExecRequest, _max: number, o: FileOpts = {}): Promise<{ exitCode: number; result: string }> {
     const baseDir = this.within(req.path ?? ".", o);
     const re = globToRegExp(req.pattern ?? "**/*");
     const hits: { p: string; m: number }[] = [];
-    const walk = (dir: string, depth: number) => {
+    const walk = async (dir: string, depth: number): Promise<void> => {
       if (depth > 30 || hits.length >= LIMITS5.localGlobMax) return;
       let entries: fs.Dirent[];
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      try { entries = await fs.promises.readdir(dir, { withFileTypes: true }); } catch { return; }
       for (const e of entries) {
         if (hits.length >= LIMITS5.localGlobMax) return;
         const full = path.join(dir, e.name);
@@ -401,47 +409,88 @@ export class LocalExecutor {
         if (this.credentialSkip(baseDir, full, o)) continue; // bug 256: nor list a credential store's contents unasked
         if (e.name === "node_modules" || e.name === ".git") continue;
         const rel = path.relative(baseDir, full);
-        if (e.isDirectory()) walk(full, depth + 1);
-        else if (re.test(rel)) { try { hits.push({ p: full, m: fs.statSync(full).mtimeMs }); } catch { /* gone */ } }
+        if (e.isDirectory()) await walk(full, depth + 1);
+        else if (re.test(rel)) { try { hits.push({ p: full, m: (await fs.promises.stat(full)).mtimeMs }); } catch { /* gone */ } }
       }
     };
-    walk(baseDir, 0);
+    await walk(baseDir, 0);
     hits.sort((a, b) => b.m - a.m);
     return { exitCode: 0, result: hits.map((h) => h.p).join("\n") };
   }
 
-  /** A ripgrep-lite content search: a regex over files under a base dir, protected paths skipped, capped. */
-  private grep(req: LocalExecRequest, o: FileOpts = {}): { exitCode: number; result: string } {
+  /** A ripgrep-lite content search: a regex over files under a base dir, protected paths skipped, capped. Async, like glob. */
+  private async grep(req: LocalExecRequest, o: FileOpts = {}): Promise<{ exitCode: number; result: string }> {
     const baseDir = this.within(req.path ?? ".", o);
     let re: RegExp;
     try { re = new RegExp(req.pattern ?? "", "m"); } catch { throw new Error("That search pattern is not a valid regular expression."); }
     const fileRe = req.command ? globToRegExp(req.command) : null; // command carries an optional --glob filter
     const out: string[] = [];
-    const walk = (dir: string, depth: number) => {
+    const scan = (file: string, text: string) => {
+      const lines = text.split("\n");
+      for (let i = 0; i < lines.length && out.length < LIMITS5.localGrepMax; i++) if (re.test(lines[i]!)) out.push(`${file}:${i + 1}:${lines[i]!.slice(0, 400)}`);
+    };
+    const walk = async (dir: string, depth: number): Promise<void> => {
       if (depth > 30 || out.length >= LIMITS5.localGrepMax) return;
       let entries: fs.Dirent[];
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      try { entries = await fs.promises.readdir(dir, { withFileTypes: true }); } catch { return; }
       for (const e of entries) {
         if (out.length >= LIMITS5.localGrepMax) return;
         const full = path.join(dir, e.name);
         try { this.guard(realNative(full), o); } catch { continue; }
         if (this.credentialSkip(baseDir, full, o)) continue; // bug 256: a search never reads a credential store it wasn't pointed at
         if (e.name === "node_modules" || e.name === ".git") continue;
-        if (e.isDirectory()) { walk(full, depth + 1); continue; }
+        if (e.isDirectory()) { await walk(full, depth + 1); continue; }
         if (fileRe && !fileRe.test(path.relative(baseDir, full))) continue;
         let text: string;
-        try { if (fs.statSync(full).size > 4 * 1024 * 1024) continue; text = fs.readFileSync(full, "utf8"); } catch { continue; }
+        try { if ((await fs.promises.stat(full)).size > 4 * 1024 * 1024) continue; text = await fs.promises.readFile(full, "utf8"); } catch { continue; }
         if (text.includes("\u0000")) continue; // binary
-        const lines = text.split("\n");
-        for (let i = 0; i < lines.length && out.length < LIMITS5.localGrepMax; i++) if (re.test(lines[i]!)) out.push(`${full}:${i + 1}:${lines[i]!.slice(0, 400)}`);
+        scan(full, text);
       }
     };
-    const single = fs.statSync(baseDir).isFile();
-    if (single) {
-      const text = fs.readFileSync(baseDir, "utf8").split("\n");
-      for (let i = 0; i < text.length && out.length < LIMITS5.localGrepMax; i++) if (re.test(text[i]!)) out.push(`${baseDir}:${i + 1}:${text[i]!.slice(0, 400)}`);
-    } else walk(baseDir, 0);
+    const single = (await fs.promises.stat(baseDir)).isFile();
+    if (single) scan(baseDir, await fs.promises.readFile(baseDir, "utf8"));
+    else await walk(baseDir, 0);
     return { exitCode: out.length ? 0 : 1, result: out.join("\n") };
+  }
+
+  /**
+   * Bug 441: open a file for writing only where it was judged. The path must still be the real path the policy
+   * judged; the last part is never followed if it became a link (O_NOFOLLOW); the parent folders are re-resolved right
+   * before and after the open, and the file opened must be the one now at that path. Anything else refuses the write
+   * before a byte is written or the file is emptied.
+   */
+  private openChecked(p: string, target: string | undefined, o: { create: boolean; read?: boolean }): number {
+    const moved = () => new Error(WRITE_MOVED);
+    if (target !== undefined && fold(target) !== fold(p)) throw moved();
+    const dir = path.dirname(p);
+    const dirOk = () => { try { return fold(realNative(dir)) === fold(dir); } catch { return false; } };
+    if (!dirOk()) throw moved();
+    const C = fs.constants;
+    let fd: number;
+    try {
+      fd = fs.openSync(p, (o.read ? C.O_RDWR : C.O_WRONLY) | C.O_NOFOLLOW | (o.create ? C.O_CREAT : 0), 0o644);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ELOOP") throw moved();
+      throw e;
+    }
+    try {
+      const st = fs.fstatSync(fd);
+      const now = fs.lstatSync(p);
+      if (!st.isFile() || !dirOk() || now.isSymbolicLink() || now.ino !== st.ino || now.dev !== st.dev) throw moved();
+      return fd;
+    } catch (e) {
+      fs.closeSync(fd);
+      throw e;
+    }
+  }
+
+  /** Bug 441: replace a file's contents through a checked descriptor. */
+  private writeChecked(p: string, target: string | undefined, data: string | Buffer, create: boolean): void {
+    const fd = this.openChecked(p, target, { create });
+    try {
+      fs.ftruncateSync(fd, 0);
+      fs.writeSync(fd, typeof data === "string" ? Buffer.from(data) : data, 0, undefined, 0);
+    } finally { fs.closeSync(fd); }
   }
 
   kill(execId: string): void {
@@ -485,13 +534,15 @@ export class LocalExecutor {
         const old = req.oldString ?? "";
         const next = req.newString ?? "";
         if (old === next) throw new Error("The old and new strings are identical.");
-        const text = fs.readFileSync(p, "utf8");
+        const rfd = this.openChecked(p, io.target, { create: false, read: true }); // bug 441: read the file that is judged
+        let text: string;
+        try { text = fs.readFileSync(rfd, "utf8"); } finally { fs.closeSync(rfd); }
         const count = old === "" ? 0 : text.split(old).length - 1;
         if (count === 0) throw new Error("The exact text to replace was not found in the file.");
         if (count > 1 && !req.replaceAll) throw new Error(`The text to replace appears ${count} times; pass replace_all or make it unique.`);
         const out = req.replaceAll ? text.split(old).join(next) : text.replace(old, () => next); // a function: `$&` in the new text stays literal
         if (Buffer.byteLength(out) > max) throw new Error(STR5.localTooLarge);
-        fs.writeFileSync(p, out);
+        this.writeChecked(p, io.target, out, false);
         return { exitCode: 0, result: `Edited ${p} (${count} replacement${count === 1 ? "" : "s"}).` };
       }
       case "glob": return this.glob(req, max, readOpts);
@@ -504,7 +555,7 @@ export class LocalExecutor {
         const p = this.within(req.path ?? "");
         if (Buffer.byteLength(req.content ?? "") > max) throw new Error(STR5.localTooLarge);
         fs.mkdirSync(path.dirname(p), { recursive: true });
-        fs.writeFileSync(p, req.content ?? "");
+        this.writeChecked(p, io.target, req.content ?? "", true);
         return { exitCode: 0, result: p };
       }
       case "copy-to-box": {
@@ -526,7 +577,8 @@ export class LocalExecutor {
       case "copy-from-box": {
         const p = this.within(req.path ?? "");
         fs.mkdirSync(path.dirname(p), { recursive: true });
-        const out = fs.openSync(p, "w");
+        const out = this.openChecked(p, io.target, { create: true }); // bug 441
+        fs.ftruncateSync(out, 0);
         let total = 0;
         try {
           for await (const chunk of io.readBox!(req.boxPath ?? "")) {
@@ -571,7 +623,15 @@ export class LocalExecutor {
     // NEVER backstop on the Mac itself: even an approved command may not exfiltrate credentials. The host's
     // fixed rules and the reviewer already walled this; here it holds whatever the host said (defense in depth).
     const home = this.o.home?.() ?? os.homedir();
-    const never = evaluateFixedRules({ side: "mac", kind: "command", command: req.command ?? "", cwd }, { home, projectDirs: [], userData: this.o.userData?.() ?? null, realpath: (p) => realNative(p), noLimits: io.noLimits === true });
+    // Bug 433: each path resolved once (a command naming thousands of paths resolved each one several times).
+    const resolved = new Map<string, string | Error>();
+    const realpath = (p: string): string => {
+      let r = resolved.get(p);
+      if (r === undefined) { try { r = realNative(p); } catch (e) { r = e instanceof Error ? e : new Error(String(e)); } resolved.set(p, r); }
+      if (r instanceof Error) throw r;
+      return r;
+    };
+    const never = evaluateFixedRules({ side: "mac", kind: "command", command: req.command ?? "", cwd }, { home, projectDirs: [], userData: this.o.userData?.() ?? null, realpath, readScript: readScriptCapped, noLimits: io.noLimits === true });
     if (never.verdict === "never") throw new Error(never.reason);
     if (macSandboxInteractive(req.command ?? "")) throw new Error(STR5.macExemptInteractive); // bug 232, as the policy
     return new Promise((resolve, reject) => {

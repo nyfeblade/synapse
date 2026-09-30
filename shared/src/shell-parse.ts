@@ -88,17 +88,22 @@ export const INTERPRETERS: Record<string, string[]> = {
 const RESERVED = new Set(["if", "then", "else", "elif", "fi", "do", "done", "while", "until", "!", "time", "{", "}", "coproc", "repeat"]);
 const SKIP_SEGMENT = new Set(["for", "select", "case", "function", "foreach"]);
 
-interface Tok { t: "word"; w: ShWord; subs: string[] ; procs: { dir: string; text: string }[] }
+interface Tok { t: "word"; w: ShWord; subs: string[] ; procs: { dir: string; text: string }[]; /** The last char of w.text (bug 433: read without flattening a long word). */ last: string }
 interface OpTok { t: "op"; v: string; heredoc?: string | null; fd?: number | null }
 type Token = Tok | OpTok;
 
 const isNameStart = (c: string | undefined) => !!c && /[A-Za-z_]/.test(c);
 
-/** Index of the char after the matching close of an opener at `i` (src[i] is the opener's last char). */
-function matchClose(src: string, i: number, open: string, close: string): number {
+/** Bug 433: a brace word whose close couldn't be looked for within the lexer's linear scan budget. */
+const BRACE_BUDGET = "a brace expansion too long to check";
+
+/** Index of the char after the matching close of an opener at `i` (src[i] is the opener's last char); -1 when there is
+ *  none; -2 when `limit` chars were scanned without finding it. */
+function matchClose(src: string, i: number, open: string, close: string, limit = Infinity): number {
   let depth = 1;
   let j = i + 1;
-  while (j < src.length) {
+  const end = Math.min(src.length, i + 1 + limit);
+  while (j < end) {
     const c = src[j]!;
     if (c === "\\") { j += 2; continue; }
     if (c === "'") { const e = src.indexOf("'", j + 1); if (e < 0) return -1; j = e + 1; continue; }
@@ -113,7 +118,7 @@ function matchClose(src: string, i: number, open: string, close: string): number
     else if (c === close && --depth === 0) return j + 1;
     j++;
   }
-  return -1;
+  return end < src.length ? -2 : -1;
 }
 
 function ansiC(body: string): string {
@@ -131,7 +136,10 @@ function lex(src: string, opaque: string[], vars: Record<string, string>): Token
   const toks: Token[] = [];
   let cur: Tok | null = null;
   const peek = (): Tok | null => cur;
-  const word = (): Tok => (cur ??= { t: "word", w: { text: "", dynamic: false, glob: false, quoted: false, headQuoted: false, literal: "", procSubst: null }, subs: [], procs: [] });
+  const word = (): Tok => (cur ??= { t: "word", w: { text: "", dynamic: false, glob: false, quoted: false, headQuoted: false, literal: "", procSubst: null }, subs: [], procs: [], last: "" });
+  /** Appends to the current word's text (and literal, when given). Bug 433: tracks the last char, so the lexer never
+   *  re-reads a growing word (a regex on it flattens the string: quadratic on a long hostile token). */
+  const append = (s: string, literal: string | null = s): Tok => { const w = word(); if (s) { w.w.text += s; w.last = s[s.length - 1]!; } if (literal) w.w.literal += literal; return w; };
   const quoteMark = (w: ShWord) => { if (w.text === "") w.headQuoted = true; w.quoted = true; };
   const pending: { tok: OpTok; delim: string; strip: boolean }[] = [];
   let expectDelim: { tok: OpTok; strip: boolean } | null = null;
@@ -143,15 +151,16 @@ function lex(src: string, opaque: string[], vars: Record<string, string>): Token
     }
     cur = null;
   };
-  const lit = (s: string) => { const w = word(); w.w.text += s; w.w.literal += s; };
+  const lit = (s: string) => { append(s); };
   /** $NAME / ${NAME} with a known value substitutes; anything else makes the word dynamic. */
   const variable = (name: string) => {
     const w = word();
-    if (Object.prototype.hasOwnProperty.call(vars, name)) { w.w.text += vars[name]; return; }
+    if (Object.prototype.hasOwnProperty.call(vars, name)) { append(vars[name]!, null); return; }
     w.w.dynamic = true;
   };
   let i = 0;
   const n = src.length;
+  let braceBudget = 4 * n + 65536;
   /** $… at i; returns the next index. */
   const dollar = (j: number, inDouble: boolean): number => {
     const nx = src[j + 1];
@@ -194,10 +203,8 @@ function lex(src: string, opaque: string[], vars: Record<string, string>): Token
       let k = j + 2;
       while (k < n && src[k] !== "'") { if (src[k] === "\\") k++; k++; }
       if (k >= n) { opaque.push("unterminated $'"); return n; }
-      const w = word();
-      quoteMark(w.w);
-      const s = ansiC(src.slice(j + 2, k));
-      w.w.text += s; w.w.literal += s;
+      quoteMark(word().w);
+      append(ansiC(src.slice(j + 2, k)));
       return k + 1;
     }
     lit("$");
@@ -249,16 +256,15 @@ function lex(src: string, opaque: string[], vars: Record<string, string>): Token
     if (c === "\\") {
       if (src[i + 1] === "\n") { i += 2; continue; }
       const w = word();
-      if (i + 1 < n) { quoteMark(w.w); w.w.text += src[i + 1]; w.w.literal += src[i + 1]; }
+      if (i + 1 < n) { quoteMark(w.w); append(src[i + 1]!); }
       i += 2;
       continue;
     }
     if (c === "'") {
       const e = src.indexOf("'", i + 1);
       if (e < 0) { opaque.push("unterminated quote"); break; }
-      const w = word();
-      quoteMark(w.w);
-      w.w.text += src.slice(i + 1, e); w.w.literal += src.slice(i + 1, e);
+      quoteMark(word().w);
+      append(src.slice(i + 1, e));
       i = e + 1;
       continue;
     }
@@ -291,16 +297,16 @@ function lex(src: string, opaque: string[], vars: Record<string, string>): Token
       continue;
     }
     const curT = peek();
-    const op = !(curT && /[=]$/.test(curT.w.text) && c === "(") ? OPS.find((o) => src.startsWith(o, i)) : undefined;
+    const op = !(c === "(" && curT && curT.last === "=") ? OPS.find((o) => src.startsWith(o, i)) : undefined;
     if (op) {
       // zsh glob qualifiers and array assignments: `*(e:…:)`, `a=(x y)` — an unquoted "(" glued to a word.
       if (op === "(" && curT) {
-        if (curT.w.glob || /[*?\]]$/.test(curT.w.text)) opaque.push("zsh glob qualifier");
+        if (curT.w.glob || /[*?\]]/.test(curT.last)) opaque.push("zsh glob qualifier");
         flush();
       }
       // An fd number glued to a redirect: 2> 2>&1 1>&2.
       let fd: number | null = null;
-      if (/^[<>]|^&>/.test(op) && curT && !curT.w.quoted && !curT.w.dynamic && /^[0-9]+$/.test(curT.w.text)) { fd = Number(curT.w.text); cur = null; }
+      if (/^[<>]|^&>/.test(op) && curT && !curT.w.quoted && !curT.w.dynamic && /[0-9]/.test(curT.last) && /^[0-9]+$/.test(curT.w.text)) { fd = Number(curT.w.text); cur = null; }
       flush();
       const tok: OpTok = { t: "op", v: op, fd };
       toks.push(tok);
@@ -311,9 +317,13 @@ function lex(src: string, opaque: string[], vars: Record<string, string>): Token
     if (c === "{" && !cur && /[\s]/.test(src[i + 1] ?? " ")) { toks.push({ t: "op", v: "{" }); i++; continue; }
     if (c === "}" && !cur && /[\s;&|)]/.test(src[i + 1] ?? " ")) { toks.push({ t: "op", v: "}" }); i++; continue; }
     if (c === "{") {
-      const e = matchClose(src, i, "{", "}");
+      // Bug 433: each `{` scans ahead for its close, so `{{{{…` (or `{` then a long body with no close) is quadratic. The
+      // scans share one budget, linear in the text; past it a `{` is a brace word we couldn't check (glob, and opaque).
+      const e = braceBudget > 0 ? matchClose(src, i, "{", "}", braceBudget) : -2;
+      braceBudget = e === -2 ? 0 : braceBudget - (e > 0 ? e - i : n - i);
+      if (e === -2) { word().w.glob = true; if (!opaque.includes(BRACE_BUDGET)) opaque.push(BRACE_BUDGET); }
       const body = e > 0 ? src.slice(i + 1, e - 1) : "";
-      if (e > 0 && (body.includes(",") || body.includes(".."))) { const w = word(); w.w.glob = true; w.w.text += src.slice(i, e); w.w.literal += src.slice(i, e); i = e; continue; }
+      if (e > 0 && (body.includes(",") || body.includes(".."))) { append(src.slice(i, e)).w.glob = true; i = e; continue; }
     }
     if (c === "*" || c === "?" || c === "[") word().w.glob = true;
     lit(c);
@@ -428,15 +438,22 @@ function peel(argv0: ShWord[]): Peeled {
       wrappers.push(name);
       argsUnknown = true;
       let k = 1;
+      // Bug 431: the replace string (-I R, -J R, -i[R], --replace[=R]): a program word holding it is computed from input.
+      let repl: string | null = null;
       while (k < argv.length) {
         const t = argv[k]!.text;
         if (t === "--") { k++; break; }
+        if (t === "-I" || t === "-J") repl = argv[k + 1]?.text ?? null;
+        else if (/^-[IJ]./.test(t)) repl = t.slice(2);
+        else if (/^-i/.test(t)) repl = t.slice(2) || "{}";
+        else if (/^--replace(=|$)/.test(t)) repl = t.slice(10) || "{}";
         if (XARGS_VALUE.has(t)) { k += 2; continue; }
-        if (/^-[IJLnPsEda]./.test(t) || /^--\w/.test(t) || /^-[0oprtx]+$/.test(t)) { k++; continue; }
+        if (/^-[IJLnPsEda]./.test(t) || /^--\w/.test(t) || /^-[0oprtx]+$/.test(t) || /^-i/.test(t)) { k++; continue; }
         break;
       }
       argv = argv.slice(k);
       if (!argv.length) argv = wordsFromString("echo");
+      else if (repl && argv[0]!.text.includes(repl)) argv = [{ ...argv[0]!, dynamic: true }, ...argv.slice(1)];
       continue;
     }
     if (PLAIN_WRAPPERS.has(name)) {

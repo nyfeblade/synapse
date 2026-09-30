@@ -328,6 +328,12 @@ describe("hidden things stay hidden, wrong links say so, and a real 404", () => 
   it("with no record in this browser, a 404 says the conversation wasn't found", () => {
     expect(js).toContain(`fail(local ? "Couldn't load replies yet. Try again later." : "This conversation wasn't found. Check you copied the whole link.")`);
   });
+  it("a deleted conversation shows one line, hides the reply box and forgets the local copy", () => {
+    expect(fs.readFileSync(path.join(__dirname, "../../site/feedback-thread.html"), "utf8")).toContain('<p class="fb-empty" data-deleted hidden>This conversation was deleted</p>');
+    expect(js).toContain('if (j.status === "deleted") return gone();');
+    expect(js).toContain('if (r.status === 410 && j.status === "deleted") return gone();');
+    expect(js).toMatch(/function gone\(\) \{\s*forget\(\);\s*msgs\.replaceChildren\(\);[\s\S]*?form\.hidden = true;/);
+  });
   it("the sent message leaves this browser after the first successful load or 7 days", () => {
     expect(js).toMatch(/err\.hidden = true;\s*forget\(\);/);
     expect(js).toMatch(/Date\.now\(\) - l\.sentAt < GRACE_MS\)\) \{ forget\(\); return null; \}/);

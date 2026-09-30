@@ -1,17 +1,16 @@
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
+import { execBounded, ORB_LIMITS, orbCall } from "./orb-exec";
 import { resolveOrb } from "./orb-path";
 
 export type GatewayRoute = "localhost" | "orb-hostname" | "ssh-tunnel";
-export type Exec = (cmd: string, args: string[], opts?: { timeoutMs?: number; env?: Record<string, string> }) => Promise<{ code: number; stdout: string; stderr: string }>;
+export interface ExecResult { code: number; stdout: string; stderr: string; timedOut?: boolean }
+export type Exec = (cmd: string, args: string[], opts?: { timeoutMs?: number; env?: Record<string, string>; stdin?: Buffer }) => Promise<ExecResult>;
 
-export const execCommand: Exec = (cmd, args, opts) =>
-  new Promise((resolve) => {
-    // 64 MB: a full provision prints far more than execFile's 1 MB default, which killed it mid-run.
-    execFile(cmd, args, { timeout: opts?.timeoutMs ?? 30_000, maxBuffer: 64 * 1024 * 1024, ...(opts?.env ? { env: { ...process.env, ...opts.env } } : {}) }, (err, stdout, stderr) => {
-      const code = err ? (typeof (err as { code?: unknown }).code === "number" ? (err as { code: number }).code : 1) : 0;
-      resolve({ code, stdout: String(stdout), stderr: String(stderr) });
-    });
-  });
+/**
+ * Bug 435: runs in its own process group and kills the whole group on timeout (a box script's stuck `orb`
+ * grandchild used to keep the pipes open, so the call never returned). 64 MB of output: a full provision prints a lot.
+ */
+export const execCommand: Exec = execBounded;
 
 /** OrbStack's ssh: <machine>@orb reaches that machine (portable install: the profile's machine, not always "box"). */
 export function spawnSshTunnel(localPort: number, remotePort: number, machine = "box"): { close(): void } {
@@ -32,7 +31,7 @@ export class OrbBoxProvider {
   constructor(private exec: Exec, private cfg: BoxProviderConfig) {}
 
   async status(): Promise<"running" | "stopped" | "missing"> {
-    const r = await this.exec(resolveOrb(), ["list"]);
+    const r = await orbCall(this.exec, resolveOrb(), ["list"], { timeoutMs: ORB_LIMITS.query, idempotent: true });
     const line = r.stdout.split("\n").find((l) => l.trim().split(/\s+/)[0] === this.cfg.machine);
     if (!line) return "missing";
     return line.trim().split(/\s+/)[1] === "running" ? "running" : "stopped";
@@ -42,7 +41,7 @@ export class OrbBoxProvider {
     const s = await this.status();
     if (s === "missing") throw new Error(`OrbStack machine "${this.cfg.machine}" not found`);
     if (s === "stopped") {
-      const r = await this.exec(resolveOrb(), ["start", this.cfg.machine], { timeoutMs: 120_000 });
+      const r = await orbCall(this.exec, resolveOrb(), ["start", this.cfg.machine], { timeoutMs: ORB_LIMITS.start, idempotent: true });
       if (r.code !== 0) throw new Error(`orb start failed: ${r.stderr.trim()}`);
     }
   }
@@ -50,7 +49,7 @@ export class OrbBoxProvider {
   async stop(): Promise<void> {
     const s = await this.status();
     if (s !== "running") return;
-    const r = await this.exec(resolveOrb(), ["stop", this.cfg.machine], { timeoutMs: 120_000 });
+    const r = await orbCall(this.exec, resolveOrb(), ["stop", this.cfg.machine], { timeoutMs: ORB_LIMITS.stop, idempotent: true });
     if (r.code !== 0) throw new Error(`orb stop failed: ${r.stderr.trim()}`);
   }
 
@@ -58,7 +57,7 @@ export class OrbBoxProvider {
   async readGatewayInfo(timeoutMs = 60_000): Promise<{ port: number; token: string; hello?: boolean }> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const r = await this.exec(resolveOrb(), ["-m", this.cfg.machine, "-u", "root", "cat", "/home/box/.host/gateway.json"]);
+      const r = await orbCall(this.exec, resolveOrb(), ["-m", this.cfg.machine, "-u", "root", "cat", "/home/box/.host/gateway.json"], { timeoutMs: ORB_LIMITS.read, idempotent: false /* this loop is the retry */ });
       if (r.code === 0) {
         const j = JSON.parse(r.stdout) as { port: number; token: string; hello?: unknown };
         return { port: j.port, token: j.token, ...(j.hello === 1 ? { hello: true } : {}) };

@@ -32,6 +32,14 @@ describe("NotificationPolicy (NTF-01, BOT-23)", () => {
     expect(badges.at(-1)).toBe(1);
   });
 
+  it("smarter approvals: a card's needs-you notification carries its approval id", () => {
+    const { p, sent } = setup();
+    p.baseline([bot()]);
+    p.setFocused(false);
+    p.update(bot({ awaiting: { tabId: "auto-review", reason: "Approval needed: send 1 email", since: 2, approvalId: "ap1" }, marker: "blocked" }));
+    expect(sent.at(-1)).toEqual({ botId: "b1", title: "Courier needs you", body: "Approval needed: send 1 email", kind: "needs-you", approvalId: "ap1" });
+  });
+
   it("stays quiet when focused, notifications off, hidden, throttled, or no new message", () => {
     const { p, sent, tick } = setup();
     p.baseline([bot()]);

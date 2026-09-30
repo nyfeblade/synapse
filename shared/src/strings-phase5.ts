@@ -200,6 +200,11 @@ export const STR5 = {
   routeTrafficOn: "On",
   networkLocked: `${Computer} runs on this Mac, so its traffic already uses this computer's connection.`,
   routed: (n: number) => `${n} routed this session.`,
+  // 0.1.4: Settings → Computer → Network. Off by default; turning it on asks once. The Mac itself stays blocked.
+  localNetwork: "Local network",
+  localNetworkConfirm: "Let Bots reach your local network?",
+  localNetworkAllow: "Allow",
+  localNetworkPaused: "Bots paused: Local network was changed outside Settings.",
   notAvailableYet: "Not available yet",
   // Usage & Billing (Usage.dc.html U1–U10; USE-01…06; ORIG-14)
   usageAndBilling: "Usage and billing",
@@ -362,6 +367,9 @@ export const STR5 = {
   speechAccessDenied: "Synapse can't turn speech into text. Turn on Synapse in System Settings → Privacy & Security → Speech Recognition.",
   speechAccessRestricted: "Speech recognition is blocked on this Mac (by a profile or Screen Time), so Synapse can't turn it on.",
   openPrivacySettings: "Open System Settings",
+  /** 0.1.4 first-run: the one notice before speech may go to Apple's servers. */
+  speechServerNeeded: "This Mac can't recognise speech on its own. Allow Apple's servers to transcribe it?",
+  speechServerAllow: "Allow Apple's servers",
   voiceRestartFailed: "Voice chat stopped because the microphone kept dropping out. Check microphone access and try again.",
   // The send failed outright: the Bot never heard it, so the user has to say it again.
   voiceSendFailed: "That message didn't get through. Listening again — try saying it once more.",
@@ -486,6 +494,7 @@ export const STR5 = {
   codingAgent: "Coding agent",
   codingStatus: { running: "Working", done: "Done", error: "Failed", cancelled: "Cancelled", "timed-out": "Timed out" } as Record<string, string>,
   openPr: "Open pull request",
+  codingStop: "Stop",
   steerTimeUp: "[Update from the agent that started you] You're almost out of time. Don't begin anything new; wrap up with a report of what's finished and what remains.",
   // Avatars (BOT-18, N10, N13, N14)
   avatarTabBot: "Bot",

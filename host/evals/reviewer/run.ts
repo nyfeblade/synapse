@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Surface } from "@synapse/shared";
@@ -21,6 +20,7 @@ import { Reviewer } from "../../review/reviewer";
 import { analyzeShell } from "../../review/static";
 import type { RiskTarget } from "../../review/types";
 import { HostSettingsStore } from "../../store/host-settings";
+import { EvalTemp } from "../eval-temp";
 
 interface EvalCase {
   id: string; surface: Surface; command?: string; tool?: string; args?: Record<string, unknown>; action?: Record<string, unknown>;
@@ -30,6 +30,8 @@ interface EvalCase {
   /** Bug 410: Full auto's intent check (ReviewRequest.fullAutoIntent). `target` is the exact action; `noRules` = a
    *  Full-auto owner with no written rules; `wakeUntrusted` = outside text that came with a routine/event wake. */
   fullAuto?: boolean; target?: { action: string; arguments: Record<string, unknown> }; noRules?: boolean; wakeUntrusted?: string[];
+  /** Smarter approvals: the owner trusts these (the gate replay test uses it; the model never sees trust). */
+  trusted?: string[];
 }
 
 /**
@@ -86,9 +88,11 @@ async function main(): Promise<number> {
   const only = process.env.EVAL_ONLY ? new RegExp(process.env.EVAL_ONLY) : null;
   const run1 = only ? cases.filter((c) => only.test(c.id)) : cases;
   const local = process.env.EVAL_LOCAL_CLI === "1";
+  // Every temp dir this run makes is removed: each case's after the case, the CLI scratch dir at the end.
+  const temp = new EvalTemp();
   let model: ModelReviewer & { dispose?(): void };
   if (local) {
-    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "eval-cli-"));
+    const scratch = temp.dir("eval-cli-");
     model = new CliModelReviewer(process.env.CLAUDE_BIN ?? "claude", scratch);
   } else {
     const cfg = loadConfig();
@@ -111,7 +115,7 @@ async function main(): Promise<number> {
     let overridden = 0;
     let errors = 0;
     for (const c of run1) {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "eval-"));
+      const dir = temp.dir("eval-");
       const settings = new HostSettingsStore(path.join(dir, "settings.json"));
       settings.update(c.noRules ? { allowInstructions: [], blockInstructions: [] } : { allowInstructions: c.extraAllow ? [...ALLOW, c.extraAllow] : ALLOW, blockInstructions: ASK });
       const logFile = path.join(dir, "log.jsonl");
@@ -144,6 +148,7 @@ async function main(): Promise<number> {
       if (c.proposal === "null" && proposed) { proposalOk = false; console.log(`  ${c.id}: expected no proposal, got "${proposed}"`); }
       if (c.proposal === "valid" && !validRule(proposed)) { proposalOk = false; console.log(`  ${c.id}: expected a valid proposal, got "${proposed}"`); }
       console.log(`${c.id} ${decision.padEnd(5)} (expected ${c.expected}) stage=${log.stage}${out.kind === "error" ? ` ERROR ${String(log.error ?? "").slice(0, 200)}` : ""}${"verdict" in out && out.verdict ? ` · ${out.verdict.reason}` : ""}`);
+      temp.done(dir);
     }
     const lat = p95(latencies);
     const overrideRate = modelCalls ? overridden / modelCalls : 0;
@@ -152,6 +157,7 @@ async function main(): Promise<number> {
     ok &&= pass;
   }
   model.dispose?.();
+  temp.cleanup();
   return ok ? 0 : 1;
 }
 

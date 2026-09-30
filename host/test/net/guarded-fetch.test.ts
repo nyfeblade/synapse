@@ -5,7 +5,7 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { discoverOAuthProtectedResourceMetadata } from "@modelcontextprotocol/sdk/client/auth.js";
-import { blockedAddress, guardedFetch, readGuardNets, BLOCKED_CODE } from "../../net/guarded-fetch";
+import { blockedAddress, guardedFetch, readGuardNets, readLanOpen, BLOCKED_CODE } from "../../net/guarded-fetch";
 import { httpConnector } from "../../mcp/connect";
 import { McpRegistry } from "../../mcp/registry";
 import { mcpFetchFor } from "../../mcp/module";
@@ -56,6 +56,42 @@ describe("blockedAddress", () => {
     expect(blockedAddress("203.0.113.9", nets)).toBe(true);
     expect(blockedAddress("2001:db8:6::7", nets)).toBe(false);
     expect(readGuardNets(path.join(d, "missing"))).toEqual([]);
+  });
+});
+
+// 0.1.4 Local network: the guarded fetch follows the switch for exactly what the box firewall opens (RFC 1918, ULA).
+describe("blockedAddress with Local network on", () => {
+  it.each(["10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "::ffff:192.168.1.1", "fd00:1:2::5"])("allows the LAN address %s", (ip) => expect(blockedAddress(ip, [], true)).toBe(false));
+  it.each([
+    "127.0.0.1", "::1", "0.0.0.0", "0.250.250.254", "0.250.250.200", "100.64.0.1", "169.254.169.254", "198.18.0.1", "198.19.249.1", "224.0.0.251",
+    "255.255.255.255", "fd07:b51a:cc66:f0::fe", "fd07:b51a:cc66:f0::1", "fe80::1", "ff02::1", "::", "::ffff:7f00:1", "64:ff9b::c0a8:101",
+  ])("still refuses %s (the Mac, OrbStack, loopback, link-local)", (ip) => expect(blockedAddress(ip, [], true)).toBe(true));
+  it("still refuses the Mac's own LAN address from MAC_NETS", () => {
+    expect(blockedAddress("192.168.1.23", ["192.168.1.23/32", "fd00:1:2::9/128"], true)).toBe(true);
+    expect(blockedAddress("fd00:1:2::9", ["192.168.1.23/32", "fd00:1:2::9/128"], true)).toBe(true);
+    expect(blockedAddress("192.168.1.24", ["192.168.1.23/32"], true)).toBe(false);
+  });
+  it("still refuses this machine's own addresses", () => {
+    const own = Object.values(os.networkInterfaces()).flat().map((i) => i!.address.replace(/%.*$/, "")).filter((a) => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a));
+    for (const a of own) expect(blockedAddress(a, [], true)).toBe(true);
+  });
+  it("still refuses OrbStack's machine network (BOX_NETS from bots-ports) and its whole ULA /48", () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "guard-")); dirs.push(d);
+    const f = path.join(d, "net-guard.conf");
+    fs.writeFileSync(f, "LAN_BLOCK=off\nMAC_NETS=192.168.1.23/32\nBOX_NETS=192.168.139.0/24 fd07:b51a:cc66::/48\n");
+    const nets = readGuardNets(f);
+    expect(nets).toEqual(["192.168.1.23/32", "192.168.139.0/24", "fd07:b51a:cc66::/48"]);
+    for (const ip of ["192.168.139.55", "192.168.139.1", "fd07:b51a:cc66:0:60cc:c4ff:febf:6270", "192.168.1.23"]) expect(blockedAddress(ip, nets, true)).toBe(true);
+    expect(blockedAddress("fd07:b51a:cc66:1::9", [], true)).toBe(true);
+    expect(blockedAddress("192.168.1.40", nets, true)).toBe(false);
+  });
+  it("reads LAN_BLOCK from the config (last line wins; anything but off is closed)", () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "guard-")); dirs.push(d);
+    const f = path.join(d, "net-guard.conf");
+    fs.writeFileSync(f, "LAN_BLOCK=on\n"); expect(readLanOpen(f)).toBe(false);
+    fs.writeFileSync(f, "LAN_BLOCK=on\nLAN_BLOCK=off\n"); expect(readLanOpen(f)).toBe(true);
+    fs.writeFileSync(f, "LAN_BLOCK=maybe\n"); expect(readLanOpen(f)).toBe(false);
+    expect(readLanOpen(path.join(d, "missing"))).toBe(false);
   });
 });
 

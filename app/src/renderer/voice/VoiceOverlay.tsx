@@ -23,6 +23,7 @@ import { useCall } from "./call-store";
 import { useBotCalls } from "./bot-calls-store";
 import { dictationFault, type PrivacyPane } from "./dictation-errors";
 import { PrivacySettingsButton } from "./PrivacySettingsButton";
+import { ServerSpeechAllow } from "./ServerSpeechAllow";
 import { isOwnSession, newDictationSessionId } from "./session";
 import { pauseMsFor } from "./sentences";
 import { speechText } from "./speech-text";
@@ -99,6 +100,9 @@ export function VoiceOverlay({ botId }: { botId: string }) {
   const [fault, setFault] = useState<string | null>(null);
   // Bug 99: the System Settings pane that fixes the current fault, when it is a permission fault.
   const [faultPane, setFaultPane] = useState<PrivacyPane | null>(null);
+  /** 0.1.4 first-run: the fault is "no on-device recognition": the opt-in to Apple's servers goes beside it. */
+  const [faultServer, setFaultServer] = useState(false);
+  const stagedServer = useRef(false);
   const stagedPane = useRef<PrivacyPane | null>(null);
   // Bug 105: a device dropped out / came back, or echo cancellation is off for this device pair.
   const [notice, setNotice] = useState<string | null>(null);
@@ -409,7 +413,7 @@ export function VoiceOverlay({ botId }: { botId: string }) {
       expectAnswer: () => { if (session.current) void nativeCall("dictation.expect", { sessionId: session.current }).catch(() => {}); },
       now: () => Date.now(), silenceMs: LIMITS5.voiceSilenceMs, helperEndpoints: true,
       after: (ms, fn) => { setTimeout(fn, ms); },
-      notify: (message) => { setFault(message); setFaultPane(stagedPane.current); stagedPane.current = null; },
+      notify: (message) => { setFault(message); setFaultPane(stagedPane.current); stagedPane.current = null; setFaultServer(stagedServer.current); stagedServer.current = false; },
       onLine: (who, text, phrase) => {
         setSpeaker(who);
         if (phrase === "filler") livingNod(who); // bug 226: the nod lands with the call's "Mm"
@@ -546,7 +550,7 @@ export function VoiceOverlay({ botId }: { botId: string }) {
       if (e.type === "error") {
         const f = dictationFault(e.message ?? "", e.code);
         if (f.notice) loop.onSessionEnd(e.message ?? "No speech detected");
-        else { stagedPane.current = f.pane; loop.onFault(f.text); stagedPane.current = null; }
+        else { stagedPane.current = f.pane; stagedServer.current = f.serverOptIn === true; loop.onFault(f.text); stagedPane.current = null; stagedServer.current = false; }
       }
       if (e.type === "end") loop.onSessionEnd();
       setState(loop.state);
@@ -822,6 +826,7 @@ export function VoiceOverlay({ botId }: { botId: string }) {
           ? <>
               <span className="voice-state voice-fault" role="alert">{fault}</span>
               {faultPane && <PrivacySettingsButton pane={faultPane} />}
+              {faultServer && <ServerSpeechAllow onAllowed={() => { setFault(null); setFaultServer(false); loop.begin(); setState(loop.state); }} />}
             </>
           : <span className="voice-state" data-testid="voice-state" aria-live="polite">{label}</span>}
         <CallMeter level={mic} muted={muted} label={STR5.callMicLevel} />

@@ -1,8 +1,9 @@
 /**
  * The JavaScript packages Synapse ships, for app/build/THIRD-PARTY-NOTICES.txt (bug 283).
  *
- * Three sets, each the production-dependency closure read from the installed node_modules:
+ * Four sets, each the production-dependency closure read from the installed node_modules:
  *   app   the app's own dependencies (app/package.json), packed into app.asar;
+ *   mcp   what esbuild inlines into the MCP helper (Resources/mcp/synapse-mcp.cjs, 0.1.4): MCP_HELPER below;
  *   host  the host's dependencies that esbuild inlines into host.mjs (host/package.json minus EXTERNAL);
  *   box   the EXTERNAL ones, which box/deploy.sh installs from npm into the box next to host.mjs.
  * Workspace packages (@synapse/*) are ours and left out; optional platform packages are left out too.
@@ -65,12 +66,16 @@ function closure(names, fromDir) {
   return out;
 }
 
+/** 0.1.4: the packages app/build.mjs inlines into the MCP helper (app/src/mcp). A build-time devDependency of the app. */
+export const MCP_HELPER = ["@modelcontextprotocol/sdk"];
+
 export function bundledPackages(repoRoot) {
   const read = (ws) => JSON.parse(fs.readFileSync(path.join(repoRoot, ws, "package.json"), "utf8"));
   const external = hostExternals(repoRoot);
   const hostDeps = Object.keys(read("host").dependencies ?? {});
   return {
     app: closure(Object.keys(read("app").dependencies ?? {}), path.join(repoRoot, "app")),
+    mcp: closure(MCP_HELPER, path.join(repoRoot, "app")),
     host: closure(hostDeps.filter((n) => !external.includes(n)), path.join(repoRoot, "host")),
     box: closure(hostDeps.filter((n) => external.includes(n)), path.join(repoRoot, "host")),
   };
@@ -83,6 +88,7 @@ const section = (title, m) =>
 export function renderPackageList(pkgs) {
   return [
     section("JavaScript packages inside the app (app.asar)", pkgs.app),
+    section("JavaScript packages inlined into the MCP helper (Resources/mcp/synapse-mcp.cjs)", pkgs.mcp),
     section("JavaScript packages inlined into the host (Resources/host/dist/host.mjs)", pkgs.host),
     section("JavaScript packages installed from npm into the box by box/deploy.sh (not in the app)", pkgs.box),
   ].join("\n\n") + "\n";

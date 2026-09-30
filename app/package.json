@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@synapse/host": "*",
     "@electron/packager": "^19.1.1",
     "@playwright/test": "^1.63.0",

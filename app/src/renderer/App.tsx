@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState, type DragEvent } from "react";
+import { startTimeZoneSync } from "./time-zone-sync";
 import { STR } from "@synapse/shared";
 import { asResource } from "./async-resource";
 import { callQuiet } from "./bridge";
@@ -8,6 +9,7 @@ import { loadDisplays, useComputer } from "./computer-state";
 import { BoxBanner } from "./components/BoxBanner";
 import { MacDiskBanner } from "./components/MacDiskBanner";
 import { KeyPrompts } from "./components/KeyPrompts";
+import { McpApprovals } from "./components/McpApprovals";
 import { MacModesBanner } from "./components/MacModesBanner";
 import { ComputerView } from "./components/ComputerView";
 import { ConnectionScreen } from "./components/ConnectionScreen";
@@ -66,6 +68,8 @@ export function App() {
   // finding 2 / UI-03): the account-menu badge must track a background update check regardless
   // of whether Settings → Updates was ever opened.
   useEffect(() => startUpdatesSync(), []);
+  // 0.1.4 first-run: the host follows the Mac's time zone (routines, and "Auto" in Settings).
+  useEffect(() => (connection.kind === "connected" ? startTimeZoneSync() : undefined), [connection.kind]);
   useEffect(() => {
     if (connection.kind !== "connected") return;
     // callQuiet, all of these: background probes fired on every reconnect, where call()'s default —
@@ -176,6 +180,7 @@ export function App() {
       <BoxBanner />
       <MacDiskBanner />
       <KeyPrompts />
+      <McpApprovals />
       <MacModesBanner />
       <Sidebar />
       {connection.kind !== "connected" ? (

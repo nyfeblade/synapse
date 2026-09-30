@@ -1,4 +1,5 @@
 import os from "node:os";
+import { macTimeZone } from "./mac-time-zone";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { hkdfSync, randomBytes } from "node:crypto";
@@ -12,7 +13,9 @@ import { CoordinatorHost, type CoordinatorProcess } from "./coordinator-host";
 import { execCommand, OrbBoxProvider } from "./box-provider";
 import { shutdownOnQuit } from "./box-quit";
 import { resolveOrb } from "./orb-path";
+import { orb, ORB_LIMITS } from "./orb-exec";
 import { MacNetsWatcher } from "./mac-nets";
+import { PORTS_SCRIPT, LocalNetwork } from "./local-network";
 import { resolveGateway, type GatewayHandle } from "./gateway-bootstrap";
 import { gatewayCall, type HostCreds } from "./gateway-call";
 import { registerComposioPaste } from "./native/composio-paste";
@@ -78,6 +81,7 @@ import { postToRenderer, sendToRenderer } from "./to-renderer";
 import { registerMacBrowser } from "./browser/wire";
 import { registerMacApps } from "./macapp/wire";
 import { registerPhone } from "./phone/wire";
+import { registerMcp } from "./mcp/wire";
 import { makeTailscale } from "./phone/tailscale";
 
 const profileDir = configureProfile(app, process.env);
@@ -233,6 +237,13 @@ let lifecycle: BoxLifecycle | null = null;
 let backupTimer: NodeJS.Timeout | null = null;
 /** Bug 365: the Mac's own networks follow into the box firewall when they change (Wi-Fi, VPN, a new IPv6 prefix). */
 let macNets: MacNetsWatcher | null = null;
+/** 0.1.4: Settings → Local network, applied as root in the box by the app only (never the host or a Bot). */
+const localNetwork = new LocalNetwork({
+  run: async (args) => { const r = await orb(["-m", boxMachine(), "-u", "root", PORTS_SCRIPT, ...args], { timeoutMs: ORB_LIMITS.inBox, idempotent: true }); return { code: r.code, stdout: r.stdout }; },
+  wanted: () => readAppSettings(app.getPath("userData"), app.getAppPath(), appRuntime()).localNetwork === true,
+  setWanted: (on) => { writeAppSettings(app.getPath("userData"), { localNetwork: on }); },
+  log: (l) => process.stderr.write(`${l}\n`),
+});
 function startBoxOps(win: BrowserWindow, profileDir: string, baseUrl: string, token: string, reconnect: () => Promise<void>): void {
   // FUZZ mode has no box (no OrbStack machine); only box:info answers, from the repo's bundled
   // box/ dir (present in development). Update/Recover/Reset would need a real machine, so they
@@ -247,10 +258,16 @@ function startBoxOps(win: BrowserWindow, profileDir: string, baseUrl: string, to
     return;
   }
   macNets ??= new MacNetsWatcher({
-    apply: async (nets) => (await execCommand(resolveOrb(), ["-m", boxMachine(), "-u", "root", "/usr/local/lib/bots/bots-ports", "mac-nets", nets.join(" ")], { timeoutMs: 20_000 })).code === 0,
+    apply: async (nets) => (await orb(["-m", boxMachine(), "-u", "root", "/usr/local/lib/bots/bots-ports", "mac-nets", nets.join(" ")], { timeoutMs: ORB_LIMITS.inBox, idempotent: true })).code === 0,
     log: (l) => process.stderr.write(`${l}\n`),
+    // 0.1.4: the Local network tamper check rides on the same tick (local-network.ts verify).
+    everyTick: () => localNetwork.verify(),
   });
+  // The host that holds Bot turns while the box's Local network state differs from the owner's choice.
+  localNetwork.setPauseHost(async (on) => { await gatewayCall(baseUrl, token, hostCallOpts)("setNetworkPause", { on }); });
   macNets.start();
+  // An Update or Reset recreated the box with the LAN blocked: the owner's Local network choice comes back.
+  void localNetwork.reconcile();
   const call = gatewayCall(baseUrl, token, hostCallOpts);
   const sink = new SnapshotSink({
     dir: path.join(profileDir, "snapshots"), call,
@@ -414,7 +431,12 @@ async function start(): Promise<void> {
         coordinator.postMessage({ type: "nolimits-verify-result", id: m.id, result: consumeNoLimitsNonce(typeof m.nonce === "string" ? m.nonce : "") });
         return;
       }
-      if (m.type === "notify" && m.botId) showBotNotification(win, { botId: m.botId, title: m.title ?? "", body: m.body ?? "" });
+      if (m.type === "notify" && m.botId) {
+        const raw = (m as { approvalId?: unknown }).approvalId;
+        const approvalId = typeof raw === "string" ? raw : undefined;
+        showBotNotification(win, { botId: m.botId, title: m.title ?? "", body: m.body ?? "", ...(approvalId ? { approvalId } : {}) },
+          (a) => coordinator.postMessage({ type: "approval-answer", ...a }));
+      }
       else if (m.type === "badge") setDockBadge(m.count ?? 0);
     },
     onDeath: (attempt) => {
@@ -456,6 +478,8 @@ async function start(): Promise<void> {
   registerExternal();
   registerFiles(() => win);
   registerNative("fetchLogo", (a: { url: string }) => fetchLogoDataUrl(a.url));
+  // 0.1.4 first-run: the Mac's zone now (the host follows it for "Auto" and reschedules routines when it changes).
+  registerNative("system.timeZone", () => ({ zone: macTimeZone() }));
   const appSettingsStore = { read: () => readAppSettings(app.getPath("userData"), app.getAppPath(), appRuntime()), write: (p: Parameters<typeof writeAppSettings>[1]) => writeAppSettings(app.getPath("userData"), p) };
   ipcMain.on("native:dropped-path", (e, p: unknown) => { if (e.sender === win.webContents && typeof p === "string") allowDroppedPath(p); });
   // Bug 105: dictation / voice narration goes to a small rotating file in the logs folder as well
@@ -492,6 +516,13 @@ async function start(): Promise<void> {
   registerSettingsNatives(registerNative, appSettingsStore, { changed: (k) => { if (k === "keepVoiceReady") kokoro.keepReadyChanged(); } });
   // Bot sharing: the owner's advanced actions (Export for website) — Settings' "Show developer tools", or SYNAPSE_OWNER=1.
   registerNative("ownerTools.get", () => ({ on: process.env.SYNAPSE_OWNER === "1" || switchValue(appSettingsStore.read(), "showDeveloperTools") }));
+  // 0.1.4 Settings → Computer → Local network: owner only, applied live in the box as root (local-network.ts).
+  registerNative("localNetwork.get", () => { if (process.env.FUZZ === "1") throw new Error("Not available in FUZZ mode"); return localNetwork.get(); });
+  registerNative("localNetwork.set", (a: { on?: unknown }) => {
+    if (process.env.FUZZ === "1") throw new Error("Not available in FUZZ mode");
+    if (typeof a?.on !== "boolean") throw new Error("Bad setting.");
+    return localNetwork.set(a.on);
+  });
   app.on("will-quit", () => kokoro.dispose());
   // Cloned voices (F5). Optional and off until the user records one: with no saved voice this
   // starts no Python, reads no weights and takes no memory. It is never kept hot — the model is
@@ -650,6 +681,8 @@ async function start(): Promise<void> {
     remote: phone.calls,
     lm: sttLm,
     whisper: (mode) => helperWhisperArgs({ status: readWhisperStatus(), mode, dictationOnly: !whisperInCalls() }),
+    // 0.1.4 first-run: speech goes to Apple's servers only after the user's opt-in (off by default).
+    serverSpeech: () => readAppSettings(app.getPath("userData"), app.getAppPath(), appRuntime()).serverSpeech === true,
     tts: kokoro,
     f5,
     qwen,
@@ -806,6 +839,20 @@ async function start(): Promise<void> {
   registerAuthIpc(ipcMain, () => (hostConnected ? apiKeySender : null), () => hostConnectError);
   // Settings → Connected accounts → Composio: the Paste click reads the clipboard here and hands the key straight to
   // the host. FUZZ never touches the real clipboard: it pastes a stand-in key the fake Composio accepts.
+  // 0.1.4: Synapse's MCP server — off by default; while on, one private Unix socket (no port) that approved MCP
+  // clients reach through the bundled helper (Contents/Resources/mcp/synapse-mcp).
+  const mcp = registerMcp({
+    userData: app.getPath("userData"),
+    reg: registerNative, emit: emitNative, log: (l) => console.log(l),
+    call: () => (handle ? gatewayCall(handle.baseUrl, handle.token, hostCallOpts) : null),
+    launch: app.isPackaged
+      ? { command: path.join(process.resourcesPath, "mcp", "synapse-mcp"), args: [], env: {} }
+      : { command: process.execPath, args: [path.join(__dirname, "mcp.cjs")], env: { ELECTRON_RUN_AS_NODE: "1" } },
+    seal: { encrypt: (s) => sealer.require((k) => k.encryptString(s)), decrypt: (b) => sealer.require((k) => k.decryptString(b)) },
+    attention: () => { try { app.dock?.bounce("informational"); } catch { /* cosmetic */ } },
+  });
+  void mcp.resume();
+  app.on("will-quit", () => { void mcp.dispose(); });
   registerComposioPaste({
     reg: registerNative,
     readClipboard: () => (process.env.FUZZ === "1" ? process.env.FUZZ_COMPOSIO_KEY ?? "ak_fuzz_example_key_0000" : clipboard.readText()),
@@ -938,7 +985,7 @@ async function start(): Promise<void> {
     if (h?.hostVersion) lastHostVersion = h.hostVersion;
     await crash.noteHostHealth(h, async () => {
       if (process.env.FUZZ === "1") return [];
-      const j = await execCommand(resolveOrb(), ["-m", boxMachine(), "-u", "root", "journalctl", "-u", "bothost", "-n", "400", "-o", "cat", "--no-pager"], { timeoutMs: 15_000 });
+      const j = await orb(["-m", boxMachine(), "-u", "root", "journalctl", "-u", "bothost", "-n", "400", "-o", "cat", "--no-pager"], { timeoutMs: ORB_LIMITS.inBox, idempotent: true });
       return j.code === 0 ? j.stdout.split("\n") : [];
     });
   };
@@ -968,7 +1015,7 @@ async function start(): Promise<void> {
       const result = await reprovisionIfChanged({
         bundled: () => { try { return bundledImageVersion(boxDir); } catch { return null; } },
         boxVersion: async () => {
-          const m = await machineMarks(execCommand, resolveOrb(), boxMachine());
+          const m = await machineMarks(execCommand, resolveOrb(), boxMachine()).catch(() => ({ ok: false as const }));
           return m.ok ? { ok: true as const, version: m.provisioned ?? m.image } : { ok: false as const };
         },
         callLive: () => micLive,

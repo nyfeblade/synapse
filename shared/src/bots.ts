@@ -129,7 +129,11 @@ export const ENGINEERING_MODE_EXTRA_TOKENS = 2_700;
 export type Presence = "idle" | "thinking" | "working" | "sending" | "searching" | "loading" | "orbit";
 export interface Activity { thinking?: true; tool?: string; detail?: string }
 export type SidebarMarker = "blocked" | "unread" | "working" | null;
-export interface AwaitingUser { tabId: "auto-review" | "widget" | "secret" | "box"; reason: string; since: number }
+export interface AwaitingUser {
+  tabId: "auto-review" | "widget" | "secret" | "box"; reason: string; since: number;
+  /** Smarter approvals: the pending card this is (auto-review only), so a notification can answer it. */
+  approvalId?: string;
+}
 
 export interface BotSummary {
   id: string;

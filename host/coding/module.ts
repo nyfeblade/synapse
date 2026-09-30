@@ -1,4 +1,5 @@
 import type { CodingAgentView } from "@synapse/shared";
+import { GatewayError } from "../gateway/errors";
 import { updateCard } from "../phase5/cards";
 import type { HostModule, ModuleContext } from "../phase5/types";
 import { fillTemplate, loadPrompt } from "../prompts";
@@ -50,8 +51,17 @@ export function createCodingModule(ctx: ModuleContext, agents: CodingAgents, car
   return {
     name: "coding",
     botTools: (botId, slot) => [createCodingAgentTool({ botId, slot, agents, bots: ctx.bots, now: ctx.now, cardIds })],
-    start: () => { for (const a of agents.markInterruptedAtBoot()) hooks.onDone(a); },
+    // 0.1.4 first-run: the card settles too (it said "Working" after a restart), then the Bot is woken.
+    start: () => { for (const a of agents.markInterruptedAtBoot()) { hooks.onChange(a); hooks.onDone(a); } },
     stop: () => hooks.dispose(),
-    handlers: { listCodingAgents: (a) => ({ agents: agents.list(a.id) }) },
+    handlers: {
+      listCodingAgents: (a) => ({ agents: agents.list(a.id) }),
+      // 0.1.4 first-run: the card's Stop. Stopping one that already ended is a no-op that returns it as it is.
+      cancelCodingAgent: (a) => {
+        if (!agents.get(a.id)) throw new GatewayError("NOT_FOUND", "That coding agent doesn't exist.");
+        agents.cancel(a.id);
+        return { agent: agents.get(a.id)! };
+      },
+    },
   };
 }

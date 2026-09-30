@@ -16,6 +16,7 @@ import { fillTemplate, loadPrompt } from "../../prompts/index";
 import { SdkFrontSession } from "../../voice/front-session";
 import { CALL_MINUTES, CALL_SCRIPT } from "../../bench/voice/call-script";
 import { tmpConfig } from "../helpers";
+import { realHomeForTest } from "../../../scripts/test-home";
 
 /**
  * Bug 142 — the ONE approved real-model run (under 100k tokens), on this Mac with the user's own sign-in:
@@ -47,7 +48,7 @@ describe.skipIf(process.env.RUN_REAL_FRONT !== "1")("voice fast path (REAL model
     const rss: number[] = [];
     const sampler = setInterval(() => { const c = childCpu(); if (c.n) { cpu.push(c.pcpu); rss.push(c.rssMb); } }, 250);
     const localEnv: Record<string, string> = {
-      HOME: os.homedir(), PATH: process.env.PATH ?? "/usr/bin:/bin", USER: process.env.USER ?? "user", LANG: "en_US.UTF-8",
+      HOME: realHomeForTest("the real claude CLI login lives there (opt-in live run)"), PATH: process.env.PATH ?? "/usr/bin:/bin", USER: process.env.USER ?? "user", LANG: "en_US.UTF-8",
       SHELL: "/bin/zsh", TMPDIR: os.tmpdir(), ENABLE_TOOL_SEARCH: "false",
     };
 

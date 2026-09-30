@@ -1,7 +1,9 @@
 import { B2B_KINDS, LIMITS, type B2BKind, type B2BRequest, type SendToAgentArgs } from "@synapse/shared";
+import type { Delivery } from "./mailbox";
 import type { RequestStore } from "./requests";
 import { extractArtifacts, hasAsk, informativeTokens, isCourtesyOnly, jaccard, normalizeText, novelty, sha1, tokenSet4 } from "./text";
 import type { ThreadStore } from "./threads";
+import { agentWakeFits } from "./wake-prompt";
 
 export type GateDecision =
   | { verdict: "reject"; check: "G1" | "G6"; text: string }
@@ -21,11 +23,27 @@ const TEXT = {
   dup: (name: string, min: number) => `Not sent: it repeats what you already sent ${name} ${min} min ago.`,
   g6Answered: (rid: string, min: number, preview: string) => `Not sent: this repeats request ${rid} (answered ${min} min ago: "${preview.slice(0, 200)}"). Use that result or ask something new.`,
   g6Open: (rid: string, min: number) => `Not sent: this repeats request ${rid} (still open, sent ${min} min ago). Its result will wake you — use it or ask something new.`,
+  tooLong: `Not sent: message is longer than ${LIMITS.b2bMessageMax.toLocaleString("en-US")} characters. Shorten it, split it into several messages, or put long content in a file under /workspace and send its path.`,
+  tooLongWrapped: "Not sent: too long for Synapse's safety check once it's wrapped for the other Bot (long expects, many artifacts or lots of <, >, & and \" signs count too). Shorten it, split it into several messages, or put long content in a file under /workspace and send its path.",
   g7: (name: string) => `Not sent: it adds nothing new to your thread with ${name}. Send only new results, questions, requests or blockers.`,
 };
 const mins = (now: number, at: number) => Math.max(1, Math.round((now - at) / 60_000));
 const words4 = (tokens: string[]) => new Set(tokens.filter((t) => /^[\p{L}]{4,}$/u.test(t)));
 const isData = (t: string) => /\d|\/|https?:/.test(t);
+
+const RID = "r_XXXXXXXX";
+/** Bug 432: the message as the recipient's wake would carry it, for every kind it could be delivered as (the classifier
+ *  may change the kind), with the ids it will get; each must fit what Auto-review reads, whatever the digest holds then. */
+function wrappedFits(i: GateInput, msg: string): boolean {
+  const a = i.args;
+  const artifacts = [...new Set([...(a.artifacts ?? []), ...extractArtifacts(msg)])];
+  return B2B_KINDS.every((kind) => agentWakeFits([{
+    from: i.from, fromName: i.nameOf(i.from), kind, message: msg, chainId: "", priority: true,
+    ...(kind === "result" ? { inReplyTo: a.in_reply_to ?? RID, status: "declined" as const } : { rid: RID }),
+    ...(a.expects ? { expects: a.expects } : {}), ...(artifacts.length ? { artifacts } : {}), ...(a.images?.length ? { images: a.images } : {}),
+    ...(kind === "handoff" ? { taskId: a.task_id ?? "t_XXXXXXXX" } : {}),
+  } satisfies Delivery]));
+}
 
 /** ORIG-09 §09.2: deterministic checks in order; the first that decides ends the gate. */
 export function runGate(i: GateInput): GateDecision {
@@ -37,11 +55,14 @@ export function runGate(i: GateInput): GateDecision {
   if (!kind || !(B2B_KINDS as readonly string[]).includes(kind)) return reject(TEXT.kind);
   const msg = (a.message ?? "").trim();
   if (!msg) return reject(TEXT.field("message", kind, "Write the message itself."));
-  if (msg.length > LIMITS.b2bMessageMax) return reject("Not sent: message is longer than 8,000 characters. Put long content in a file under /workspace and send its path.");
+  if (msg.length > LIMITS.b2bMessageMax) return reject(TEXT.tooLong);
   const expects = (a.expects ?? "").trim();
   if (NEEDS_EXPECTS.includes(kind) && expects.length < LIMITS.b2bExpectsMin) return reject(TEXT.field("expects", kind, "Say exactly what you expect back (at least 8 characters)."));
   if (expects.length > LIMITS.b2bExpectsMax) return reject("Not sent: expects can be at most 300 characters.");
   if ((a.artifacts?.length ?? 0) > LIMITS.b2bArtifactsMax) return reject("Not sent: at most 10 artifacts per message.");
+  // Bug 432: Auto-review reads LIMITS.reviewerContextChars of the wake this message becomes. One it couldn't read whole
+  // (long expects, many artifacts, heavy escaping) is refused here, never cut: nothing can hide past the part it sees.
+  if (!wrappedFits(i, msg)) return reject(TEXT.tooLongWrapped);
   let bound: B2BRequest | null = null;
   if (a.in_reply_to) {
     const r = i.requests.get(a.in_reply_to);

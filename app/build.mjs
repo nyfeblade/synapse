@@ -13,6 +13,13 @@ await build({
   sourcemap: process.env.PACKAGE_BUILD !== "1", external: ["electron"],
 });
 console.log("app: built main, preload, coordinator");
+// 0.1.4: the stdio MCP helper an MCP client launches (dist/mcp.cjs; packaged as Contents/Resources/mcp). One file, no
+// source map in a package build, the official MCP SDK inlined: it starts in well under a second.
+await build({
+  entryPoints: { mcp: "src/mcp/entry.ts" }, absWorkingDir: here, outdir: "dist", outExtension: { ".js": ".cjs" },
+  bundle: true, platform: "node", format: "cjs", target: "node22", sourcemap: process.env.PACKAGE_BUILD !== "1", external: ["electron"],
+});
+console.log("app: built the MCP helper");
 // Bug 198: the phone client that Phone access serves (dist/phone, next to main.cjs).
 const { buildPhone } = await import("./scripts/build-phone.mjs");
 await buildPhone(path.join(here, "dist", "phone"));

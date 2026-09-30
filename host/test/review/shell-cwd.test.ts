@@ -170,8 +170,10 @@ describe("Write/Edit to git control or security files carry the F8 floor (item 1
     await s.gate.preToolUse(s.id, w("/home/box/.claude/settings.json", "g2"));
     await s.gate.preToolUse(s.id, w("/etc/hosts", "g3"));
     expect(s.seen[0]!.staticResult).toMatchObject({ floorHits: ["F8"], tierHint: 4 });
-    expect(s.seen[1]!.staticResult).toMatchObject({ floorHits: ["F8"], tierHint: 4 });
-    expect(s.seen[2]!.staticResult.floorHits).toEqual([]);
+    expect(s.seen[1]!.staticResult).toMatchObject({ tierHint: 4 });
+    expect(s.seen[1]!.staticResult.floorHits).toContain("F8");
+    // Bug 439: /etc is a protected place to the Full-auto classifier, so Ask carries its floor too (never F8).
+    expect(s.seen[2]!.staticResult.floorHits).toEqual(["F5"]);
   });
 });
 

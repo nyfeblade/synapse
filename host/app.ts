@@ -5,7 +5,7 @@ import fs from "node:fs";
 import type http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
-import { DEFAULT_BOT_MODEL, DEFAULT_EFFORT, DEFAULT_HISTORY_KEEP, LONG_CONTEXT_ESCALATE_TOKENS, isModelId, modelLabel, spawnModelId, STR, STRG, STRV, STR_AUTH, type HealthInfo } from "@synapse/shared";
+import { DEFAULT_BOT_MODEL, DEFAULT_EFFORT, DEFAULT_HISTORY_KEEP, LONG_CONTEXT_ESCALATE_TOKENS, isModelId, modelLabel, spawnModelId, STR, STR5, STRG, STRV, STR_AUTH, type HealthInfo } from "@synapse/shared";
 import { ApprovalGate } from "./approvals/approval-gate";
 import { BotService } from "./bots/bot-service";
 import { ClaudeBrain } from "./brain/claude-brain";
@@ -71,6 +71,7 @@ import { mergeExtensions, type BotToolExtensions } from "./tools/registry";
 import { claudeExecutableFor } from "./brain/tool-policy";
 import type { BrainWiring, SpawnConfig, SupervisedBrain } from "./brain/types";
 import { mergeCommands } from "./commands";
+import { McpBridge } from "./mcp-server/bridge";
 import type { HostConfig } from "./config";
 import { createPhase3Services, type Phase3Services } from "./computer/phase3-services";
 import { GatewayError } from "./gateway/errors";
@@ -300,6 +301,8 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     onChange: (ok) => { if (ok) for (const t of trays.list()) if (t.dedupeKey === "box-firewall") trays.dismiss(t.id); },
   });
   firewall.start();
+  /** 0.1.4: set by the app (setNetworkPause) while the box's Local network state differs from the owner's choice. */
+  let networkPaused = false;
   const proxyTray = (): void => {
     if (!authProxyUp && auth.apiKey()) trays.add({ botId: null, title: STR_AUTH.proxyDownTitle, detail: STR_AUTH.proxyDownDetail, retry: true, dedupeKey: "auth-proxy" });
   };
@@ -325,7 +328,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     cfg, bots, acks, trays, presence, settings, flags: flagsFn, now, hooks, toolExtensions: ext, metrics,
     sendAcceptance: new SendAcceptanceLedger(hp("send-acceptance.json")), resume: new ResumeLedger(hp("host-restart-resume.json")),
     beforeTurn: () => conformanceReady,
-    turnBlocked: () => firewall.blocked(),
+    turnBlocked: async () => (networkPaused ? STR5.localNetworkPaused : firewall.blocked()),
     extraSystemAppend: (botId) => phase3?.promptSection(botId) ?? "",
     extraTools: (botId) => phase3?.botTools(botId) ?? [],
     extraSendHandlers: (botId) => phase3?.sendHandlers(botId),
@@ -469,6 +472,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     mcpReadOnly: (serverId, tool) => phase5?.mcpReadOnly(serverId, tool) ?? false,
     mcpServerHost: (serverId) => phase5?.mcpServerHost(serverId) ?? null,
     mcpServerComposio: (serverId) => phase5?.mcpServerComposio(serverId) ?? false,
+    mcpToolInfo: (serverId, tool) => phase5?.mcpToolInfo(serverId, tool) ?? { known: false, description: null },
     composioBuiltin: (botId) => phase5?.composioBuiltin(botId) ?? false,
     // Bug 413: who a Composio send reaches, read through the Bot's own granted connection (a read-listed tool).
     // Bug 420: known contacts — the owner's Gmail Sent folder, through Google if connected, else Composio's Gmail.
@@ -839,6 +843,15 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
       if (settings.rulesVersion() !== before || view.autoReviewEnabled !== wasOn) { gate!.settingsChanged(); compile(); }
       return view;
     },
+    setMacTimeZone: (a) => { settings.setMacTimeZone(a.zone); return settings.view(); },
+    // 0.1.4: the app saw the box's Local network state differ from the owner's choice (tampering, or a failed apply).
+    // No Bot turn starts until the app says it matches again; a tray says why.
+    setNetworkPause: (a) => {
+      networkPaused = a.on === true;
+      if (networkPaused) trays.add({ botId: null, title: STR5.localNetworkPaused, dedupeKey: "local-network" });
+      else for (const t of trays.list()) if (t.dedupeKey === "local-network") trays.dismiss(t.id);
+      return { on: networkPaused };
+    },
     getTrays: () => ({ trays: trays.list() }),
     clearTrays: (a) => { trays.clear(a.botId); return {}; },
   };
@@ -849,6 +862,8 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     phase3.handlers,
     { ...p4Rest, ...callWrap },
     createBotAdminCommands({ bots }),
+    // 0.1.4: Synapse's MCP server — an approved outside app's request runs as an outside wake (host/mcp-server).
+    new McpBridge({ runner, bots, redact: redactFor, now }).commands(),
     createWidgetCommands({
       bots, acks, now, host: hostWidgets,
       wake: (bid, text) => runner.enqueueHidden(bid, { source: "widget-answer", lane: "user", silenceAllowed: false, text, ackToken: acks.token(bid), userSeqMax: bots.latestUserSeq(bid) }),

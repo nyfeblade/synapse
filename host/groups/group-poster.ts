@@ -24,7 +24,7 @@ export class BotGroupPoster implements GroupPoster {
     if (!this.d.groups.isGroup(groupId)) return err(`No group with id ${groupId}.`);
     const groupName = this.d.bots.summary(groupId).profile.name;
     if (!this.d.groups.members(groupId).includes(fromBotId)) return err(`Not sent: you're not a member of "${groupName}".`);
-    const text = args.message.trim().slice(0, LIMITS.b2bMessageMax);
+    const text = args.message.trim().slice(0, LIMITS.groupPostMaxChars);
     if (!text) return err("Not sent: message is required.");
     if (isPass(text)) return err('Not sent: "(pass)" is only for your own turn in a group chat.');
     const history = this.d.orchestrator.roomHistory(groupId);

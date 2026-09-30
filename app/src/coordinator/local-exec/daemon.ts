@@ -262,6 +262,7 @@ export class LocalExecDaemon {
     }
     if (req.op === "browser") return void (await this.browser(req));
     if (req.op === "mac-app") return void (await this.macapp(req));
+    await this.d.policy.warm?.(req);
     const verdict = this.d.policy.check(req);
     if (!verdict.ok) return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: verdict.reason }));
     let buf: { stream: "stdout" | "stderr"; chunk: string }[] = [];
@@ -277,6 +278,7 @@ export class LocalExecDaemon {
         pin: verdict.pin ?? null, // bug 235: the executor re-checks the exempt tool right before exec
         // Bug 258: an everyday hand-off with no card (light sandbox), Full auto's web-page bridge, No limits' sandbox.
         quiet: verdict.quiet === true, openBridge: this.d.policy.fullAutoFor(req), noLimits: verdict.noLimits === true,
+        ...(verdict.target !== undefined ? { target: verdict.target } : {}), // bug 441: the real path the check judged
         uploadBox: async (chunk, offset, final) => void (await this.post("localExecUpload", { execId: req.execId, offset, bytesBase64: chunk.toString("base64"), final })),
         readBox: (boxPath) => this.readBox(boxPath),
       });

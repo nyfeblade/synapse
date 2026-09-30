@@ -33,7 +33,8 @@
  * (app/src/coordinator/local-exec/policy.ts) and the Browser classifier (app/src/main/browser) all call this one
  * function, so the three cannot drift apart.
  */
-import { messagesSend } from "./mac-messages";
+import { MAC_COMMAND_MAX, inOrder, realOfDeepest } from "./linear-text";
+import { blankDoubleQuoted, messagesSend } from "./mac-messages";
 import { parseShell, shPath, type ShCmd, type ShRedirect, type ShWord } from "./shell-parse";
 
 export type FullAutoCategory = "destruction" | "send" | "money" | "security" | "user-rule";
@@ -65,7 +66,7 @@ export type FullAutoAction =
   /** Bug 256: "read" is a Mac read tool (read, list, glob, grep, copy-to-box); it asks only for a credential store. */
   | { kind: "file"; side: "mac" | "box"; op: "write" | "edit" | "delete" | "read"; path: string; cwd?: string | null }
   /** A control-plane / connector call, named by the host classifier's target action. */
-  | { kind: "tool"; action: string; args?: Record<string, unknown> }
+  | { kind: "tool"; action: string; args?: Record<string, unknown>; mcp?: McpToolMeta }
   /** One browser action, judged against the live page by the Mac's Browser classifier. */
   | { kind: "browser"; action: string; url?: string; label?: string | null; field?: "password" | "card" | null; submit?: boolean };
 
@@ -108,24 +109,30 @@ function lexical(p: string, base: string): string {
   return `/${out.join("/")}`;
 }
 const within = (p: string, dir: string): boolean => dir !== "/" && (p === dir || p.startsWith(`${dir}/`));
+/** Bug 433: the folded home, worked out once per home instead of once per path checked (a command with thousands of
+ *  arguments folded it thousands of times). */
+let lastHome: { home: string; h: string } | null = null;
+function foldedHome(home: string): string {
+  if (lastHome?.home !== home) lastHome = { home, h: fold(lexical(home, "/")) };
+  return lastHome.h;
+}
 
 function realOf(abs: string, realpath?: (p: string) => string): string {
   if (!realpath) return abs;
-  const tail: string[] = [];
-  let cur = abs;
-  for (;;) {
-    try { return lexical([realpath(cur), ...tail].join("/"), "/"); } catch { /* missing: walk up */ }
-    if (cur === "/") return abs;
-    tail.unshift(cur.slice(cur.lastIndexOf("/") + 1));
-    cur = cur.slice(0, cur.lastIndexOf("/")) || "/";
-  }
+  const real = realOfDeepest(abs, realpath); // bug 433: linear on a deep hostile path
+  return real === null ? abs : lexical(real, "/");
 }
 
-/** True when the path is inside a root the Bot owns (its workspace, its scratch, a Mac project dir). */
+/**
+ * True when the path is inside a root the Bot owns (its workspace, its scratch, a Mac project dir). Bug 441: judged by
+ * where the path REALLY is (symlinks in the file and in every parent folder resolved), so a link inside the workspace
+ * to a file outside it is outside. A root is matched as written and as resolved (/tmp is /private/tmp on a Mac).
+ */
 function inWorkspace(abs: string, ctx: FullAutoContext): boolean {
-  const roots = ctx.workspaces.filter((d) => typeof d === "string" && d.startsWith("/")).map((d) => fold(lexical(d, "/")));
-  const check = (p: string) => roots.some((r) => within(fold(p), r));
-  return check(abs) || check(realOf(abs, ctx.realpath));
+  const lex = ctx.workspaces.filter((d) => typeof d === "string" && d.startsWith("/")).map((d) => lexical(d, "/"));
+  const roots = new Set([...lex, ...(ctx.realpath ? lex.map((d) => realOf(d, ctx.realpath)) : [])].map(fold));
+  const real = fold(realOf(abs, ctx.realpath));
+  return [...roots].some((r) => within(real, r));
 }
 
 const expandHome = (p: string, home: string) => p.replace(/^~(?=$|\/)/, home);
@@ -149,6 +156,7 @@ function wordPrefix(w: ShWord, c: ShCmd, ctx: FullAutoContext): string | null {
 const SUDO = /^(sudo|doas|sudoedit|run0|pkexec|su)$/;
 const SHELL_RC = [".zshrc", ".zshenv", ".zprofile", ".zlogin", ".zlogout", ".bashrc", ".bash_profile", ".bash_login", ".profile", ".inputrc", ".bash_logout"];
 /** Folders whose contents are keys, credentials, startup items or the app's own security settings. */
+const SHELL_RC_FOLDED: ReadonlySet<string> = new Set(SHELL_RC.map((n) => n.toLowerCase()));
 const SECRET_DIRS = [".ssh", ".gnupg", ".aws", ".config/gh", ".docker", ".kube", ".password-store", "library/keychains", "library/launchagents", "library/launchdaemons"];
 const SECRET_ABS = ["/library/keychains", "/library/launchagents", "/library/launchdaemons", "/etc", "/system/library/keychains", "/private/etc"];
 const SECRET_FILE = /(^|\/)(id_(rsa|dsa|ecdsa|ed25519|xmss)|[^/]*\.(pem|key|p12|pfx|keychain|keychain-db|kdbx|ppk|jks)|\.netrc|credentials|secring\.gpg)$/i;
@@ -171,16 +179,19 @@ const CREDENTIAL_CLI: Record<string, RegExp> = { gh: /^auth$/, aws: /^configure$
 
 function isSecurityPath(abs: string, ctx: FullAutoContext): boolean {
   const f = fold(abs);
-  const h = fold(lexical(ctx.home, "/"));
+  const h = foldedHome(ctx.home);
   const tail = f.startsWith(`${h}/`) ? f.slice(h.length + 1) : "";
-  if (SHELL_RC.some((n) => tail === n.toLowerCase())) return true;
+  if (tail && SHELL_RC_FOLDED.has(tail)) return true;
   if (SECRET_DIRS.some((d) => within(f, `${h}/${d}`))) return true;
   if (SECRET_ABS.some((d) => within(f, d))) return true;
   if (SECRET_FILE.test(f)) return true;
   return APP_SECURITY_PATH.test(abs);
 }
-const securityPathHit = (abs: string, ctx: FullAutoContext): boolean =>
-  isSecurityPath(abs, ctx) || isSecurityPath(realOf(abs, ctx.realpath), ctx);
+const securityPathHit = (abs: string, ctx: FullAutoContext): boolean => {
+  if (isSecurityPath(abs, ctx)) return true;
+  const real = realOf(abs, ctx.realpath);
+  return real !== abs && isSecurityPath(real, ctx); // bug 433: the same path isn't checked twice
+};
 
 /**
  * Bug 256 (review): places whose CONTENTS are the user's logins, cookies, mail or messages. Reading one is the
@@ -201,7 +212,7 @@ const DOTENV_TEMPLATE = /\.(example|sample|template|dist|defaults)$/;
 function credentialStore(abs: string, ctx: FullAutoContext, recursive = false): boolean {
   const check = (p: string): boolean => {
     const f = fold(p);
-    const h = fold(lexical(ctx.home, "/"));
+    const h = foldedHome(ctx.home);
     const name = f.slice(f.lastIndexOf("/") + 1);
     if (CREDENTIAL_DIRS.some((d) => within(f, `${h}/${d}`))) return true;
     if (FIREFOX_STORE.test(name)) return true;
@@ -211,7 +222,9 @@ function credentialStore(abs: string, ctx: FullAutoContext, recursive = false): 
     if (recursive && f !== "/" && [...CREDENTIAL_DIRS, ...BROWSER_ROOTS, ".ssh", ".gnupg", ".aws", "library/keychains"].some((d) => within(`${h}/${d}`, f))) return true;
     return false;
   };
-  return check(abs) || check(realOf(abs, ctx.realpath));
+  if (check(abs)) return true;
+  const real = realOf(abs, ctx.realpath);
+  return real !== abs && check(real); // bug 433: the same path isn't checked twice
 }
 /** Bug 256 (review): the Mac's grep/glob walk skips these (a search of ~ must not read a browser's saved logins). */
 export function macCredentialStore(abs: string, home: string): boolean {
@@ -265,7 +278,7 @@ function securityForCommand(c: ShCmd, ctx: FullAutoContext): FullAutoResult | nu
     if (w.text.startsWith("-")) continue;
     const abs = wordPath(w, c, ctx) ?? wordPrefix(w, c, ctx);
     // Bug 258: No limits lets ssh and its copiers use the user's SSH keys and config.
-    if (ctx.noLimits && abs && SSH_CLIENTS.test(prog) && within(fold(abs), `${fold(lexical(ctx.home, "/"))}/.ssh`)) continue;
+    if (ctx.noLimits && abs && SSH_CLIENTS.test(prog) && within(fold(abs), `${foldedHome(ctx.home)}/.ssh`)) continue;
     if (abs && securityPathHit(abs, ctx)) {
       return READERS.test(prog)
         ? R("security", "read-credentials", "This reads keys or credentials.")
@@ -430,25 +443,353 @@ const REMOTE_OPERAND = /^(rsync:\/\/|[^/\s:]+:)/;
 const INTERPRETERS = /^(python[0-9.]*|node|nodejs|deno|bun|ruby|perl|php|osascript|lua|Rscript)$/;
 const NET_CODE = /\b(socket|requests|urllib[0-9]*|http\.client|httpx|aiohttp|urlopen|ftplib|smtplib|telnetlib|paramiko|fetch|XMLHttpRequest|WebSocket|require\(\s*["'`](node:)?(https?|net|tls|dgram|http2)["'`]\s*\)|from\s+["'`](node:)?(https?|net|tls|dgram)["'`]|Net::|open-uri|TCPSocket|IO::Socket|LWP|HTTP::Tiny|curl_init|fsockopen|stream_socket_client|file_get_contents\(\s*["']https?:|do shell script)/;
 
-function sendForCommand(c: ShCmd, command: string, ctx: FullAutoContext): FullAutoResult | null {
+/**
+ * Bug 433: facts about the whole command text, worked out once per command (lazily) instead of once per parsed
+ * command: a long command splits into many, and re-scanning all of it for each one was quadratic.
+ */
+interface WholeText { mailSend(): boolean; sms(): ReturnType<typeof messagesSend>; hasSubst(): boolean }
+function wholeText(command: string): WholeText {
+  const once = <T>(f: () => T): (() => T) => { let done = false; let v: T; return () => { if (!done) { v = f(); done = true; } return v; }; };
+  return {
+    mailSend: once(() => /\bapp(lication)?\s+"Mail"|Application\(\s*["']Mail["']\s*\)/i.test(command) && /\bsend\b/i.test(blankDoubleQuoted(command))),
+    sms: once(() => messagesSend(command)),
+    hasSubst: once(() => /\$\(|`/.test(command)),
+  };
+}
+
+/**
+ * Bug 439: how curl, wget and httpie/xh are told to send a body, and every host a request goes to. The option walk
+ * follows the programs' own rules: a short-option cluster ends at the first letter that takes a value (`-sLo out`
+ * writes `out`, `-sF f=@x` posts a form), and an option's value is skipped, so what is left are the URLs. A host
+ * that can't be read (a variable) is null: not provably this machine.
+ */
+const CURL_SHORT_VALUE = new Set("AbcCdDeEFHKmoPQrtTuUwxXyYz".split(""));
+const CURL_SHORT_SEND = new Set(["d", "F", "T"]);
+const CURL_LONG_SEND = /^--(data|data-ascii|data-binary|data-raw|data-urlencode|form|form-string|upload-file|json)$/;
+const CURL_LONG_VALUE = /^--(data|data-ascii|data-binary|data-raw|data-urlencode|form|form-string|upload-file|json|output|output-dir|header|proxy-header|user|proxy-user|user-agent|referer|cookie|cookie-jar|request|max-time|connect-timeout|retry|retry-delay|retry-max-time|proxy|preproxy|noproxy|cacert|capath|cert|key|cert-type|key-type|pass|config|write-out|range|limit-rate|resolve|connect-to|dump-header|url|interface|netrc-file|proto|proto-redir|oauth2-bearer|aws-sigv4|variable|max-filesize|max-redirs|ciphers|local-port|dns-servers|doh-url|speed-limit|speed-time|time-cond|trace|trace-ascii|stderr|unix-socket|abstract-unix-socket|mail-from|mail-rcpt|mail-auth|quote|socks4|socks4a|socks5|socks5-hostname|url-query|request-target|crlfile|pinnedpubkey|alt-svc|hsts|etag-save|etag-compare|rate|expect100-timeout|keepalive-time|happy-eyeballs-timeout-ms|parallel-max|create-file-mode|ftp-port|ftp-account|krb|delegation|service-name|sasl-authzid|login-options|tlsuser|tlspassword|telnet-option|hostpubmd5|hostpubsha256)$/;
+const WGET_SHORT_VALUE = new Set("OoaeiBtTwPUlARDIXQ".split(""));
+const WGET_LONG_SEND = /^--(post-data|post-file|body-data|body-file)$/;
+const WGET_LONG_VALUE = /^--(post-data|post-file|body-data|body-file|method|output-document|output-file|append-output|header|user|password|http-user|http-password|proxy-user|proxy-password|user-agent|referer|tries|timeout|dns-timeout|connect-timeout|read-timeout|wait|waitretry|directory-prefix|level|accept|reject|accept-regex|reject-regex|domains|exclude-domains|include-directories|exclude-directories|execute|input-file|base|load-cookies|save-cookies|ca-certificate|ca-directory|certificate|certificate-type|private-key|private-key-type|bind-address|limit-rate|quota|config|restrict-file-names|local-encoding|remote-encoding|default-page|backups|secure-protocol|ciphers|max-redirect)$/;
+const HTTPIE_SHORT_VALUE = new Set("aAoPp".split(""));
+const HTTPIE_LONG_VALUE = /^--(auth|auth-type|output|session|session-read-only|verify|cert|cert-key|cert-key-pass|proxy|timeout|max-redirects|print|history-print|pretty|style|format-options|boundary|response-charset|response-mime|ssl|ciphers|default-scheme|max-headers)$/;
+/** An httpie request item that carries data (`k=v`, `k:=json`, `k@file`, `k=@file`), not a header (`H:v`) or a query (`k==v`). */
+const HTTPIE_DATA_ITEM = /^[^\s=:@]*(:=@|=@|:=|@|=(?!=))/;
+
+function hostOfOperand(t: string, dynamic: boolean): string | null {
+  if (dynamic || !t) return null;
+  if (/^:\d*(\/|$)/.test(t)) return "localhost"; // httpie's :3000/path
+  const rest = t.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  const host = (rest.split(/[/?#]/)[0] ?? "").replace(/^[^@]*@/, "").replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+  return host ? host.toLowerCase() : null;
+}
+
+/** Bug 439: whether a curl/wget/httpie/xh command sends a body, and the hosts it talks to (null = can't be read). */
+export function netRequest(c: ShCmd): { writes: boolean; hosts: (string | null)[] } {
+  const curl = c.program === "curl";
+  const wget = c.program === "wget";
+  const words = c.argv.slice(1);
+  const hosts: (string | null)[] = [];
+  let writes = false;
+  const shortValue = curl ? CURL_SHORT_VALUE : wget ? WGET_SHORT_VALUE : HTTPIE_SHORT_VALUE;
+  const longValue = curl ? CURL_LONG_VALUE : wget ? WGET_LONG_VALUE : HTTPIE_LONG_VALUE;
+  let positional = 0;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]!;
+    const t = w.text;
+    if (t === "--") continue;
+    if (t.startsWith("--")) {
+      const eq = t.indexOf("=");
+      const name = eq >= 0 ? t.slice(0, eq) : t;
+      const value = eq >= 0 ? t.slice(eq + 1) : longValue.test(name) ? (words[++i]?.text ?? "") : null;
+      if (curl && CURL_LONG_SEND.test(name)) writes = true;
+      if (wget && WGET_LONG_SEND.test(name)) writes = true;
+      if ((name === "--request" || name === "--method") && value !== null && WRITE_METHODS.test(value)) writes = true;
+      if (!curl && !wget && /^--(form|multipart|raw)$/.test(name)) writes = true;
+      if (curl && name === "--url" && value !== null) hosts.push(hostOfOperand(value, false));
+      continue;
+    }
+    if (t.startsWith("-") && t.length > 1) {
+      for (let k = 1; k < t.length; k++) {
+        const ch = t[k]!;
+        if (curl && CURL_SHORT_SEND.has(ch)) writes = true;
+        if (!shortValue.has(ch)) continue;
+        const value = k + 1 < t.length ? t.slice(k + 1) : (words[++i]?.text ?? "");
+        if (ch === "X" && curl && WRITE_METHODS.test(value)) writes = true;
+        break;
+      }
+      continue;
+    }
+    if (!curl && !wget) {
+      // httpie/xh: [METHOD] URL [items…]
+      if (positional === 0 && !w.dynamic && /^(GET|HEAD|OPTIONS|POST|PUT|PATCH|DELETE)$/i.test(t)) {
+        if (WRITE_METHODS.test(t)) writes = true;
+        continue;
+      }
+      positional++;
+      if (positional === 1) hosts.push(hostOfOperand(t, w.dynamic));
+      else if (w.dynamic || HTTPIE_DATA_ITEM.test(t)) writes = true;
+      continue;
+    }
+    hosts.push(hostOfOperand(t, w.dynamic));
+  }
+  // httpie/xh send what arrives on standard input as the body; curl/wget only with a flag (counted above).
+  if (!curl && !wget && c.stdin !== null) writes = true;
+  return { writes, hosts };
+}
+
+/**
+ * Bug 439: FETCH AND RUN. Code downloaded from the network and run in the same command, in any of its spellings:
+ * piped into a shell (above, `security.pipe-to-shell`), run from a substitution (`bash <(curl …)`, `source <(…)`,
+ * `sh -c "$(curl …)"`, `eval "$(wget -O- …)"`), or saved to a file that is then run (`curl -o i.sh … && bash i.sh`,
+ * `wget …/tool && chmod +x tool && ./tool`). Downloading a file, or piping JSON to jq, is ordinary work.
+ */
+const FETCHERS = /^(curl|wget|http|https|xh|xhs|aria2c)$/;
+const SH_RUNNERS = /^(sh|bash|zsh|dash|ksh|mksh|ash|fish|busybox|source|\.)$/;
+const LANG_RUNNERS = /^(python[0-9.]*|node|nodejs|deno|bun|perl|ruby|php|lua|Rscript|pwsh)$/;
+const base = (p: string) => p.slice(p.lastIndexOf("/") + 1);
+
+/** The words a runner takes its program from: the script operand, or the code after -c/-e; every word of eval. */
+function codeWords(c: ShCmd): ShWord[] {
+  if (c.program === "eval") return c.argv.slice(1);
+  if (!SH_RUNNERS.test(c.program) && !LANG_RUNNERS.test(c.program)) return [];
+  const words = c.argv.slice(1);
+  for (let i = 0; i < words.length; i++) {
+    const t = words[i]!.text;
+    if (/^-[a-zA-Z]*[ce]$/.test(t) || t === "--eval" || t === "--command") return words[i + 1] ? [words[i + 1]!] : [];
+    if (t.startsWith("-") && t !== "-") continue;
+    return [words[i]!];
+  }
+  return [];
+}
+
+/** The file names a fetcher saves to: -o/-O/--output/--output-document, wget's and -O's remote name, a `>` redirect. */
+function savedNames(c: ShCmd): string[] {
+  const out: string[] = [];
+  const words = c.argv.slice(1).map((w) => w.text);
+  const urls = words.filter((t) => /^[a-z][a-z0-9+.-]*:\/\//i.test(t) || /^[\w.-]+\.[a-z]{2,}\//i.test(t));
+  const remote = () => urls.forEach((u) => out.push(base(u.replace(/[?#].*$/, "")) || "index.html"));
+  let named = false;
+  for (let i = 0; i < words.length; i++) {
+    const t = words[i]!;
+    const long = /^--(output|output-document)(=(.*))?$/.exec(t);
+    if (long) { out.push(long[3] ?? words[++i] ?? ""); named = true; continue; }
+    if (t === "--remote-name" || t === "--remote-name-all") { remote(); named = true; continue; }
+    if (/^-[a-zA-Z]+/.test(t) && !t.startsWith("--")) {
+      const m = /^-[a-zA-NP-Za-np-z]*([oO])(.*)$/.exec(t);
+      if (!m) continue;
+      if (c.program === "curl" && m[1] === "O") { remote(); named = true; continue; }
+      const value = m[2] || words[++i] || "";
+      if (c.program === "wget" && m[1] === "o") continue; // wget -o is its log file
+      out.push(value);
+      named = true;
+    }
+  }
+  if (!named && (c.program === "wget" || c.program === "aria2c")) remote();
+  for (const r of c.redirects) if (r.target && /^(>|>\||>>|&>|&>>)$/.test(r.op)) out.push(r.target.text);
+  return out.map(base).filter((n) => n && n !== "-" && n !== "stdout");
+}
+
+/** Bug 440: a command that unpacks an archive or a compressed file (tar x, unzip, ditto -x, 7z x, gunzip …). */
+function unpacks(c: ShCmd): boolean {
+  const args = c.argv.slice(1).map((w) => w.text);
+  switch (c.program) {
+    case "tar": case "gtar": case "bsdtar":
+      return args.some((t, i) => t === "--extract" || t === "--get" || (/^-[A-Za-z]+$/.test(t) && t.includes("x")) || (i === 0 && /^[A-Za-z]+$/.test(t) && t.includes("x")));
+    case "unzip": return !args.some((t) => /^-[a-zA-Z]*[ltvZ]/.test(t)); // -l/-t/-v/-Z only list or test
+    case "unar": case "gunzip": case "bunzip2": case "unxz": case "unzstd": case "uncompress": case "funzip": case "cpio": return true;
+    case "ditto": return args.some((t) => /^-[a-zA-Z]*x/.test(t));
+    case "7z": case "7za": case "7zz": case "7zr": return /^[xe]$/.test(args[0] ?? "");
+    case "xz": case "zstd": case "gzip": case "bzip2": return args.some((t) => /^-[a-zA-Z]*d/.test(t) || t === "--decompress");
+    default: return false;
+  }
+}
+
+/** Bug 440: a command that runs code from files on disk: a program named by a path, a runner's script, a build. */
+const BUILD_RUNNERS = /^(make|gmake|cmake|ninja|meson|scons|rake)$/;
+function runsLocalCode(c: ShCmd): boolean {
+  const prog = c.argv[0]?.text ?? "";
+  if (prog.includes("/") || c.argv[0]?.dynamic) return true;
+  if (codeWords(c).length) return true;
+  if (BUILD_RUNNERS.test(c.program)) return true;
+  const sub = c.argv[1]?.text ?? "";
+  if (/^(npm|pnpm|yarn|bun)$/.test(c.program) && (c.argv.length === 1 || /^(i|install|ci|add|run|run-script|start|test|exec|x|rebuild)$/.test(sub))) return true;
+  if (/^(pip[0-9.]*|uv|pipx)$/.test(c.program) && c.argv.slice(1).some((w) => /^\.{1,2}$/.test(w.text) || (w.text.includes("/") && !w.text.startsWith("-") && !/^[a-z][a-z0-9+.-]*:\/\//i.test(w.text)))) return true;
+  return false;
+}
+
+export function fetchAndRun(cmds: readonly ShCmd[]): FullAutoResult | null {
+  const fetchers = cmds.filter((c) => FETCHERS.test(c.program));
+  if (!fetchers.length) return null;
+  const hit = R("security", "fetch-and-run", "This downloads code and runs it.");
+  // 1. A download inside a substitution, and a runner that takes its program from a substitution.
+  if (fetchers.some((c) => c.origin === "subst" || c.origin === "procsubst")) {
+    for (const c of cmds) {
+      if (FETCHERS.test(c.program) || c.origin === "subst" || c.origin === "procsubst") continue;
+      if (c.programFromInput || codeWords(c).some((w) => w.dynamic || w.procSubst !== null)) return hit;
+    }
+  }
+  // 2. A file a fetcher saved (a tee in its pipeline too), then run as a program or a runner's script.
+  const saved = new Set<string>();
+  const fetchPipes = new Set<string>();
+  for (const f of fetchers) {
+    for (const n of savedNames(f)) saved.add(n);
+    fetchPipes.add(`${f.origin}:${f.group}:${f.pipeline}`);
+  }
+  // Linear (bug 433): one pass over the tees, matched to a fetcher's pipeline by key.
+  for (const t of cmds) if (t.program === "tee" && fetchPipes.has(`${t.origin}:${t.group}:${t.pipeline}`)) for (const w of t.argv.slice(1)) if (!w.text.startsWith("-")) saved.add(base(w.text));
+  // 3. Bug 440: an archive unpacked after a download in the same command, then something run from what it unpacked:
+  // a program named by a path, a runner's script, or the archive's own build (make, npm install …). Which files the
+  // archive held can't be known ahead of time, so any such run after the unpack counts. Unpacking alone is fine.
+  const firstFetch = cmds.findIndex((c) => FETCHERS.test(c.program));
+  const unpack = cmds.findIndex((c, i) => i > firstFetch && unpacks(c));
+  if (unpack >= 0 && cmds.some((c, i) => i > unpack && runsLocalCode(c))) return hit;
+  if (!saved.size) return null;
+  for (const c of cmds) {
+    if (FETCHERS.test(c.program)) continue;
+    const prog = c.argv[0]?.text ?? "";
+    if (prog.includes("/") && saved.has(base(prog))) return hit;
+    if (codeWords(c).some((w) => !w.dynamic && saved.has(base(w.text)))) return hit;
+  }
+  return null;
+}
+
+/**
+ * Bug 440: cloud storage CLIs. A copy, sync or move whose destination is a bucket or a remote sends files off this
+ * machine, like scp. Only a plain download (the first operand is the bucket, nothing else is remote or unknown) runs
+ * without asking; a copy between two buckets, a source read from stdin, or a destination in a variable asks.
+ */
+const AWS_VALUE = /^--(profile|region|endpoint-url|output|query|ca-bundle|cli-read-timeout|cli-connect-timeout|color|cli-binary-format|acl|grants|storage-class|sse|sse-c|sse-c-key|sse-kms-key-id|sse-c-copy-source|sse-c-copy-source-key|exclude|include|cache-control|content-type|content-disposition|content-encoding|content-language|expires|metadata|metadata-directive|website-redirect|page-size|expected-size|request-payer|source-region|checksum-algorithm|checksum-mode|copy-props|tagging|tagging-directive)$/;
+const GSUTIL_VALUE = new Set("hoiuazjLsxy".split(""));
+const GCLOUD_VALUE = /^--(project|billing-project|account|configuration|impersonate-service-account|verbosity|format|flatten|content-type|content-encoding|content-disposition|content-language|cache-control|canned-acl|predefined-acl|storage-class|exclude|manifest-path|encryption-key|decryption-keys|custom-metadata|custom-time|log-http|trace-token|user-output-enabled)$/;
+const RCLONE_VALUE = /^--(config|transfers|checkers|include|exclude|filter|filter-from|include-from|exclude-from|files-from|files-from-raw|bwlimit|max-age|min-age|max-size|min-size|log-file|log-level|backup-dir|compare-dest|copy-dest|suffix|retries|retries-sleep|low-level-retries|contimeout|timeout|max-transfer|max-depth|order-by|stats|stats-log-level|user-agent|cache-dir|temp-dir|max-backlog|multi-thread-streams|multi-thread-cutoff|buffer-size|tpslimit|tpslimit-burst|header|header-upload|header-download|metadata-set|workdir)$/;
+const B2_VALUE = /^--(threads|compare-versions|compare-threshold|exclude-regex|include-regex|exclude-dir-regex|exclude-if-modified-after|keep-days|replace-newer|skip-newer|destination-server-side-encryption|destination-server-side-encryption-algorithm)$/;
+/** An rclone remote: `name:path` or an on-the-fly backend `:s3:bucket` (a local path has a / or . before any colon). */
+const RCLONE_REMOTE = /^(:[\w-]+[:,]|\w[\w .-]*:)(?!\/\/)/;
+const NO_VALUE = /^$/;
+
+/** The operands of a transfer (flags and their values skipped), and whether a skipped flag value named a remote. */
+function transferOperands(words: readonly ShWord[], o: { longValue: RegExp; shortValue?: ReadonlySet<string>; stopAtOperand?: boolean; remote: RegExp }): { ops: ShWord[]; remoteValue: boolean } {
+  const ops: ShWord[] = [];
+  let remoteValue = false;
+  let flags = true;
+  const isRemote = (w: ShWord | undefined) => !!w && !w.dynamic && o.remote.test(w.text);
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]!;
+    const t = w.text;
+    if (!flags || w.dynamic || t === "-" || !t.startsWith("-")) {
+      ops.push(w);
+      if (o.stopAtOperand) flags = false;
+      continue;
+    }
+    if (t === "--") { flags = false; continue; }
+    if (t.startsWith("--")) {
+      const eq = t.indexOf("=");
+      if (eq >= 0) { if (o.remote.test(t.slice(eq + 1))) remoteValue = true; continue; }
+      if (o.longValue.test(t)) { if (isRemote(words[i + 1])) remoteValue = true; i++; }
+      continue;
+    }
+    for (let k = 1; k < t.length; k++) {
+      if (!o.shortValue?.has(t[k]!)) continue;
+      if (k + 1 === t.length) { if (isRemote(words[i + 1])) remoteValue = true; i++; }
+      break;
+    }
+  }
+  return { ops, remoteValue };
+}
+
+/** A transfer sends data out unless it is provably a download: the first operand remote, no other remote or unknown. */
+function sendsOut(t: { ops: ShWord[]; remoteValue: boolean }, remote: RegExp): boolean {
+  const isRemote = (w: ShWord) => !w.dynamic && remote.test(w.text);
+  if (t.remoteValue) return true;
+  if (!t.ops.some((w) => isRemote(w) || w.dynamic)) return false; // a local copy: not a transfer at all
+  const [first, ...rest] = t.ops;
+  return !(first && isRemote(first) && rest.every((w) => !isRemote(w) && !w.dynamic));
+}
+
+function cloudUpload(c: ShCmd): FullAutoResult | null {
+  const prog = c.program;
+  const words = c.argv.slice(1);
+  const texts = words.map((w) => w.text);
+  const hit = (what: string) => R("send", "cloud-upload", `This uploads files to ${what} on another machine.`);
+  if (prog === "aws") {
+    const at = texts.findIndex((t) => t === "s3" || t === "s3api");
+    if (at < 0) return null;
+    const verb = texts[at + 1] ?? "";
+    if (texts[at] === "s3api") return /^(put-object|upload-part|upload-part-copy|copy-object|create-multipart-upload|complete-multipart-upload)$/.test(verb) ? hit("cloud storage (S3)") : null;
+    if (!/^(cp|sync|mv)$/.test(verb)) return null;
+    const remote = /^(s3:\/\/|arn:)/i;
+    return sendsOut(transferOperands(words.slice(at + 2), { longValue: AWS_VALUE, remote }), remote) ? hit("cloud storage (S3)") : null;
+  }
+  if (prog === "gsutil") {
+    const remote = /^(gs|s3):\/\//i;
+    // Global options come before the command, and gsutil stops reading options at the first operand.
+    let i = 0;
+    for (; i < words.length && texts[i]!.startsWith("-"); i++) if (/^-[hoiu]$/.test(texts[i]!)) i++;
+    if (!/^(cp|mv|rsync)$/.test(texts[i] ?? "")) return null;
+    return sendsOut(transferOperands(words.slice(i + 1), { longValue: NO_VALUE, shortValue: GSUTIL_VALUE, stopAtOperand: true, remote }), remote) ? hit("cloud storage (Google Cloud)") : null;
+  }
+  if (prog === "gcloud") {
+    const at = texts.indexOf("storage");
+    if (at < 0 || !/^(cp|mv|rsync)$/.test(texts[at + 1] ?? "")) return null;
+    const remote = /^(gs|s3):\/\//i;
+    return sendsOut(transferOperands(words.slice(at + 2), { longValue: GCLOUD_VALUE, remote }), remote) ? hit("cloud storage (Google Cloud)") : null;
+  }
+  if (prog === "rclone") {
+    const t = transferOperands(words, { longValue: RCLONE_VALUE, remote: RCLONE_REMOTE });
+    const verb = t.ops[0]?.text ?? "";
+    if (/^(rcat|copyurl)$/.test(verb)) return hit("a remote storage service");
+    if (!/^(copy|copyto|sync|move|moveto|bisync)$/.test(verb)) return null;
+    return sendsOut({ ops: t.ops.slice(1), remoteValue: t.remoteValue }, RCLONE_REMOTE) ? hit("a remote storage service") : null;
+  }
+  if (prog === "az") {
+    const at = texts.indexOf("storage");
+    if (at < 0) return null;
+    // az storage blob upload / upload-batch / sync, file upload, fs file upload, azcopy blob upload, blob copy start …
+    const rest = texts.slice(at + 1).filter((x) => !x.startsWith("-")).slice(0, 4);
+    return rest.some((x) => /^(upload|upload-batch|sync|copy|start|start-batch)$/.test(x)) ? hit("cloud storage (Azure)") : null;
+  }
+  if (prog === "azcopy") {
+    if (!/^(copy|cp|sync)$/.test(texts[0] ?? "")) return null;
+    const remote = /^https?:\/\//i;
+    return sendsOut(transferOperands(words.slice(1), { longValue: NO_VALUE, remote }), remote) ? hit("cloud storage (Azure)") : null;
+  }
+  if (prog === "b2") {
+    const ops = texts.filter((x) => !x.startsWith("-"));
+    const verb = ops[0] ?? "";
+    if (/^(upload-file|upload_file|upload-unbound-stream|upload_unbound_stream|copy-file-by-id|copy_file_by_id)$/.test(verb)) return hit("cloud storage (Backblaze B2)");
+    if (verb === "file" && /^(upload|copy-by-id|server-side-copy)$/.test(ops[1] ?? "")) return hit("cloud storage (Backblaze B2)");
+    if (verb !== "sync") return null;
+    const remote = /^b2:\/\//i;
+    return sendsOut(transferOperands(words.slice(texts.indexOf("sync") + 1), { longValue: B2_VALUE, remote }), remote) ? hit("cloud storage (Backblaze B2)") : null;
+  }
+  return null;
+}
+
+function sendForCommand(c: ShCmd, whole: WholeText, ctx: FullAutoContext): FullAutoResult | null {
   void ctx;
   const prog = c.program;
   if (MAILERS.test(prog)) return R("send", "email", "This sends an email.");
+  const cloud = cloudUpload(c);
+  if (cloud) return cloud;
   if (SOCKET_TOOLS.test(prog)) return R("send", "network", `“${prog}” sends data to another machine.`);
   if (prog === "ssh" && c.argv.slice(1).some((w) => !w.text.startsWith("-"))) return R("send", "network", "This runs something on, or sends data to, another machine over ssh.");
   if (/^(scp|rsync)$/.test(prog) && c.argv.slice(1).some((w) => !w.text.startsWith("-") && REMOTE_OPERAND.test(w.literal))) return R("send", "network", `“${prog}” copies files to or from another machine.`);
   if (INTERPRETERS.test(prog) && c.inlineCode.some((code) => NET_CODE.test(code))) return R("send", "network-script", "This script opens a network connection.");
   // Bug 258: an email sent through the Mail app with AppleScript.
-  if (prog === "osascript" && /\bapp(lication)?\s+"Mail"|Application\(\s*["']Mail["']\s*\)/i.test(command) && /\bsend\b/i.test(command.replace(/"(?:[^"\\]|\\.)*"/g, '""'))) {
+  if (prog === "osascript" && whole.mailSend()) {
     return R("send", "email", "This sends an email as you from the Mail app.");
   }
-  const sms = messagesSend(command);
+  const sms = whole.sms();
   if (sms) return R("send", "message", `This sends a message as you to ${sms.recipient}: “${sms.text.slice(0, 200)}”.`);
   if (NET_SENDERS.test(prog)) {
     const args = c.argv.slice(1).map((w) => w.text);
     const method = args.find((a, i) => /^(-X|--request|--method)$/.test(args[i - 1] ?? "") || /^--request=/.test(a));
     const writes = args.some((a) => SEND_FLAGS.test(a) || /^(--data|--form|--upload-file|--json)=/.test(a)) || (!!method && WRITE_METHODS.test(method.replace(/^--request=/, "")));
     if (writes && urlsIn(c).some(thirdParty)) return R("send", "webhook", "This posts data to a third-party service.");
+    // Bug 439: the same upload in every spelling the program accepts (`-d@file`, `-sF f=@x`, `--post-file=x`, an
+    // httpie `POST … @file`), and to a host written without https://. Anything but this machine asks.
+    const req = netRequest(c);
+    if (req.writes && (req.hosts.length === 0 || req.hosts.some((h) => h === null || !LOCAL_HOST.test(h)))) return R("send", "webhook", "This posts data to a third-party service.");
     // Bug 256 (review): data smuggled into a GET — a command substitution in the URL or a header, or a header file.
     const words = c.argv.slice(1);
     const smuggles = words.some((w, i) => {
@@ -457,7 +798,7 @@ function sendForCommand(c: ShCmd, command: string, ctx: FullAutoContext): FullAu
       if (w.dynamic && !/^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$/.test(raw) && /^https?:|^-H|^--header/.test(raw)) return true;
       const prev = words[i - 1]?.text ?? "";
       return (/^(-H|--header)$/.test(prev) && w.text.startsWith("@")) || /^--header=@/.test(w.text);
-    }) || (c.argv.some((w) => w.dynamic) && /\$\(|`/.test(command));
+    }) || (c.argv.some((w) => w.dynamic) && whole.hasSubst());
     if (smuggles) return R("send", "exfil", "This puts the output of a command or a file into a web request.");
   }
   if (/^(gh|glab)$/.test(prog)) {
@@ -497,26 +838,35 @@ function moneyForCommand(c: ShCmd): FullAutoResult | null {
 // ---------------------------------------------------------------------------------------------------------------
 // Commands the parser cannot see through: a plain text scan for the five categories.
 // ---------------------------------------------------------------------------------------------------------------
-const RAW: [RegExp, FullAutoCategory, string, string][] = [
+/** Bug 433: a raw-scan pattern, or a linear-time test for what a backtracking `a[^\n]*b` regex used to find. */
+type RawTest = RegExp | ((text: string) => boolean);
+const either = (...ts: RawTest[]) => (text: string): boolean => ts.some((t) => (typeof t === "function" ? t(text) : t.test(text)));
+const onLine = (...parts: RegExp[]) => (text: string): boolean => inOrder(text, parts, /\n/);
+const RAW: [RawTest, FullAutoCategory, string, string][] = [
+  [/(\$\(|`|<\()\s*(curl|wget|xh|http)\s/, "security", "security.fetch-and-run", "This downloads code and runs it."],
   [/(^|[\s;&|(`])(sudo|doas|pkexec|run0)\s/, "security", "security.sudo", "This runs with administrator (sudo) privileges."],
   [/\|\s*(sudo\s+)?(env\s+)?(ba|z|da|k|c|tc|fi)?sh\b/, "security", "security.pipe-to-shell", "This pipes downloaded content straight into a shell."],
   [/\b(csrutil|spctl|socketfilterfw|pfctl|launchctl|crontab|ssh-keygen|ssh-copy-id|visudo|installer)\b/, "security", "security.system-control", "This changes credentials, permissions, startup items or a system protection."],
   [/(^|[\s/'"=:~])\.(ssh|gnupg|aws|netrc|kube)\b|Keychains|\.zshrc|\.zprofile|\.bash_profile/, "security", "security.protected-place", "This touches keys, credentials or startup files."],
   [/Library\/(Mail|Messages|Safari|Cookies)\b|\b(logins\.json|key[34]\.db|cookies\.sqlite)\b|Login Data|Web Data|\/Cookies\b/, "security", "security.read-credentials", "This reads saved logins, cookies, mail or messages."],
-  [/(^|[\s;&|(`])(nc|ncat|netcat|socat|telnet|sftp)\s|\b(scp|rsync)\b[^\n]*\s[^\s/:]+:|\bssh\s+[^-\s]/, "send", "send.network", "This sends data to another machine."],
-  [/\b(npm|pnpm|yarn|bun)\s+(i|install|add)\b[^\n]*\s-g\b|--global\b|\bbrew\s+(install|upgrade)\b/, "security", "security.system-install", "This installs software outside the project."],
+  [either(/(^|[\s;&|(`])(nc|ncat|netcat|socat|telnet|sftp)\s|\bssh\s+[^-\s]/, onLine(/\b(scp|rsync)\b/, /\s[^\s/:]+:/)), "send", "send.network", "This sends data to another machine."],
+  // Bug 440: a cloud storage copy the parser couldn't read: its direction can't be proven, so it asks.
+  [either(/\bgcloud\s+storage\s+(cp|mv|rsync)\s|\brclone\s+(copy|copyto|sync|move|moveto|bisync|rcat|copyurl)\s|\bazcopy\s+(copy|cp|sync)\s|\bb2\s+(upload[-_]\w+|file\s+upload|sync)\b/,
+    onLine(/\baws\b/, /\ss3\s+(cp|sync|mv)\s|\ss3api\s+(put-object|upload-part|copy-object)\b/), onLine(/\bgsutil\b/, /\s(cp|mv|rsync)\s/), onLine(/\baz\s+storage\b/, /\s(upload|upload-batch|sync|copy)\b/)),
+  "send", "send.cloud-upload", "This uploads files to cloud storage on another machine."],
+  [either(/--global\b|\bbrew\s+(install|upgrade)\b/, onLine(/\b(npm|pnpm|yarn|bun)\s+(i|install|add)\b/, /\s-g\b/)), "security", "security.system-install", "This installs software outside the project."],
   [/\brm\s+-[a-zA-Z]*[rRf]/, "destruction", "destruction.delete-unproven-target", "This deletes files at a path that can't be checked ahead of time."],
-  [/\bgit\s+[^\n]*\bpush\b[^\n]*(--force|-f\b)|\breset\s+--hard\b|\bfilter-(branch|repo)\b|\bgit\s+clean\s+-[a-zA-Z]*f/, "destruction", "destruction.discard-work", "This overwrites or discards work that can't be recovered."],
+  [either(/\breset\s+--hard\b|\bfilter-(branch|repo)\b|\bgit\s+clean\s+-[a-zA-Z]*f/, onLine(/\bgit\s+/, /\bpush\b/, /--force|-f\b/)), "destruction", "destruction.discard-work", "This overwrites or discards work that can't be recovered."],
   [/\b(drop\s+(database|table|schema)|truncate\s+table)\b/i, "destruction", "destruction.drop-database", "This drops or empties a database."],
   [/\bdiskutil\s+(erase|apfs\s+deleteVolume)|\bmkfs\b|\bempty\s+(the\s+)?trash\b/i, "destruction", "destruction.wipe-disk", "This erases a disk, volume or the Trash."],
-  [/\b(mail|sendmail|mutt|msmtp)\b|\bcurl\b[^\n]*(-X\s*(POST|PUT|PATCH)|--data|-d\s)|\bgh\s+(pr|issue|gist|release)\s+(create|comment)/i, "send", "send.post", "This sends something a person receives."],
+  [either(/\b(mail|sendmail|mutt|msmtp)\b|\bgh\s+(pr|issue|gist|release)\s+(create|comment)/i, onLine(/\bcurl\b/i, /-X\s*(POST|PUT|PATCH)|--data|-d\s/i)), "send", "send.post", "This sends something a person receives."],
   [/app(lication)?\s+"Messages"/i, "send", "send.message", "This sends a message as you."],
   [/\/(checkout|billing|payment|purchase)(\/|\?|$)|stripe\.com|paypal\.com/i, "money", "money.checkout-page", "This touches a checkout, payment or billing page."],
 ];
 
 function rawScan(text: string): FullAutoResult | null {
   for (const [re, category, rule, reason] of RAW) {
-    if (re.test(text)) return { ask: true, category, rule, reason };
+    if (typeof re === "function" ? re(text) : re.test(text)) return { ask: true, category, rule, reason };
   }
   return null;
 }
@@ -530,7 +880,98 @@ const GOOGLE_READS = new Set(["gmail_search", "gmail_read", "calendar_list", "dr
 
 const snake = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
 
-function toolAsk(action: string, args: Record<string, unknown>): FullAutoResult | null {
+/**
+ * Bug 275: what the host knows about an MCP tool from a registry server. `known` = a server Synapse ships and
+ * knows (curated); anything else is unknown. `description` = the tool's own description, when the host has it.
+ */
+export interface McpToolMeta { known: boolean; description?: string | null }
+
+/** A tool name's words: split on separators and case changes (createPaymentIntent → create, payment, intent). */
+function wordsOf(name: string): string[] {
+  return name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/([A-Z])([A-Z][a-z])/g, "$1_$2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+}
+/** Bug 275: deleting words, whole words only (list_removed_items is a read, below). */
+const DESTROY_WORD = /^(delete[ds]?|deleting|destroy(s|ed|ing)?|purge[ds]?|purging|wipe[ds]?|wiping|trash(es|ed|ing)?|remove[ds]?|removing|erase[ds]?|erasing|drop(s|ped|ping)?|truncate[ds]?|bulkdelete)$/;
+/** Bug 275: money words — the old list matched "pay" but not "payment", "charge", "invoice", "transfer", "payout" … */
+const MONEY_WORD = /^(pay|pays|paid|paying|payment|payments|payout|payouts|purchase[ds]?|purchasing|checkout|charge[ds]?|charging|subscribe[ds]?|subscribing|subscription|subscriptions|invoice[ds]?|invoicing|refund(s|ed|ing)?|transfer(s|red|ring)?|withdraw(s|al|als|ing)?|deposit(s|ed|ing)?|billing|bill|buy(s|ing)?|order|orders|donate[ds]?|donation|donations|tip|tips|remit|remittance|sell|spend|topup|money|funds)$/;
+/** Bug 275: somebody else receives it. */
+const SEND_WORD = /^(send[s]?|sending|sendmail|post(s|ed|ing)?|publish(es|ed|ing)?|share[ds]?|sharing|tweet[s]?|toot[s]?|invite[ds]?|inviting|invitation[s]?|comment[s]?|reply|replies|respond|forward(s|ed|ing)?|notify|notification[s]?|broadcast[s]?|announce|email[s]?|mail|dm[s]?|sms|message[s]?|attendee[s]?|guest[s]?|invitee[s]?|rsvp|mention[s]?|dial)$/;
+/** Send words that are also plain nouns, so list_messages / get_comment stay reads. */
+const SEND_NOUN = /^(message[s]?|email[s]?|mail|comment[s]?|attendee[s]?|guest[s]?|invitee[s]?|invitation[s]?|notification[s]?|mention[s]?|post[s]?|tweet[s]?|dm[s]?|sms|replies)$/;
+/** A plain read by its first word (get_…, list_…, search_…). */
+const READ_LEAD = /^(get|list|search|read|fetch|find|query|lookup|describe|retrieve|count|view|show|check|browse|download|preview|inspect|peek|validate|verify)$/;
+/** Words that make a tool a change even when it starts like a read (get_or_create, fetch_and_send). */
+const CHANGE_WORD = /^(create|make|add|new|set|update|upsert|insert|write|edit|patch|put|issue|execute|run|trigger|invoke|schedule|book|and|or|then)$/;
+
+/** Input keys whose value says who receives it (snake_case; camelCase is folded first). */
+const RECIPIENT_FIELD = /^(to|cc|bcc|recipient|recipients|recipient_email|recipient_emails|recipient_list|extra_recipients|to_email|to_emails|to_address|to_addresses|email|emails|email_address|email_addresses|attendee|attendees|guest|guests|invitee|invitees|participant|participants|channel|channels|channel_id|channel_name|chat_id|conversation_id|phone|phone_number|phone_numbers|to_number|mobile|share_with|shared_with|user_email|user_emails|webhook|webhook_url|audience|followers|subscribers|mentions)$/;
+/** Input keys whose value is money moving (a currency alone is not: a list can filter by it). */
+const MONEY_FIELD = /^(amount|amounts|amount_cents|amount_in_cents|amount_minor|unit_amount|price|price_id|payment_method|payment_method_id|payment_method_types|payment_intent|card_number|cvc|iban|account_number|routing_number|sort_code|bank_account|destination_account|payee|tip_amount)$/;
+/** Message text, not who receives it. */
+const BODY_FIELD = /^(body|text|message|content|html|markdown|subject|comment|caption)$/;
+
+const present = (v: unknown): boolean => v !== undefined && v !== null && v !== false && v !== "" && !(Array.isArray(v) && v.length === 0) && !(typeof v === "object" && !Array.isArray(v) && Object.keys(v as object).length === 0);
+
+/** Every key/value pair of an input, nested objects and arrays included (depth-capped). */
+function eachField(v: unknown, visit: (key: string, value: unknown) => void, depth = 0): void {
+  if (depth > 6 || !v || typeof v !== "object") return;
+  if (Array.isArray(v)) { for (const x of v) eachField(x, visit, depth + 1); return; }
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    visit(snake(k), x);
+    eachField(x, visit, depth + 1);
+  }
+}
+function fieldIn(input: Record<string, unknown>, re: RegExp): boolean {
+  let hit = false;
+  eachField(input, (k, v) => { if (!hit && re.test(k) && present(v)) hit = true; });
+  return hit;
+}
+const moneyFieldIn = (input: Record<string, unknown>): boolean => fieldIn(input, MONEY_FIELD);
+/** A Composio meta tool's inner slugs (tool_slug: "GMAIL_SEND_EMAIL", tools: [{ tool_slug … }]). */
+function innerSlugs(input: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  eachField(input, (k, v) => { if (/^(tool_slug|slug|action|tool|tool_name|action_name)$/.test(k) && typeof v === "string" && /^[A-Z][A-Z0-9]*_[A-Z0-9_]+$/.test(v)) out.push(v); });
+  return out;
+}
+
+/** What a tool description says it does, verbs only ("Lists payments" is a read; "Charges a card" is not). */
+const DESC_DESTROY = /\b(delet(e|es|ing)|remov(e|es|ing)|trash(es|ing)?|destroy(s|ing)?|eras(e|es|ing)|purg(e|es|ing))\b/i;
+const DESC_MONEY = /\b(pay(s|ing)?|charg(e|es|ing)|refund(s|ing)?|transfer(s|ring)?|payout|purchas(e|es|ing)|buy(s|ing)?|withdraw(s|ing)?|(creates?|issues?|sends?) (an? |the )?(payment|invoice|charge|subscription|order|transfer|payout|refund)s?)\b/i;
+const DESC_SEND = /\b(send(s|ing)?|publish(es|ing)?|invit(e|es|ing)|shar(e|es|ing) (it |this |the \w+ |\w+ )?with|forward(s|ing)?|notif(y|ies|ying)|repl(y|ies|ying) to|post(s|ing)? (a |an |the )?(message|tweet|comment|update|reply|status|to|in|on)|e-?mail(s|ing)? (to|a|an|the)|messag(e|es|ing) (to|a|an|the))\b/i;
+
+/**
+ * Bug 275 — Full auto: a tool from a generic or custom MCP server. It cards whenever it could delete, pay, send,
+ * post, invite or share, judged by its name, its description, and the recipient-like or money-like fields in its
+ * input. A plain read (get_…, list_…) carrying no message text stays quiet. On a server Synapse doesn't
+ * specifically know, a change it can't judge (no description to go on) is a card too: unknown means card.
+ */
+function connectorAsk(server: string, tool: string, input: Record<string, unknown>, meta: McpToolMeta | undefined): FullAutoResult | null {
+  const name = `“${snake(server)} ${snake(tool)}”`;
+  const words = [...wordsOf(tool), ...innerSlugs(input).flatMap(wordsOf)];
+  const desc = meta?.description?.trim() ?? "";
+  const hasBody = fieldIn(input, BODY_FIELD);
+  // A read: get_/list_/search_… with no change or send verb after it, and no message text in its input.
+  // One leading app name is allowed (googlecalendar_list_events), as long as it isn't itself a verb.
+  const verb = (w: string) => CHANGE_WORD.test(w) || DESTROY_WORD.test(w) || MONEY_WORD.test(w) || SEND_WORD.test(w);
+  const lead = READ_LEAD.test(words[0] ?? "") ? 0 : READ_LEAD.test(words[1] ?? "") && !verb(words[0] ?? "") ? 1 : -1;
+  const read = lead >= 0 && !hasBody
+    && !words.slice(lead + 1).some((w) => CHANGE_WORD.test(w) || /^(delete|destroy|purge|wipe|trash|remove|erase|drop|truncate)$/.test(w) || (SEND_WORD.test(w) && !SEND_NOUN.test(w)));
+  if (read) return readLies(name, desc.split(/(?<=[.!?])\s|\n/)[0] ?? "");
+  if (words.some((w) => DESTROY_WORD.test(w)) || DESC_DESTROY.test(desc)) return R("destruction", "delete-record", `${name} deletes something of yours.`);
+  if (words.some((w) => MONEY_WORD.test(w)) || DESC_MONEY.test(desc) || moneyFieldIn(input)) return R("money", "purchase", `${name} spends or moves money.`);
+  if (words.some((w) => SEND_WORD.test(w)) || DESC_SEND.test(desc) || fieldIn(input, RECIPIENT_FIELD)) return R("send", "post", `${name} reaches other people.`);
+  if (meta?.known !== true && !desc) return R("send", "unknown-tool", `${name} is from a server Synapse doesn't know, so it needs your OK.`);
+  return null;
+}
+/** A tool named like a read whose own description (its first sentence) says it deletes, pays or sends: believe that. */
+function readLies(name: string, first: string): FullAutoResult | null {
+  if (DESC_DESTROY.test(first)) return R("destruction", "delete-record", `${name} deletes something of yours.`);
+  if (DESC_MONEY.test(first)) return R("money", "purchase", `${name} spends or moves money.`);
+  if (DESC_SEND.test(first)) return R("send", "post", `${name} reaches other people.`);
+  return null;
+}
+
+function toolAsk(action: string, args: Record<string, unknown>, meta?: McpToolMeta): FullAutoResult | null {
   if (ACCESS_ACTIONS.has(action)) return R("security", "grant-access", "This changes what another Bot is told or what it can reach.");
   if (/^delete_/.test(action)) return R("destruction", "delete-record", "This deletes something of yours that can't be brought back.");
   if (action === "google_write") {
@@ -547,19 +988,15 @@ function toolAsk(action: string, args: Record<string, unknown>): FullAutoResult 
   if (action === "composio_write") {
     // Apps through Composio: the host only classifies a call as a write when it isn't a plain read, and a write
     // in the user's own connected account asks in Full auto too (the owner's rule: every send or change asks).
-    const tool = snake(String(args.tool ?? "")).toLowerCase();
-    if (/(^|_)(delete|destroy|purge|wipe|trash|remove)(_|$)/.test(tool)) return R("destruction", "delete-record", "This deletes something in your connected app.");
-    if (/(^|_)(pay|purchase|checkout|charge|subscribe|invoice|refund)(_|$)/.test(tool)) return R("money", "purchase", "This spends money in your connected app.");
+    // Bug 275: a meta tool (COMPOSIO_MULTI_EXECUTE_TOOL …) names the real slugs inside its input; they count too.
+    const tool = snake(String(args.tool ?? ""));
+    const input = (args.arguments ?? {}) as Record<string, unknown>;
+    const words = [...wordsOf(tool), ...innerSlugs(input).flatMap(wordsOf)];
+    if (words.some((w) => DESTROY_WORD.test(w))) return R("destruction", "delete-record", "This deletes something in your connected app.");
+    if (words.some((w) => MONEY_WORD.test(w)) || moneyFieldIn(input)) return R("money", "purchase", "This spends or moves money in your connected app.");
     return R("send", "connected-app", "This sends or changes something in your connected app.");
   }
-  if (action === "mcp") {
-    const tool = snake(String(args.tool ?? ""));
-    const server = snake(String(args.server ?? ""));
-    if (/(^|_)(delete|destroy|purge|wipe)(_|$)/.test(tool)) return R("destruction", "delete-record", `“${server} ${tool}” deletes something of yours.`);
-    if (/(^|_)(pay|purchase|checkout|charge|subscribe|invoice|refund)(_|$)/.test(tool)) return R("money", "purchase", `“${server} ${tool}” spends money.`);
-    if (SEND_TOOL.test(tool)) return R("send", "post", `“${server} ${tool}” is seen by other people.`);
-    return null;
-  }
+  if (action === "mcp") return connectorAsk(String(args.server ?? ""), String(args.tool ?? ""), (args.arguments ?? {}) as Record<string, unknown>, meta);
   return null;
 }
 
@@ -593,10 +1030,11 @@ export function fullAutoAsk(action: FullAutoAction, ctx: FullAutoContext): FullA
   // Bug 258: No limits lifts sending outward and the reads of private files and credentials, nothing else.
   return ctx.noLimits && r.ask && liftedByNoLimits(r) ? OK : r;
 }
-const liftedByNoLimits = (r: FullAutoResult): boolean => r.category === "send" || r.rule === "security.read-credentials";
+// Bug 275: a tool Synapse can't judge (send.unknown-tool) may spend or delete, so No limits doesn't lift it.
+const liftedByNoLimits = (r: FullAutoResult): boolean => (r.category === "send" && r.rule !== "send.unknown-tool") || r.rule === "security.read-credentials";
 
 function fullAutoAskAll(action: FullAutoAction, ctx: FullAutoContext): FullAutoResult {
-  if (action.kind === "tool") return toolAsk(action.action, action.args ?? {}) ?? OK;
+  if (action.kind === "tool") return toolAsk(action.action, action.args ?? {}, action.mcp) ?? OK;
   if (action.kind === "browser") return browserAsk(action) ?? OK;
 
   if (action.kind === "file") {
@@ -616,13 +1054,18 @@ function fullAutoAskAll(action: FullAutoAction, ctx: FullAutoContext): FullAutoR
   }
 
   const command = action.command ?? "";
+  // Bug 433: a Mac command too long to check ahead of time asks (see MAC_COMMAND_MAX); No limits doesn't lift it.
+  if (action.side === "mac" && command.length > MAC_COMMAND_MAX) return R("security", "too-long", "This command is too long to check ahead of time.");
   const parse = parseShell(command, { cwd: action.cwd ?? ctx.workspaces[0] ?? ctx.home, home: ctx.home, vars: ctx.vars });
   let hit: FullAutoResult | null = null;
   const fdSafe = fdAliasesSafe(parse.cmds, parse.opaque.length > 0);
+  const whole = wholeText(command);
   for (const c of parse.cmds) {
-    hit = securityForCommand(c, ctx) ?? destructionForCommand(c, ctx, fdSafe) ?? sendForCommand(c, command, ctx) ?? moneyForCommand(c);
+    hit = securityForCommand(c, ctx) ?? destructionForCommand(c, ctx, fdSafe) ?? sendForCommand(c, whole, ctx) ?? moneyForCommand(c);
     if (hit) return hit;
   }
+  hit = fetchAndRun(parse.cmds);
+  if (hit) return hit;
   // Nothing the parser could see is one of the five. If it could not see everything, scan the raw text too:
   // Full auto is the user's own trust, so unreadable-but-ordinary text runs — unreadable-and-loaded text asks.
   if (parse.opaque.length > 0) return rawScan(command) ?? OK;

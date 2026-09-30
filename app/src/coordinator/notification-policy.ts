@@ -11,7 +11,7 @@ export class NotificationPolicy {
   private based = false;
   private badgeCount = -1;
 
-  constructor(private o: { now(): number; notify(n: { botId: string; title: string; body: string; kind: Kind }): void; badge(count: number): void }) {}
+  constructor(private o: { now(): number; notify(n: { botId: string; title: string; body: string; kind: Kind; approvalId?: string }): void; badge(count: number): void }) {}
 
   setFocused(f: boolean): void {
     this.focused = f;
@@ -28,7 +28,9 @@ export class NotificationPolicy {
     this.prev.set(b.id, b);
     if (this.based) {
       const reasonChanged = b.awaiting && (!p?.awaiting || p.awaiting.reason !== b.awaiting.reason || p.awaiting.since !== b.awaiting.since);
-      if (reasonChanged) this.fire(b, "needs-you", STR.needsYou(b.profile.name), b.awaiting!.reason || STR.waitingForInput);
+      // Smarter approvals: a card's notification carries its id, so it can be answered from the notification.
+      const approvalId = b.awaiting?.tabId === "auto-review" ? b.awaiting.approvalId : undefined;
+      if (reasonChanged) this.fire(b, "needs-you", STR.needsYou(b.profile.name), b.awaiting!.reason || STR.waitingForInput, approvalId);
       else if (p?.running && !b.running && b.lastBotMessageAt > p.lastBotMessageAt && !b.lastBotMessageQuiet) this.fire(b, "finished", b.profile.name, b.statusLine || STR.openToSee);
     }
     this.updateBadge();
@@ -39,13 +41,13 @@ export class NotificationPolicy {
     this.updateBadge();
   }
 
-  private fire(b: BotSummary, kind: Kind, title: string, body: string): void {
+  private fire(b: BotSummary, kind: Kind, title: string, body: string, approvalId?: string): void {
     if (this.focused || !b.settings.notifyOnAgentUpdates || b.settings.hiddenFromSidebar) return;
     const key = `${b.id}:${kind}`;
     const now = this.o.now();
     if (now - (this.last.get(key) ?? -Infinity) < LIMITS.notifyThrottleMs) return;
     this.last.set(key, now);
-    this.o.notify({ botId: b.id, title, body: cap(body), kind });
+    this.o.notify({ botId: b.id, title, body: cap(body), kind, ...(approvalId ? { approvalId } : {}) });
   }
 
   private updateBadge(): void {

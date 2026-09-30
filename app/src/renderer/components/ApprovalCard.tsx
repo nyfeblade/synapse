@@ -55,7 +55,14 @@ export function ApprovalCard({ botId, approval: a, isNew = false }: { botId: str
   const shown = expanded ? a.items : a.items.slice(0, 2);
   return (
     <section aria-label="Approval needed" className={`${batch ? "card pending batch" : "card pending"}${newFlag(isNew)}`}>
-      {batch ? (
+      {a.planSteps?.length ? (
+        <>
+          <div className="card-head"><span className="card-title">{named(a.title)}</span></div>
+          <ol className="card-items plan-steps">
+            {a.planSteps.map((line, i) => <li key={i}>{line.replace(/^\d+\.\s*/, "")}</li>)}
+          </ol>
+        </>
+      ) : batch ? (
         <>
           <div className="card-subtitle">{named(a.title)}</div>
           <div className="card-items">
@@ -74,7 +81,7 @@ export function ApprovalCard({ botId, approval: a, isNew = false }: { botId: str
       )}
       {err && <div role="alert" className="card-error">{err}</div>}
       <div className="card-actions">
-        <button type="button" className="btn-primary" disabled={busy} onClick={() => void choose("once")}>{STR.allowOnce}</button>
+        <button type="button" className="btn-primary" disabled={busy} onClick={() => void choose("once")}>{a.planSteps?.length ? STR.approve : STR.allowOnce}</button>
         {a.hasProposedRule && <button type="button" className="btn-outline" disabled={busy} onClick={() => void choose("always")}>{STR.alwaysAllow}</button>}
         <button type="button" className="btn-outline" disabled={busy} onClick={() => void choose("deny")}>{STR.deny}</button>
         <span className="grow" />

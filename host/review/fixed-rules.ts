@@ -14,7 +14,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { evaluateFixedRules, fullAutoAsk, type FullAutoAction, type FullAutoContext, type FullAutoResult, type PermAction, type PermContext, type PermResult, type PermMode } from "@synapse/shared";
+import { evaluateFixedRules, fullAutoAsk, type FullAutoAction, type FullAutoContext, type FullAutoResult, type McpToolMeta, type PermAction, type PermContext, type PermResult, type PermMode } from "@synapse/shared";
 import type { Classification } from "./classify";
 import type { ToolCall } from "../brain/types";
 
@@ -27,6 +27,8 @@ export interface FixedRulesEnv {
   scratch?: readonly string[];
   /** Bug 258: the Bot is in No limits (Full auto only): sends and private-file reads don't ask; the NEVER walls hold. */
   noLimits?: boolean;
+  /** Bug 275: what the host knows about a registry MCP tool (a server Synapse knows; the tool's description). */
+  mcpTool?(serverId: string, tool: string): McpToolMeta;
 }
 
 /** Translate a classified call into the engine's PermAction, or null when the fixed rules don't apply. */
@@ -72,6 +74,9 @@ export function fixedRuleFor(call: ToolCall, cls: Classification, env: FixedRule
 // so the three agree. The classifier decides CARDS only; the fixed NEVER wall above is still a hard block.
 // ---------------------------------------------------------------------------------------------------------------
 
+/** Bug 441: the most realpath lookups one box decision makes (a few per path named; the classifier walks up). */
+export const BOX_REALPATH_BUDGET = 4096;
+
 /** The roots the Bot owns: its box workspace, its scratch dirs, and the Mac's auto-run (project) roots. */
 export function fullAutoContext(env: FixedRulesEnv): FullAutoContext {
   return {
@@ -115,6 +120,12 @@ export function toFullAutoAction(call: ToolCall, cls: Classification, env: Fixed
     const a = t.arguments as Record<string, unknown>;
     return { kind: "browser", action: str(a.tool) || str(a.action), url: str(a.url) || undefined, label: str(a.element) || str(a.value) || undefined };
   }
+  if (t.action === "mcp") {
+    // Bug 275: the raw server id (claude_ai_ kept) from the tool name; nothing known about it = unknown.
+    const m = /^mcp__(.+?)__(.+)$/.exec(call.toolName);
+    const meta: McpToolMeta = (m && env.mcpTool?.(m[1]!, m[2]!)) || { known: false, description: null };
+    return { kind: "tool", action: t.action, args: t.arguments as Record<string, unknown>, mcp: meta };
+  }
   return { kind: "tool", action: t.action, args: t.arguments as Record<string, unknown> };
 }
 
@@ -126,7 +137,28 @@ export function fullAutoAskFor(call: ToolCall, cls: Classification, env: FixedRu
     const read = fullAutoAsk({ kind: "file", side: "mac", op: "read", path: call.input.local_path }, fullAutoContext(env));
     if (read.ask) return read;
   }
-  return a ? fullAutoAsk(a, fullAutoContext(env)) : { ask: false, category: null, rule: "full-auto.quiet", reason: "" };
+  if (!a) return { ask: false, category: null, rule: "full-auto.quiet", reason: "" };
+  // Bug 441: a box file or command is judged by where its paths REALLY are (the host sees the box's files); a Mac path
+  // is resolved on the Mac, by the coordinator, never here.
+  const box = (a.kind === "file" || a.kind === "command") && a.side === "box";
+  if (!box) return fullAutoAsk(a, fullAutoContext(env));
+  // Each path resolved once, and at most BOX_REALPATH_BUDGET lookups per call (bug 433's rule): past that, what the
+  // classifier found can't be trusted to stay quiet, so it asks.
+  const memo = new Map<string, string | Error>();
+  let calls = 0;
+  let exhausted = false;
+  const realpath = (p: string): string => {
+    let r = memo.get(p);
+    if (r === undefined) {
+      if (++calls > BOX_REALPATH_BUDGET) { exhausted = true; throw new Error("realpath budget"); }
+      try { r = fs.realpathSync.native(p); } catch (e) { r = e as Error; }
+      memo.set(p, r);
+    }
+    if (r instanceof Error) throw r;
+    return r;
+  };
+  const v = fullAutoAsk(a, { ...fullAutoContext(env), realpath });
+  return !v.ask && exhausted ? { ask: true, category: "security", rule: "security.too-long", reason: "This names more paths than can be checked ahead of time." } : v;
 }
 
 /**
@@ -145,4 +177,46 @@ export function modeAllowsWithoutCard(mode: PermMode, call: ToolCall, cls: Class
     return r.verdict === "always-allow";
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Bug 439: ASK IS NEVER WEAKER THAN FULL AUTO. Ask and Auto-accept edits run the same Full-auto classifier as a
+// deterministic floor, before the reviewer model. What Full auto would card, these modes card or hand to the reviewer
+// with a floor it can't wave through on its own judgement.
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+ * Code from the network run in place, and data sent off this machine (uploads, remote copies, raw sockets, a
+ * script's own connection, a command's output put into a request): a card every time, in every mode and with
+ * Auto-review off. No Allow rule, exact rule or reviewer verdict lifts it (the same standing as F7–F9).
+ */
+export const HARD_FLOOR_RULES: ReadonlySet<string> = new Set([
+  "security.pipe-to-shell", "security.fetch-and-run", "send.webhook", "send.network", "send.network-script", "send.exfil", "send.cloud-upload",
+]);
+
+/** The reviewer floor each Full-auto category stands for (post-validation blocks an allow without a covering rule). */
+const CATEGORY_FLOOR: Record<string, string> = { destruction: "F4", send: "F1", money: "F3", security: "F5" };
+
+export interface AskFloor {
+  /** The Full-auto verdict this call would get. */
+  result: FullAutoResult;
+  /** A card before the reviewer, whatever the rules or the reviewer say. */
+  hard: boolean;
+  /** The floor code added to the static result. */
+  code: string;
+}
+
+/** The floor Ask and Auto-accept edits take from the Full-auto classifier, or null when Full auto would stay quiet. */
+export function askModeFloor(call: ToolCall, cls: Classification, env: FixedRulesEnv): AskFloor | null {
+  const r = fullAutoAskFor(call, cls, { ...env, noLimits: false });
+  if (!r.ask || !r.category) return null;
+  const hard = HARD_FLOOR_RULES.has(r.rule);
+  return { result: r, hard, code: hard ? "F9" : (CATEGORY_FLOOR[r.category] ?? "F5") };
+}
+
+/** The static result with the Ask floor added: the floor code, and a tier the fast path can't take. */
+export function withAskFloor<T extends { tierHint: 0 | 1 | 2 | 3 | 4; floorHits: string[]; readOnly: boolean }>(st: T, f: AskFloor | null): T {
+  if (!f) return st;
+  const tier = (f.hard ? 4 : Math.max(st.tierHint, 3)) as T["tierHint"];
+  return { ...st, floorHits: st.floorHits.includes(f.code) ? st.floorHits : [...st.floorHits, f.code], tierHint: tier, readOnly: false };
 }

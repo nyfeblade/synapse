@@ -25,7 +25,7 @@ export const SPEC_GATEWAY_COMMANDS: readonly string[] = [
   // Phase 3 box and computer additions
   "ensureDisplay", "setTakeoverActive", "openComputerApp", "submitForm", "openDiskSaver", "restoreSnapshot", "deleteSnapshot", "prepareBoxRestart", "setBoxMaintenance",
   // Trays, attachments, settings, secrets
-  "dismissTray", "clearTrays", "uploadAttachment", "setHostSettings", "setBotSecrets",
+  "dismissTray", "clearTrays", "uploadAttachment", "setHostSettings", "setMacTimeZone", "setNetworkPause", "setBotSecrets",
   // MCP and plugins
   "installPlugin", "uninstallPlugin", "setMcpToolEnabled", "startMcpAuth", "completeMcpOAuth",
   // Templates
@@ -46,6 +46,10 @@ export const SPEC_GATEWAY_COMMANDS: readonly string[] = [
   "startGoogleSetupTask", "cancelGoogleSetupTask", "setGoogleReconnectCheck",
   // Per-Bot GitHub sign-in (bug-log 195)
   "startGitHubSignIn", "signOutGitHub",
+  // 0.1.4 first-run: the coding-agent card's Stop
+  "cancelCodingAgent",
+  // 0.1.4: Synapse's MCP server (host/mcp-server)
+  "mcpStartTask",
 ];
 
 /** §4.5 commands (plus Phase 4 additions) that only read. */
@@ -60,6 +64,7 @@ export const READ_ONLY_COMMANDS: readonly string[] = [
   "getMarketplace", "getCatalogEntry", "listPluginMarketplaces", "getTemplate", "listStarterTemplates", "getLocalComputer", "getLocalPolicyStatus", "getLocalPolicyReset", "getLocalBotMode", "getLocalBrowserAllowed", "getLocalMacAppAllowed", "getBrowserUsage",
   "readLocalFile", "getNetworkStats", "getOnboarding", "listCodingAgents", "getPhase5Settings", "getGoogleStatus", "getGoogleReconnectCheck", "getComposioStatus", "getGitHubStatus",
   "getAuth", "getModelAccess", "getBudgetPrompt", "macClaudeAuth",
+  "mcpListBots", "mcpTaskStatus", "mcpTaskResult",
 ];
 
 export const PARITY: Record<string, ParityEntry> = {
@@ -77,6 +82,7 @@ export const PARITY: Record<string, ParityEntry> = {
   setStandupSettings: { userOnly: "the daily standup's settings" },
   runStandupNow: { userOnly: "running the daily standup" },
   interruptAgent: { userOnly: "the user's Stop button" },
+  cancelCodingAgent: { userOnly: "the user's Stop button (a Bot cancels its own with CodingAgent)" },
   createAgent: { tool: "CreateAgent" },
   kickstartAgent: { tool: "CreateAgent" },
   updateAgent: { tool: "UpdateAgent" },
@@ -140,6 +146,8 @@ export const PARITY: Record<string, ParityEntry> = {
   clearTrays: { userOnly: "view state" },
   uploadAttachment: { userOnly: "the user's own attachments" },
   setHostSettings: { tool: "update_state:account_settings" },
+  setMacTimeZone: { userOnly: "the Mac's own clock" },
+  setNetworkPause: { userOnly: "the app's check of the Bots' computer's network guard" },
   setBotSecrets: { userOnly: "secret values" },
   installPlugin: { laterPhase: 5, tool: "InstallPlugin" },
   uninstallPlugin: { laterPhase: 5, tool: "UninstallPlugin" },
@@ -215,4 +223,5 @@ export const PARITY: Record<string, ParityEntry> = {
   setGoogleReconnectCheck: { userOnly: "connected accounts" },
   startGitHubSignIn: { userOnly: "GitHub sign-in in the browser" },
   signOutGitHub: { userOnly: "connected accounts" },
+  mcpStartTask: { userOnly: "an outside app's request over Synapse's MCP server" },
 };

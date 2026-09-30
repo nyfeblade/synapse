@@ -376,3 +376,59 @@ describe("Bug 421: the final review's three", () => {
     } finally { c.stop(); }
   });
 });
+
+describe("bug 440: a send whose recipients the host can't resolve cards, never passes on the reviewer", () => {
+  const none = async () => ({ recipients: [] as string[], channels: [] as { name: string; members: number }[] });
+
+  it("a Slack send where the host found no channel cards (every Slack send slug)", async () => {
+    for (const slug of ["SLACK_SEND_MESSAGE", "SLACK_CHAT_POST_MESSAGE"]) {
+      const s = setup({ user: "Post in #design that the new mocks are in Figma.", composio: none });
+      expect(await s.run(`mcp__composio_apps__${slug}`, { channel: "#design", text: "The new mocks are in Figma." }), slug).toBe("ask");
+      expect(s.requests, slug).toHaveLength(0);
+    }
+  });
+
+  it("a Gmail reply whose thread gave no participants cards", async () => {
+    const s = setup({ composio: none });
+    expect(await s.run("mcp__composio_apps__GMAIL_REPLY_TO_THREAD", { thread_id: "t1", message_body: "Ten minutes late." })).toBe("ask");
+    expect(s.requests).toHaveLength(0);
+  });
+
+  it("an email send with no address, or a recipient that isn't one, cards", async () => {
+    const cases: [string, Record<string, unknown>][] = [
+      ["mcp__composio_apps__GMAIL_SEND_EMAIL", { recipient_email: "Sarah", subject: "Late", body: "Ten minutes late." }],
+      ["mcp__composio_apps__GMAIL_SEND_EMAIL", { subject: "Late", body: "Ten minutes late." }],
+      ["mcp__composio_apps__GMAIL_SEND_EMAIL", { ...SARAH, cc: ["U04ABCDEF"] }],
+      ["mcp__composio_apps__GMAIL_SEND_EMAIL", { ...SARAH, extra_recipients: "sarah.lee@example.com, the whole team" }],
+      ["mcp__google__gmail_send", { to: "Sarah", subject: "Late", body: "Ten minutes late." }],
+      ["mcp__google__gmail_send", { to: "", subject: "Late", body: "Ten minutes late." }],
+    ];
+    for (const [tool, input] of cases) {
+      const s = setup();
+      expect(await s.run(tool, input), JSON.stringify(input)).toBe("ask");
+      expect(s.requests, JSON.stringify(input)).toHaveLength(0);
+    }
+  });
+
+  it("a draft with no recipients cards", async () => {
+    const s = setup({ draft: { to: "", body: "Ten minutes late." } });
+    expect(await s.run("mcp__google__gmail_send", { draft_id: "r-123" })).toBe("ask");
+    expect(s.requests).toHaveLength(0);
+  });
+
+  it("a calendar event with a guest the host can't resolve cards; one with no guests still runs", async () => {
+    const user = "Add a meeting with Uncle John to my calendar at 3:45 PM ET and invite him.";
+    const ev = { summary: "Uncle John", start: "2026-10-01T19:45:00Z", end: "2026-10-01T20:15:00Z" };
+    expect(await setup({ user }).run("mcp__google__calendar_create", { ...ev, attendees: ["Uncle John"] })).toBe("ask");
+    expect(await setup({ user }).run("mcp__composio_apps__GOOGLECALENDAR_CREATE_EVENT", { ...ev, attendees: ["John"] })).toBe("ask");
+    expect(await setup({ user: "Add a meeting with Uncle John to my calendar please. 3:45 PM ET." }).run("mcp__google__calendar_create", ev)).toBe("allow");
+  });
+
+  it("controls: resolved sends still run", async () => {
+    expect(await setup().run("mcp__composio_apps__GMAIL_SEND_EMAIL", SARAH)).toBe("allow");
+    expect(await setup().run("mcp__composio_apps__GMAIL_SEND_EMAIL", { ...SARAH, recipient_email: "\"Lee, Sarah\" <sarah.lee@example.com>" })).toBe("allow");
+    expect(await setup().run("mcp__google__gmail_send", { to: "sarah.lee@example.com", subject: "Late", body: "Ten minutes late." })).toBe("allow");
+    const ch = async () => ({ recipients: [], channels: [{ name: "design", members: 4 }] });
+    expect(await setup({ user: "Post in #design that the new mocks are in Figma.", composio: ch }).run("mcp__composio_apps__SLACK_SEND_MESSAGE", { channel: "#design", text: "The new mocks are in Figma." })).toBe("allow");
+  });
+});

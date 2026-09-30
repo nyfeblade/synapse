@@ -26,6 +26,8 @@ export interface ApprovalCardView {
   ruleAddedText: string | null;
   createdAt: number;
   settledAt: number | null;
+  /** Smarter approvals: a plan card's steps, one line each (absent on every other card). */
+  planSteps?: string[];
 }
 
 /** CHAT-12: reactions are stored on the target entry. `by` is "user" or the reacting Bot's id. */
@@ -154,7 +156,7 @@ export type TimelineEvent =
   | { type: "routine-created" | "routine-updated" | "routine-enabled" | "routine-disabled" | "routine-deleted"; routineId: string; name: string; nextRunAt?: number | null; count?: number; turnKey?: string }
   | { type: "agents-messaged"; botIds: string[]; chainId: string }
   | { type: "agent-exchange"; chainId: string; botIds: string[]; entryIds: string[]; count: number }
-  | { type: "wake-origin"; source: "agent" | "routine" | "followup" | "revival"; botIds?: string[]; routineId?: string; routineName?: string; taskId?: string; taskTitle?: string; via?: "schedule" | "event" | "manual" | "bot"; caughtUp?: boolean }
+  | { type: "wake-origin"; source: "agent" | "routine" | "followup" | "revival" | "mcp"; client?: string; botIds?: string[]; routineId?: string; routineName?: string; taskId?: string; taskTitle?: string; via?: "schedule" | "event" | "manual" | "bot"; caughtUp?: boolean }
   | { type: "member-pass"; botIds: string[]; roomTurnId: string }
   | { type: "group-created"; groupId: string; name: string };
 export interface EventEntry { kind: "event"; id: string; createdAt: number; event: TimelineEvent }

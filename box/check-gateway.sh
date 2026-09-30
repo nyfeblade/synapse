@@ -13,7 +13,8 @@ TRIES="${SYNAPSE_CHECK_TRIES:-120}"
 WANT="$SYNAPSE_GATEWAY_PORT"
 INFO=""; PORT=""
 for _ in $(seq 1 "$TRIES"); do
-  INFO="$(orb -m "$BOX_MACHINE" -u root cat /home/box/.host/gateway.json 2>/dev/null || true)"
+  # Each read is bounded (10 s, orb.sh): the hang (bug 435) shows up right after the host restarts; the loop reads again.
+  INFO="$(ORB_TIMEOUT=10 orb -m "$BOX_MACHINE" -u root cat /home/box/.host/gateway.json 2>/dev/null || true)"
   # plutil (macOS) reads JSON: Synapse.app runs this with Finder's PATH, which has no node.
   if [ -n "$INFO" ]; then PORT="$(printf '%s' "$INFO" | plutil -extract port raw -o - - 2>/dev/null || true)"; fi
   [ -n "$INFO" ] && [ "$PORT" = "$WANT" ] && break; sleep 0.5

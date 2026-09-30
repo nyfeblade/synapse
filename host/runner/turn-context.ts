@@ -5,7 +5,9 @@ export type WakeOrigin =
   | { kind: "agent"; senderIds: string[] }
   | { kind: "routine"; routineId: string; routineName: string; via?: "schedule" | "event" | "manual" | "bot"; caughtUp?: boolean }
   | { kind: "revival"; taskId: string; title: string }
-  | { kind: "followup" };
+  | { kind: "followup" }
+  /** 0.1.4: an outside app asked over Synapse's MCP server; `client` is the name the owner approved. */
+  | { kind: "mcp"; client: string };
 
 /** Per-turn Phase 4 context carried on the TurnSlot. */
 export interface TurnContext {

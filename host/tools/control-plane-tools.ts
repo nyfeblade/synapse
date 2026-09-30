@@ -229,6 +229,7 @@ export function settingsTarget(bots: BotService, settings: HostSettingsStore): S
 const USER_ONLY: [string[], string][] = [
   [["auto_review_enabled", "auto_review", "allow_instructions", "block_instructions", "auto_review_rules"], "Auto-review"],
   [["local_execution", "execution_policy"], "Local execution"],
+  [["trusted_recipients", "trustedRecipients", "trusted_people", "trusted"], "Auto-review → Trusted people"],
 ];
 
 /** update_state target:"account_settings" {user_time_zone} (ORIG-17). */

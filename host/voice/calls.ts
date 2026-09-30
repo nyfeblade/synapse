@@ -1,5 +1,6 @@
 import { LIMITS5, STR5, type BotSummary, type TranscriptEntry, type VoiceCallView } from "@synapse/shared";
 import { GatewayError } from "../gateway/errors";
+import { roomBotName } from "../groups/member-prompt";
 import type { CommandHandlers } from "../gateway/server";
 
 /** 192400 → "3m 12s"; under a minute → "42s". */
@@ -215,7 +216,8 @@ export class CallRegistry {
       let who: string | null = null;
       let text = "";
       if (e.kind === "message" && e.role === "user" && !("fromAgent" in e && e.fromAgent) && !("toAgent" in e && e.toAgent)) { who = "User"; text = e.content; }
-      else if (e.kind === "send-message" && e.message.type === "text") { who = e.author?.name ?? this.name(c.chatId); text = e.message.content; }
+      // Bug 434 follow-up: a Bot named like the user ("User", any case, width or look-alike) never reads as the user.
+      else if (e.kind === "send-message" && e.message.type === "text") { who = roomBotName(e.author?.name ?? this.name(c.chatId)); text = e.message.content; }
       if (who && text.trim()) lines.push(`${who}: ${scrub(text.replace(/\s+/g, " ").trim()).slice(0, 600)}`);
     }
     const head = [

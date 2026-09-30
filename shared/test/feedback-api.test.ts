@@ -48,6 +48,10 @@ function gh(o: { issues?: Row[] | "error"; comments?: Row[] | "error"; putStatus
     if (/\/issues\?/.test(url)) return o.issues === "error" ? new Response("{}", { status: 503 }) : new Response(JSON.stringify(o.issues ?? []));
     if (url.endsWith("/issues")) return new Response(JSON.stringify({ number: 7 }), { status: 201 });
     if (init.method === "PUT") return new Response("{}", { status: puts.shift() ?? 201 });
+    if (url.endsWith("/git/blobs")) return new Response(JSON.stringify({ sha: "blob1" }), { status: 201 });
+    if (url.endsWith("/git/trees")) return new Response(JSON.stringify({ sha: "tree1" }), { status: 201 });
+    if (url.endsWith("/git/commits")) return new Response(JSON.stringify({ sha: "commit1" }), { status: 201 });
+    if (url.endsWith("/git/refs")) return new Response("{}", { status: 201 });
     return new Response("{}", { status: 404 });
   });
   return { fetch, calls, issue: () => calls.find((c) => c.url.endsWith("/issues")), created: () => calls.filter((c) => c.url.endsWith("/issues")).length };
@@ -341,17 +345,27 @@ describe("rate limits", () => {
 });
 
 describe("screenshots", () => {
-  it("are committed to the private attachments branch, linked, and labelled has-screenshot", async () => {
+  it("each goes on its own orphan branch shots/<date>-<random>, linked from the issue, labelled has-screenshot", async () => {
     const { g, h } = handler();
     const r = res();
     await h(jsonReq({ ...app, screenshot: PNG }), r);
     expect(r.statusCode).toBe(200);
-    const put = g.calls.find((c) => c.method === "PUT")!;
-    expect(put.url).toMatch(/\/repos\/owner\/private-repo\/contents\/feedback\/[\w-]+\.png$/);
-    expect(put.body).toMatchObject({ branch: "feedback-attachments", content: PNG });
-    expect(g.issue()!.body.body).toMatch(/blob\/feedback-attachments\/feedback\/[\w-]+\.png/);
+    // Nothing is written through the contents API, so no shared branch (and never the default branch) is touched.
+    expect(g.calls.some((c) => c.method === "PUT" || c.url.includes("/contents/"))).toBe(false);
+    const ref = g.calls.find((c) => c.url.endsWith("/git/refs"))!;
+    expect(ref.body.ref).toMatch(/^refs\/heads\/shots\/\d{4}-\d{2}-\d{2}-[0-9a-f]{12}$/);
+    const id = ref.body.ref.split("/").pop();
+    expect(g.issue()!.body.body).toContain(`**Screenshot:** [${id}.png](https://github.com/owner/private-repo/blob/shots/${id}/feedback/${id}.png) (private branch \`shots/${id}\`)`);
     expect(g.issue()!.body.body).not.toContain(PNG);
     expect(g.issue()!.body.labels).toContain("has-screenshot");
+  });
+  it("a second screenshot gets a different branch", async () => {
+    const { g, h } = handler();
+    await h(jsonReq({ ...app, screenshot: PNG }), res());
+    await h(jsonReq({ ...app, message: "another one", screenshot: PNG }, { ip: "192.0.2.4" }), res());
+    const refs = g.calls.filter((c) => c.url.endsWith("/git/refs")).map((c) => c.body.ref);
+    expect(refs).toHaveLength(2);
+    expect(new Set(refs).size).toBe(2);
   });
   it("over 15 a day, the screenshot is left out and the text still goes", async () => {
     const shots = Array.from({ length: CAPS.screenshotsPerDay }, (_, i) => row({ number: i + 1, labels: [{ name: "feedback" }, { name: "has-screenshot" }] }));
@@ -359,29 +373,55 @@ describe("screenshots", () => {
     const r = res();
     await h(jsonReq({ ...app, screenshot: PNG }), r);
     expect(r.statusCode).toBe(200);
-    expect(g.calls.some((c) => c.method === "PUT")).toBe(false);
+    expect(g.calls.some((c) => c.url.includes("/git/"))).toBe(false);
     expect(g.issue()!.body.body).toContain("A screenshot was sent but not attached.");
     expect(g.issue()!.body.labels).not.toContain("has-screenshot");
   });
-  it("make an ORPHAN branch the first time: a new tree and a commit with no parent", async () => {
+  it("the ref: a blob, a tree with no base, a commit with no parent, then refs/heads/shots/<id>", async () => {
     const calls: { m: string; p: string; b: any }[] = [];
-    let puts = 0;
     const call = async (m: string, p: string, b?: any) => {
       calls.push({ m, p, b });
-      if (m === "PUT") return new Response("{}", { status: puts++ === 0 ? 404 : 201 });
       if (p.endsWith("/git/blobs")) return new Response(JSON.stringify({ sha: "blob1" }), { status: 201 });
       if (p.endsWith("/git/trees")) return new Response(JSON.stringify({ sha: "tree1" }), { status: 201 });
       if (p.endsWith("/git/commits")) return new Response(JSON.stringify({ sha: "commit1" }), { status: 201 });
       if (p.endsWith("/git/refs")) return new Response("{}", { status: 201 });
       return new Response("{}", { status: 404 });
     };
-    const link = await attachScreenshot(call, "o/r", PNG, "2026-09-29-x");
-    expect(link).toBe("https://github.com/o/r/blob/feedback-attachments/feedback/2026-09-29-x.png");
-    expect(calls.map((c) => `${c.m} ${c.p}`)).toEqual(["PUT /repos/o/r/contents/feedback/2026-09-29-x.png", "POST /repos/o/r/git/blobs", "POST /repos/o/r/git/trees", "POST /repos/o/r/git/commits", "POST /repos/o/r/git/refs"]);
-    expect(calls[2]!.b.tree).toEqual([{ path: "feedback/2026-09-29-x.png", mode: "100644", type: "blob", sha: "blob1" }]);
-    expect(calls[2]!.b).not.toHaveProperty("base_tree");
-    expect(calls[3]!.b.parents).toEqual([]);
-    expect(calls[4]!.b).toEqual({ ref: "refs/heads/feedback-attachments", sha: "commit1" });
+    const id = "2026-09-29-0123456789ab";
+    const link = await attachScreenshot(call, "o/r", PNG, id);
+    expect(link).toBe(`https://github.com/o/r/blob/shots/${id}/feedback/${id}.png`);
+    expect(calls.map((c) => `${c.m} ${c.p}`)).toEqual(["POST /repos/o/r/git/blobs", "POST /repos/o/r/git/trees", "POST /repos/o/r/git/commits", "POST /repos/o/r/git/refs"]);
+    expect(calls[0]!.b).toEqual({ content: PNG, encoding: "base64" });
+    expect(calls[1]!.b.tree).toEqual([{ path: `feedback/${id}.png`, mode: "100644", type: "blob", sha: "blob1" }]);
+    expect(calls[1]!.b).not.toHaveProperty("base_tree");
+    expect(calls[2]!.b.parents).toEqual([]);
+    expect(calls[3]!.b).toEqual({ ref: `refs/heads/shots/${id}`, sha: "commit1" });
+  });
+  it("fails closed: any failed step (or an existing ref, or a bad id) → false, nothing linked", async () => {
+    const PNG_ID = "2026-09-29-0123456789ab";
+    for (const failAt of ["/git/blobs", "/git/trees", "/git/commits", "/git/refs"]) {
+      const call = async (_m: string, p: string) => {
+        if (p.endsWith(failAt)) return new Response("{}", { status: failAt === "/git/refs" ? 422 : 500 });
+        return new Response(JSON.stringify({ sha: "x" }), { status: 201 });
+      };
+      expect(await attachScreenshot(call, "o/r", PNG, PNG_ID)).toBe(false);
+    }
+    const thrower = async () => { throw new Error("offline"); };
+    expect(await attachScreenshot(thrower, "o/r", PNG, PNG_ID)).toBe(false);
+    const never = vi.fn(async () => new Response("{}", { status: 201 }));
+    for (const bad of ["x", "../main", "2026-09-29-XYZ", "2026-09-29-0123456789ab/../../main"]) expect(await attachScreenshot(never, "o/r", PNG, bad)).toBe(false);
+    expect(never).not.toHaveBeenCalled();
+  });
+  it("a failed attach still files the text, marked not attached (fail closed on the shot only)", async () => {
+    const g = gh();
+    const inner = g.fetch.getMockImplementation()!;
+    g.fetch.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith("/git/refs") ? new Response("{}", { status: 500 }) : inner(url, init)));
+    const h = createHandler({ env: ENV, fetch: g.fetch, log: () => {} });
+    const r = res();
+    await h(jsonReq({ ...app, screenshot: PNG }), r);
+    expect(r.statusCode).toBe(200);
+    expect(g.issue()!.body.body).toContain("A screenshot was sent but not attached.");
+    expect(g.issue()!.body.labels).not.toContain("has-screenshot");
   });
 });
 

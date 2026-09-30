@@ -124,6 +124,8 @@ struct Options {
   var locale = Locale.current.identifier
   var mode = Mode.dictation
   var file: String? = nil
+  /// 0.1.4: the user opted in to Apple's servers for speech when this Mac can't recognise it on its own.
+  var allowServer = false
   var silenceMs = 1200.0
   var noSpeechMs = 8000.0
   /// Bug 185: dictation keeps listening through pauses and stops after this long with no new words.
@@ -210,6 +212,7 @@ while let a = argv.next() {
   case "--self-test-spatial": opt.selfTestSpatial = true
   case "--speech", "--out", "--seat-mode": _ = argv.next() // read by --self-test-spatial itself
   case "--pcm-stdin": opt.pcmStdin = true
+  case "--allow-server-speech": opt.allowServer = true
   case "--names": if let v = argv.next() { opt.names = cleanNames(v.split(separator: ",").map(String.init)) }
   case "--wake-threshold": if let v = argv.next(), let n = Double(v), n >= 0, n <= 1 { opt.wakeThreshold = n }
   case "--self-test-wake": opt.selfTestWake = true
@@ -319,6 +322,12 @@ log("recognizer ready, onDevice=\(onDevice)")
 // Wake word: local only. A recognizer that would send audio to a server never listens for the name.
 if opt.mode == .wake && !onDevice {
   fail("offline-unavailable", "Listening for \"Hey <name>\" needs on-device speech recognition for \(opt.locale). Download the language in System Settings → Keyboard → Dictation.", 3)
+}
+// 0.1.4 first-run: dictation and calls never send speech to Apple's servers silently. Without on-device recognition
+// for this language the helper stops before any audio is captured, and the app asks once (the user's opt-in comes
+// back as --allow-server-speech). A --file self-test is the developer's own audio, not the user's speech.
+if !onDevice && !opt.allowServer && opt.file == nil {
+  fail("server-speech", "This Mac can't recognise \(opt.locale) speech on its own. Allow Apple's servers, or download the language in System Settings → Keyboard → Dictation.", 3)
 }
 /// Wake word: the names being listened for (only touched on q).
 var wakeNames = opt.names

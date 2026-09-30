@@ -158,7 +158,8 @@ export class SchedulerEngine {
       const key = `${rec.botId}/${rec.id}`;
       seen.add(key);
       const prev = old.get(key);
-      if (prev && prev.defHash === rec.defHash && prev.enabled === rec.def.enabled) continue; // past next_run_at values are skipped by tick()
+      // 0.1.4 first-run: a row computed in another time zone (the Mac moved zones while the host was down) is redone too.
+      if (prev && prev.defHash === rec.defHash && prev.enabled === rec.def.enabled && !this.zoneMoved(prev, rec)) continue; // past next_run_at values are skipped by tick()
       this.d.db.upsertIndex(this.rowFor(rec, now));
     }
     for (const [key, r] of old) if (!seen.has(key)) this.d.db.deleteIndex(r.botId, r.routineId);
@@ -185,6 +186,31 @@ export class SchedulerEngine {
       if (!prev || prev.defHash !== rec.defHash || prev.enabled !== rec.def.enabled) this.d.db.upsertIndex(this.rowFor(rec, now));
     }
     if (this.running) this.arm();
+  }
+
+  /** A scheduled row whose zone is no longer the zone its schedule runs in now. */
+  private zoneMoved(row: IndexRow, rec: RoutineRecord): boolean {
+    const ps = this.parsed(rec);
+    return !!ps[0] && row.tz !== effectiveZone(ps[0], this.d.botTz(rec.botId));
+  }
+
+  /**
+   * 0.1.4 first-run (code audit 6.1): the user's time zone changed (the Mac moved zones, or Settings → Time zone).
+   * Every scheduled row that follows the user's zone gets its next run recomputed from now in the new zone; rows with
+   * an explicit zone of their own are left alone. Returns how many rows moved.
+   */
+  rezone(): number {
+    const now = this.d.now();
+    const rows = new Map(this.d.db.index().map((r) => [`${r.botId}/${r.routineId}`, r]));
+    let moved = 0;
+    for (const rec of this.d.store.all()) {
+      const prev = rows.get(`${rec.botId}/${rec.id}`);
+      if (!prev || !this.zoneMoved(prev, rec)) continue;
+      this.d.db.upsertIndex(this.rowFor(rec, now));
+      moved++;
+    }
+    if (moved && this.running) this.arm();
+    return moved;
   }
 
   nextRunAt(botId: string, routineId: string): number | null {

@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
+import { macQuietHandoff, type MacHandoffContext } from "@synapse/shared";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,6 +13,11 @@ import path from "node:path";
  *
  * The result is cached per input for the life of the process (apps don't change mid-run), so the codesign spawn is
  * paid at most once per app.
+ *
+ * 0.1.4 first-run (code audit 3.4): the coordinator's policy check is synchronous, and a codesign of a big app took
+ * seconds there, freezing every stream the coordinator carries (the chat froze while a Bot worked on the Mac). The
+ * daemon now calls `warmAllowedApps` first, which runs codesign asynchronously and fills the cache, so the sync
+ * check only reads it. The sync spawn is left only as the fallback for a name the warm-up didn't see.
  */
 const cache = new Map<string, boolean>();
 
@@ -93,6 +99,57 @@ function compute(nameOrPath: string, home: string): boolean {
 function codesignValid(bundle: string): boolean {
   try { return spawnSync("/usr/bin/codesign", ["--verify", "--strict", bundle], { timeout: 8_000, stdio: "ignore" }).status === 0; }
   catch { return false; }
+}
+
+type Run = (file: string, args: string[], timeoutMs: number) => Promise<"ok" | "fail" | "timeout">;
+const runAsync: Run = (file, args, timeoutMs) => new Promise((resolve) => {
+  try {
+    execFile(file, args, { timeout: timeoutMs }, (err) => {
+      if (!err) return resolve("ok");
+      const e = err as NodeJS.ErrnoException & { killed?: boolean; signal?: string | null };
+      resolve(e.killed || e.signal === "SIGTERM" ? "timeout" : "fail");
+    });
+  } catch { resolve("fail"); }
+});
+
+/** The same decision as `compute`, with codesign run off the thread. A codesign that timed out is not cached, so a
+ *  big app is checked again next time instead of being remembered as untrusted. */
+async function computeAsync(nameOrPath: string, home: string, run: Run): Promise<boolean | "timeout"> {
+  const bundle = resolveBundle(nameOrPath, home);
+  if (!bundle) return false;
+  const f = bundle.toLowerCase();
+  if (f.startsWith("/system/")) return true;
+  if (!f.startsWith("/applications/")) return false;
+  if (!notUserWritable(bundle)) return false;
+  let rootOwned = false;
+  try { rootOwned = fs.statSync(bundle).uid === 0; } catch { return false; }
+  const limit = 30_000; // off the thread now, so a big bundle gets the time it needs
+  if (!rootOwned) {
+    const anchored = await run("/usr/bin/codesign", ["--verify", "--strict", "-R=anchor apple generic", bundle], limit);
+    if (anchored !== "ok") return anchored === "timeout" ? "timeout" : false;
+  }
+  const valid = await run("/usr/bin/codesign", ["--verify", "--strict", bundle], limit);
+  return valid === "timeout" ? "timeout" : valid === "ok";
+}
+
+/** Check one app off the thread and cache the answer (what `macAllowedApp` then returns without a spawn). */
+export async function warmAllowedApp(nameOrPath: string, home: string = os.homedir(), run: Run = runAsync): Promise<boolean | null> {
+  const key = `${home}\0${nameOrPath}`;
+  const hit = cache.get(key);
+  if (hit !== undefined) return hit;
+  const ok = await computeAsync(nameOrPath, home, run);
+  if (ok === "timeout") return null;
+  cache.set(key, ok);
+  if (cache.size > 500) cache.delete(cache.keys().next().value!);
+  return ok;
+}
+
+/** Every app a command's Full-auto hand-off check would ask about, checked off the thread before the (sync) check. */
+export async function warmAllowedApps(command: string, ctx: MacHandoffContext, run: Run = runAsync): Promise<string[]> {
+  const names = new Set<string>();
+  try { macQuietHandoff(command, { ...ctx, isAllowedApp: (n) => { names.add(n); return true; } }); } catch { /* the real check decides */ }
+  await Promise.all([...names].map((n) => warmAllowedApp(n, ctx.home, run)));
+  return [...names];
 }
 
 /** Tests only: forget the cache. */

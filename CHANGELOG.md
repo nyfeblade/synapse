@@ -3,6 +3,52 @@
 Every version of Synapse. The website's Changelog page is built from this file.
 Newest first. A version headed `Unreleased` shows as "in progress".
 
+## 0.1.4 — 2026-09-30
+
+### Approvals
+
+- **Approve a whole plan once.** When a Bot lays out several steps, one card covers them for that task. A step outside the plan still asks, and payments and deletions always do.
+- **Trusted people.** Emails and calendar invites to just you skip the card. So do ones you ask for that go only to people you add in Settings → Auto-review → Trusted people. Your own ask-first rules still win, and a message that copies something from an email or web page still asks.
+- **Approve or Deny right from the notification.**
+- **Full auto now asks before sends, payments and deletes from any tool server it doesn't know,** judged by the tool's name, description and who it reaches.
+
+### Use your Bots from other apps
+
+- **Synapse's own MCP server.** Claude Desktop, Claude Code and Cursor can list your Bots, ask one something, hand it a task and check the result. It's off by default and uses no network port. You approve each app once, can revoke it any time, and every call is logged in Settings → System → MCP access.
+- **Nothing another app sends counts as your own words.** Risky actions still ask you in Synapse, and another app can never approve anything.
+
+### First run
+
+- **The Bots' browser works on a brand-new Bots' computer.**
+- **Setup never sits at 0%.** Start says why it's waiting, and Retry works.
+- **Setup and box checks never hang on a stuck OrbStack call.** Each call has a time limit, and setup offers Retry.
+- **The chat no longer freezes** while a Bot searches your Mac.
+- **No more disk writes every second** while idle.
+- **Stop works on coding agents,** and finished ones never stay on "Working".
+- **Speech only goes to Apple's servers after you say so,** on Macs that can't recognise speech on-device.
+- **Calls leave the ring to macOS** when Synapse can't tell whether Focus is on, so Focus decides. **Routines follow your time zone** when it changes.
+
+### Network
+
+- **Local network switch** in Settings → Computer → Network. Off by default. When it's on, Bots can reach devices on your home network, but never your Mac itself.
+- **If anything changes the Bots' network guard behind the app,** Bots pause and your setting is put back.
+- **Bots can't run OrbStack, Docker or other container tools on your Mac.** A script that only mentions one asks you first.
+
+### Safety
+
+- **The safety reviewer always reads the whole of what it judges.** Messages between Bots and from other apps are sized to fit, room reviews read the newest posts, and anything too long to read in full asks you instead.
+- **A Bot's name can't pass it off as you** in a group room.
+- **Huge commands can't slow down or slip past the Mac check.** Every check runs fast on any input, and a command too big to judge fully always asks you.
+- **Ask is never looser than Full auto.** Anything Full auto would ask about, Ask and Auto-accept edits ask about too.
+- **Uploads and download-and-run always ask,** in every mode, including uploads to cloud storage and a download that's unpacked and run in one go.
+- **A send to someone Synapse can't identify always asks,** even inside an approved plan or to trusted people.
+- **Writes are judged by where they really land,** so a shortcut inside a project can't reach a file outside it.
+- **Auto-accept edits asks before changing git hooks, key files or credentials** in a project.
+
+### Feedback
+
+- **Deleted feedback is gone for good,** screenshot included, and the sender's link says the conversation was deleted.
+
 ## 0.1.3 — 2026-09-29
 
 ### Safety

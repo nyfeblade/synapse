@@ -118,6 +118,7 @@ export const STRV = {
   presenceWaiting: "Needs you",
   callBot: (name: string) => `Call ${name}`,
   callSounds: "Call sounds",
+  speechServer: "Apple's servers for speech",
   callShortcut: "Call shortcut",
   callShortcutHelp: "Calls the Bot whose chat is open, from anywhere on the Mac.",
   callShortcutTaken: "That shortcut is already used by another app. Try a different one.",

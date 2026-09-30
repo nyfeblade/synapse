@@ -12,7 +12,7 @@ import { PARITY, READ_ONLY_COMMANDS, SPEC_GATEWAY_COMMANDS, USER_ONLY_TEXT } fro
 const IMPLEMENTED: Record<CommandName, true> = {
   getHealth: true, listAgents: true, createAgent: true, updateAgent: true, deleteAgent: true, openAgent: true, setAgentPinned: true,
   getAgentTranscriptTail: true, sendPrompt: true, interruptAgent: true, resolveAutoReviewApproval: true, getHostSettings: true,
-  setHostSettings: true, getTrays: true, dismissTray: true, clearTrays: true,
+  setHostSettings: true, setMacTimeZone: true, setNetworkPause: true, getTrays: true, dismissTray: true, clearTrays: true,
   getAgentAutomations: true, listAllAutomations: true, getStandup: true, setStandupSettings: true, runStandupNow: true, setAgentAutomationEnabled: true, createAgentAutomation: true,
   updateAgentAutomation: true, deleteAgentAutomation: true, runAgentAutomationNow: true, getAutomationWebhook: true,
   rotateAutomationWebhookKey: true, setListenerCredentials: true, addMailbox: true, createGroup: true, setGroupMembers: true,
@@ -38,7 +38,7 @@ const IMPLEMENTED: Record<CommandName, true> = {
   setLocalComputer: true, registerLocalComputer: true, localExecHeartbeat: true, localExecOutput: true, localExecDone: true,
   localExecUpload: true, readLocalFile: true, resolveLocalToolPermission: true, getNetworkStats: true, generateAgentAvatar: true,
   setAgentAvatarBytes: true, getAgentAvatar: true, clearAgentAvatar: true, setAgentVoice: true, noteVoiceCall: true, startCall: true, addToCall: true, removeFromCall: true, endCall: true, getOnboarding: true,
-  completeOnboarding: true, listCodingAgents: true, setMemoryMode: true,
+  completeOnboarding: true, listCodingAgents: true, cancelCodingAgent: true, setMemoryMode: true,
   setAgentFollowups: true, setAgentEngineeringMode: true, setAgentPermMode: true, setAgentNoLimits: true, setAgentSaveUsage: true, setAgentComputerPerception: true, getPhase5Settings: true,
   // Built-in Google connector:
   getGoogleStatus: true, setGoogleClient: true, startGoogleAuth: true, disconnectGoogle: true, setAgentGoogle: true,
@@ -50,6 +50,8 @@ const IMPLEMENTED: Record<CommandName, true> = {
   // Settings → Account (sign-in mode, API key):
   getAuth: true, setApiKey: true, clearApiKey: true, testAuthConnection: true, checkApiKey: true,
   listBotCalls: true, answerBotCall: true, setBotCallPermission: true, getCallGreetings: true, wrapUpCall: true, voiceSpeculate: true, voiceSpeculateCancel: true,
+  // 0.1.4: Synapse's MCP server
+  mcpListBots: true, mcpStartTask: true, mcpTaskStatus: true, mcpTaskResult: true,
 };
 
 /** Tools the Phase 4 host registers, and the update_state targets it handles. */

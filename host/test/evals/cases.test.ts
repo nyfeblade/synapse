@@ -12,7 +12,7 @@ describe("reviewer eval cases (§01.12)", () => {
     const mustBlock = spec.filter((c) => c.mustBlock).map((c) => c.id);
     expect(mustBlock).toEqual(["E03", "E05", "E06", "E08", "E09", "E11", "E14", "E15", "E17", "E19", "E20", "E23", "E25", "E26", "E28", "E29", "E30", "E31"]);
     const fa = cases.filter((c) => c.fullAuto);
-    expect(fa.map((c) => c.id)).toEqual(Array.from({ length: 15 }, (_, i) => `FA${String(i + 1).padStart(2, "0")}`));
+    expect(fa.map((c) => c.id)).toEqual(Array.from({ length: 19 }, (_, i) => `FA${String(i + 1).padStart(2, "0")}`));
     // Every Full-auto case that should card is a must-block: a false allow there fails the run.
     for (const c of fa) expect(c.mustBlock === true, c.id).toBe(c.expected === "block");
   });

@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { scrubClaudeLogin } from "@synapse/shared";
 import fs from "node:fs";
 import os from "node:os";
@@ -8,7 +7,7 @@ import type { HealthInfo } from "@synapse/shared";
 import { readAppSettings, writeAppSettings } from "../app-settings";
 import type { AppRuntime } from "../box-lifecycle";
 import { sealer } from "../sealing";
-import { resolveOrb } from "../orb-path";
+import { ORB_LIMITS, orbBytes } from "../orb-exec";
 import { createRotatingLog } from "../rotating-log";
 import { readSecret, storeSecret } from "../secrets";
 import { BackupService, type BackupSettings } from "./service";
@@ -20,21 +19,6 @@ export const logsDir = () => path.join(os.homedir(), "Library", "Logs", APP_DATA
 export const defaultBackupDir = () => path.join(os.homedir(), "Library", "Application Support", APP_DATA_NAME, "backups");
 
 export interface GatewayRef { baseUrl: string; token: string }
-
-/** Runs a command, collecting stdout as bytes (execFile's string stdout would corrupt a tarball). */
-function runBytes(cmd: string, args: string[], stdin?: Buffer, timeoutMs = 10 * 60_000): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { env: scrubClaudeLogin(process.env), stdio: ["pipe", "pipe", "pipe"] });
-    const out: Buffer[] = [];
-    let err = "";
-    const t = setTimeout(() => p.kill("SIGKILL"), timeoutMs);
-    p.stdout.on("data", (c: Buffer) => out.push(c));
-    p.stderr.on("data", (c: Buffer) => { err = (err + c.toString()).slice(-400); });
-    p.on("error", (e) => { clearTimeout(t); reject(e); });
-    p.on("close", (code) => { clearTimeout(t); code === 0 ? resolve(Buffer.concat(out)) : reject(new Error(`${path.basename(cmd)} exited ${code}: ${err.trim()}`)); });
-    p.stdin.end(stdin ?? Buffer.alloc(0));
-  });
-}
 
 export function registerBackups(o: {
   userData: string; appDir: string; runtime: AppRuntime; appVersion: string; fuzz: boolean;
@@ -55,7 +39,9 @@ export function registerBackups(o: {
     return { auto: o.fuzz ? s.backupAuto === true : s.backupAuto !== false, keep: s.backupKeep ?? 7, dir: s.backupDir || (o.fuzz ? path.join(o.userData, "backups") : defaultBackupDir()) };
   };
   const need = () => { if (!o.gateway()) throw new Error("Synapse isn't connected to its host yet."); };
-  const orb = (user: "box" | "root", args: string[], stdin?: Buffer) => runBytes(resolveOrb(), ["-m", o.machine?.() ?? "box", "-u", user, ...args], stdin);
+  // Bytes (a tarball), bounded like every orb call (bug 435). A pull is safe to repeat; a push or a restart is not.
+  const orb = (user: "box" | "root", args: string[], o2: { idempotent: boolean; stdin?: Buffer; timeoutMs?: number }) =>
+    orbBytes(["-m", o.machine?.() ?? "box", "-u", user, ...args], { timeoutMs: o2.timeoutMs ?? ORB_LIMITS.transfer, idempotent: o2.idempotent, fullEnv: scrubClaudeLogin(process.env), ...(o2.stdin ? { stdin: o2.stdin } : {}) });
   const svc = new BackupService({
     userData: o.userData, appVersion: o.appVersion, now: Date.now, settings, log,
     key: {
@@ -91,13 +77,13 @@ export function registerBackups(o: {
       },
       botCount: async () => (await o.call("listAgents")).agents.length,
       // The FUZZ/local host restarts on reconnect (connect() disposes and relaunches it on the same data).
-      restart: async () => { if (o.fuzz) await o.reconnect(); else await orb("root", ["systemctl", "restart", "bothost"]); },
+      restart: async () => { if (o.fuzz) await o.reconnect(); else await orb("root", ["systemctl", "restart", "bothost"], { idempotent: false, timeoutMs: ORB_LIMITS.restart }); },
       reconnect: o.reconnect,
     },
     // The Bots' Claude Code sessions are box-private (walls: cli-sessions), so they travel as the box user.
     sessions: o.fuzz ? undefined : {
-      pull: () => orb("box", ["tar", "-C", "/home/box/.claude", "-czf", "-", "projects"]),
-      push: async (tgz) => { await orb("box", ["tar", "-C", "/home/box/.claude", "-xzf", "-"], tgz); },
+      pull: () => orb("box", ["tar", "-C", "/home/box/.claude", "-czf", "-", "projects"], { idempotent: true }),
+      push: async (tgz) => { await orb("box", ["tar", "-C", "/home/box/.claude", "-xzf", "-"], { idempotent: false, stdin: tgz }); },
     },
   });
   // Only archives this session listed or the user picked can be previewed or restored.

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { FrameReader, findKokoro, kokoroCommand, probeKokoro } from "../../src/main/native/kokoro";
+import { realHomeForTest } from "../../../scripts/test-home";
 
 /**
  * Bug 107: the helper plays Kokoro's PCM (24 kHz mono float32, streamed in chunks) through the same
@@ -105,7 +106,7 @@ describe.skipIf(process.env.RUN_NATIVE !== "1" || process.platform !== "darwin")
 });
 
 // The real engine, on this Mac, when the user's Kokoro is installed (never downloaded, never bundled).
-const engine = process.platform === "darwin" ? findKokoro({ home: os.homedir(), userData: "/nonexistent", exists: fs.existsSync, listDir: (p) => fs.readdirSync(p) }) : null;
+const engine = process.env.RUN_NATIVE === "1" && process.platform === "darwin" ? findKokoro({ home: realHomeForTest("finds the user's installed Kokoro, read-only (opt-in RUN_NATIVE run)"), userData: "/nonexistent", exists: fs.existsSync, listDir: (p) => fs.readdirSync(p) }) : null;
 describe.skipIf(process.env.RUN_NATIVE !== "1" || !engine)("the Kokoro sidecar on this Mac (bug 107)", () => {
   it("passes the 3 s import probe", async () => {
     await expect(probeKokoro(engine!)).resolves.toMatchObject({ ok: true });

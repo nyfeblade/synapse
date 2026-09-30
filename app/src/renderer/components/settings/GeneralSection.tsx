@@ -38,7 +38,7 @@ export function AutoReviewSection() {
     );
   }
 
-  const put = async (patch: { autoReviewEnabled?: boolean; allowInstructions?: string[]; blockInstructions?: string[] }) => {
+  const put = async (patch: { autoReviewEnabled?: boolean; allowInstructions?: string[]; blockInstructions?: string[]; trustedRecipients?: string[] }) => {
     try {
       setError(null);
       const view = await call("setHostSettings", patch);
@@ -122,6 +122,42 @@ export function AutoReviewSection() {
               ))}
             </div>}
           </div>
+        </div>
+      </div>
+      <TrustedPeople list={settings.trustedRecipients ?? []} save={(trustedRecipients) => put({ trustedRecipients })} />
+    </>
+  );
+}
+
+/** Smarter approvals: sends to only these people (and you) skip the card. Set here only; a Bot can't change it. */
+function TrustedPeople({ list, save }: { list: string[]; save: (next: string[]) => Promise<void> }) {
+  const [text, setText] = useState("");
+  const add = async () => {
+    const e = text.trim().toLowerCase();
+    if (!e) return;
+    await save([...list.filter((x) => x !== e), e]);
+    setText("");
+  };
+  return (
+    <>
+      <h3>{STR.trustedPeople}</h3>
+      <div className="settings-card">
+        <div className="rules">
+          <div className="rule-controls">
+            <input type="email" aria-label={STR.trustedPeople} value={text} maxLength={254} placeholder={STR.trustedPlaceholder} style={{ flexGrow: 1 }}
+              onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void add(); }} />
+            <button type="button" className="btn-primary" disabled={!text.trim()} onClick={() => void add()}>{STR.add}</button>
+          </div>
+          {list.length > 0 && <div role="table" aria-label={STR.trustedPeople} className="rules-table">
+            {list.map((e) => (
+              <div role="row" key={e} className="rules-row">
+                <span role="cell" className="rule-text" title={e}>{e}</span>
+                <span role="cell" className="rule-actions">
+                  <button type="button" className="icon-btn" aria-label={`Remove ${e}`} onClick={() => void save(list.filter((x) => x !== e))}><TrashIcon /></button>
+                </span>
+              </div>
+            ))}
+          </div>}
         </div>
       </div>
     </>

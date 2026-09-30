@@ -59,7 +59,7 @@ recording and accessibility only when you first use a feature that needs them.
 - **Code.** Point a Bot at a repository: it works on its own branch in a separate worktree, runs the tests
   and hands back the branch or a pull request.
 - **Voice calls.** Call a Bot and talk. Speech is transcribed on your Mac and the voice is generated on your
-  Mac.
+  Mac. If your Mac can't transcribe your language itself, Synapse asks before using Apple's servers.
 - **Your Mac, with approval.** A Bot can use your Mac's apps and screen and run commands in a sandbox. Risky
   actions show an approval card first.
 - **Routines.** Bots run jobs on a schedule: a morning briefing, a weekly check, a reminder.

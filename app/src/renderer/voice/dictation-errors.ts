@@ -55,9 +55,11 @@ export function permissionFault(message: string): PermissionFault | null {
  * permission wording and a settings button, every other failure shows the helper's own reason.
  * "Nobody spoke" is a notice, not an alarm, but it is always said: dictation never just stops.
  */
-export type DictationFault = { text: string; pane: PrivacyPane | null; notice: boolean };
+export type DictationFault = { text: string; pane: PrivacyPane | null; notice: boolean; serverOptIn?: boolean };
 export function dictationFault(message: string, code?: string): DictationFault {
   if (code === "no-speech" || (!code && isBenignSpeechEnd(message))) return { text: STR5.dictationNoSpeech, pane: null, notice: true };
+  // 0.1.4 first-run: no on-device recognition here; nothing was sent. Ask once, with the opt-in beside it.
+  if (code === "server-speech") return { text: STR5.speechServerNeeded, pane: null, notice: false, serverOptIn: true };
   if (code && code !== "permission") return { text: message, pane: null, notice: false };
   const p = permissionFault(message);
   return p ? { text: p.text, pane: p.pane, notice: false } : { text: message, pane: null, notice: false };

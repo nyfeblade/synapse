@@ -154,7 +154,7 @@ const PCM_CHUNK_BYTES = 12_000 * 4;
 export type DictationMode = "dictation" | "call";
 
 /** Helper arguments for a session: voice mode adds echo cancellation and the end-of-turn silence. */
-export function helperArgs(mode: DictationMode, locale: string | undefined, devices?: AudioPrefs, voice?: string | null, contextFile?: string, lmDir?: string, whisper?: string[], remote = false, spatial = false): string[] {
+export function helperArgs(mode: DictationMode, locale: string | undefined, devices?: AudioPrefs, voice?: string | null, contextFile?: string, lmDir?: string, whisper?: string[], remote = false, spatial = false, allowServer = false): string[] {
   // Bug 198: a phone call has the phone's echo cancellation and no Mac devices at all.
   const args = mode === "call" ? ["--mode", "call", ...(remote ? ["--remote-audio"] : ["--voice-processing"]), "--silence-ms", String(LIMITS5.voiceSilenceMs)] : []; // the helper defaults to dictation
   // Bug 106: a call speaks, so it gets the chosen voice up front and warms it before the first reply.
@@ -177,6 +177,8 @@ export function helperArgs(mode: DictationMode, locale: string | undefined, devi
   // Bug 213: a call that starts as a group call is stereo, with the seats, from its start. A 1:1 call
   // (and a phone call) stays exactly as it was: mono, voice processing, no mic swap.
   if (spatial && mode === "call" && !remote) args.push("--spatial");
+  // 0.1.4 first-run: only the user's opt-in lets speech go to Apple's servers (Settings → Voice, or the notice).
+  if (allowServer) args.push("--allow-server-speech");
   // Bug 105: the chosen microphone (and, for a call, speaker); system default passes nothing.
   return devices && !remote ? [...args, ...deviceArgs(devices, mode)] : args;
 }
@@ -237,6 +239,8 @@ export function registerDictation(o: {
   prosody?: () => Prosody;
   /** Bug 198: a phone call's audio path (Phone access). Absent = every call uses this Mac. */
   remote?: RemoteAudio;
+  /** 0.1.4 first-run: the user allowed Apple's servers for speech (read at every session start). Absent = never. */
+  serverSpeech?: () => boolean;
 }): { switchDevices(p: AudioPrefs): void; feedRemote(pcm: Buffer): boolean; remoteLive(): boolean; muteRemote(muted: boolean): void } {
   const log = o.log ?? ((line: string) => console.warn(line));
   const prosody = o.prosody ?? (() => prosodyFrom());
@@ -345,7 +349,7 @@ export function registerDictation(o: {
     // build when it is not — in the background, so the microphone is never kept waiting.
     const lmDir = context.length ? o.lm?.dirFor(context, locale ?? "en-US") ?? null : null;
     const whisperArgs = o.whisper?.(mode) ?? [];
-    const spawned = (o.spawnFn ?? spawn)(o.binary, helperArgs(mode, locale, o.devices?.(), o.voice?.(), contextFile ?? undefined, lmDir ?? undefined, whisperArgs, remote, spatial), { stdio: ["pipe", "pipe", "pipe"] });
+    const spawned = (o.spawnFn ?? spawn)(o.binary, helperArgs(mode, locale, o.devices?.(), o.voice?.(), contextFile ?? undefined, lmDir ?? undefined, whisperArgs, remote, spatial, o.serverSpeech?.() === true), { stdio: ["pipe", "pipe", "pipe"] });
     if (whisperArgs.length) withWhisper.add(spawned);
     if (remote) { remoteHelpers.add(spawned); log(`dictation[${sessionId.slice(0, 8)}] phone call: this Mac's microphone and speaker stay off`); }
     // A write to a helper that already exited must never take the main process down.

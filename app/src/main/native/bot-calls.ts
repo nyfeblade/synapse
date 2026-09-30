@@ -22,21 +22,36 @@ export function inQuietHours(q: QuietHours | null, now: Date): boolean {
 }
 
 /**
- * Best effort: macOS keeps active Focus / Do Not Disturb assertions in this file while one is on (on
- * some versions it is absent entirely, or unreadable without Full Disk Access). Unreadable = off: the
- * notification itself is still silenced by macOS when a Focus is on.
+ * macOS keeps active Focus / Do Not Disturb assertions in this file while one is on. "unknown" when it can't be
+ * read: without Full Disk Access (the usual case for an app) the folder is closed to us, and a file that doesn't
+ * parse proves nothing either.
+ *
+ * 0.1.4 first-run (code audit 1.2): unreadable used to count as OFF, so the app played its own ring through a
+ * Focus. Unknown now rings quietly: no ring tone of the app's own while it isn't in front, and a notification with
+ * sound that macOS itself holds back during a Focus.
  */
-export function focusActive(home: string): boolean {
+export type FocusState = "on" | "off" | "unknown";
+export function focusState(home: string): FocusState {
+  const dir = path.join(home, "Library/DoNotDisturb/DB");
   try {
-    const j = JSON.parse(fs.readFileSync(path.join(home, "Library/DoNotDisturb/DB/Assertions.json"), "utf8")) as { data?: { storeAssertionRecords?: unknown[] }[] };
-    return (j.data ?? []).some((d) => Array.isArray(d.storeAssertionRecords) && d.storeAssertionRecords.length > 0);
-  } catch {
-    return false;
+    const j = JSON.parse(fs.readFileSync(path.join(dir, "Assertions.json"), "utf8")) as { data?: { storeAssertionRecords?: unknown[] }[] };
+    return (j.data ?? []).some((d) => Array.isArray(d.storeAssertionRecords) && d.storeAssertionRecords.length > 0) ? "on" : "off";
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") return "unknown";
+    // No assertions file: off, but only when the folder itself can be read (else we simply can't see it).
+    try { fs.readdirSync(dir); return "off"; } catch { return "unknown"; }
   }
 }
 
-export function ringPolicy(o: { quiet: QuietHours | null; focus: boolean; now: Date }): { ring: true } | { ring: false; why: string } {
-  if (o.focus) return { ring: false, why: "Focus is on" };
+/** True only when a Focus is known to be on. */
+export function focusActive(home: string): boolean {
+  return focusState(home) === "on";
+}
+
+/** `sound`: the app may play its own ring. False while the Focus state can't be read (macOS decides instead). */
+export function ringPolicy(o: { quiet: QuietHours | null; focus: FocusState | boolean; now: Date }): { ring: true; sound: boolean } | { ring: false; why: string } {
+  const focus: FocusState = o.focus === true ? "on" : o.focus === false ? "off" : o.focus;
+  if (focus === "on") return { ring: false, why: "Focus is on" };
   if (inQuietHours(o.quiet, o.now)) return { ring: false, why: "quiet hours" };
-  return { ring: true };
+  return { ring: true, sound: focus === "off" };
 }

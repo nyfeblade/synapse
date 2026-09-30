@@ -7,9 +7,17 @@ export interface LedgerProc { pid: number; botId: string; kind: "bot" | "child";
 export interface LedgerFile { hostBootId: string; procs: LedgerProc[] }
 
 export class SupervisorLedger {
+  /** What this host last wrote: the host's 1 s ticker calls write() every second, and an idle host must not
+   *  rewrite (and fsync) an unchanged file every second (0.1.4 first-run, code audit 6.3). */
+  private last: string | null = null;
   constructor(private file: string, private hostBootId: string) {}
-  write(procs: LedgerProc[]): void {
+  /** Writes only when the processes changed since the last write. Returns whether it wrote. */
+  write(procs: LedgerProc[]): boolean {
+    const key = JSON.stringify(procs);
+    if (key === this.last) return false;
     writeJsonAtomic(this.file, { hostBootId: this.hostBootId, procs }, 0o600);
+    this.last = key;
+    return true;
   }
   read(): LedgerFile | null {
     return readJson<LedgerFile | null>(this.file, null);

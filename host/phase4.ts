@@ -413,7 +413,16 @@ export function installPhase4(d: Phase4Deps): Phase4 {
           d.trays.add({ botId: null, title: "Couldn't open the webhook on your network", detail: String(err), dedupeKey: "webhook-lan" });
         },
       });
+      // 0.1.4 first-run: a new time zone (the Mac's, or the one chosen in Settings) reschedules the routines at once,
+      // and the Bots' prompts pick it up on their next turn.
+      let zone = d.settings.timeZone();
       unsubscribe = d.hub.subscribe((e) => {
+        if (e.channel === "host-settings" && d.settings.timeZone() !== zone) {
+          zone = d.settings.timeZone();
+          const moved = s.engine.rezone();
+          d.bots.invalidatePromptSnapshots();
+          log.info("time zone changed; routines rescheduled", { zone, moved });
+        }
         if (e.channel === "host-settings") syncTunnel();
         if (e.channel === "host-settings") void lanWatch.changed();
         if (e.channel === "automations") { b.resyncTriggers(); d.bots.invalidatePromptSnapshots(e.payload.botId); } // RTN-21 list is part of the frozen prompt

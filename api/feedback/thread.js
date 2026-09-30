@@ -1,6 +1,6 @@
 // /api/feedback/thread: the sender's private view of their feedback, and follow-ups.
 //
-//   GET  with header X-Feedback-Code → { ok, status: "open"|"closed", messages: [{ from: "you"|"synapse", text, at }] }
+//   GET  with header X-Feedback-Code → { ok, status: "open"|"closed"|"deleted", messages: [{ from: "you"|"synapse", text, at }] }
 //   POST with header X-Feedback-Code and { message } → adds a follow-up comment
 //
 // The code is "<issue number>.<128-bit secret>". The issue is read directly by number (no search) and
@@ -12,9 +12,14 @@
 // Env: FEEDBACK_REPO, FEEDBACK_GITHUB_TOKEN, and FEEDBACK_OWNER (the login allowed to /reply). FEEDBACK_OWNER
 // is REQUIRED when the repo belongs to an organisation; otherwise it defaults to the repo's owner.
 // Unknown or wrong code → 404 with no detail.
+//
+// Deleted conversations: before the owner deletes an issue, the admin app adds "<issue> <thread hash>" to
+// the deleted-threads list (its own branch in the private repo). A code whose secret matches a line there
+// gets { ok, status: "deleted", messages: [] } (and a follow-up gets 410). Only the secret's holder can match
+// a line, so a guessed or wrong code still gets the same bare 404 whether or not the issue ever existed.
 import { cleanReply, stripHidden } from "../../shared/src/feedback-content.js";
 import {
-  CAPS, GENERIC_REFUSAL, LIMITS, UNTRUSTED_HEADER, checkText, clientIp, followUpBody, footerHash, github, hashMatches, makeLimiter, makeRecent,
+  CAPS, GENERIC_REFUSAL, LIMITS, UNTRUSTED_HEADER, checkText, clientIp, followUpBody, footerHash, github, hashMatches, isDeleted, makeDeletedList, makeLimiter, makeRecent,
   originAllowed, parseCode, readBody, sendJson, tally, tooBig,
 } from "../_lib/feedback-core.js";
 
@@ -33,6 +38,7 @@ export function createThreadHandler(deps = {}) {
   const readLimiter = deps.readLimiter || makeLimiter(now, { perSource: 60, perInstance: 600 });
   const writeLimiter = deps.writeLimiter || makeLimiter(now);
   const recent = deps.recent || makeRecent(now);
+  const deletedList = deps.deletedList || makeDeletedList(now);
   const log = deps.log || ((m) => console.error(m));
   // Per issue number: its footer hash and whether it can be a thread (5 minutes), or "not found" (60 s),
   // so guessed codes are turned away without a GitHub call each.
@@ -56,11 +62,26 @@ export function createThreadHandler(deps = {}) {
     if (req.method === "POST" && tooBig(req, LIMITS.webBody)) return sendJson(res, 413, { ok: false, error: "That's too big." });
     const gh = github(token, deps.fetch || globalThis.fetch);
 
+    const deleted = () => (req.method === "GET"
+      ? sendJson(res, 200, { ok: true, status: "deleted", messages: [] })
+      : sendJson(res, 410, { ok: false, status: "deleted", error: "This conversation was deleted." }));
+
     try {
+      // The deleted list first, for every code alike (cached; a failed read fails closed for everyone).
+      let gone;
+      try { gone = await deletedList(gh, repo); } catch { log("feedback thread: deleted list unavailable"); return later(); }
+      if (isDeleted(gone, code)) return deleted();
+      // A missing issue may have just been deleted after the list was cached: look once more (at most one
+      // list read every 2 s per instance, however many codes are guessed) before saying 404.
+      const missing = async () => {
+        try { if (isDeleted(await deletedList(gh, repo, 2_000), code)) return deleted(); } catch { return later(); }
+        return notFound();
+      };
       const k = recall(code.number);
-      if (k && (k.missing || !k.thread || !hashMatches(k.hash, code.secret))) return notFound();
+      if (k?.missing) return missing();
+      if (k && (!k.thread || !hashMatches(k.hash, code.secret))) return notFound();
       const ir = await gh("GET", `/repos/${repo}/issues/${code.number}`);
-      if (ir.status === 404 || ir.status === 410) { remember(code.number, { missing: true }); return notFound(); }
+      if (ir.status === 404 || ir.status === 410) { remember(code.number, { missing: true }); return missing(); }
       if (!ir.ok) { log(`feedback thread: GitHub answered ${ir.status}`); return later(); }
       const issue = await ir.json();
       const isFeedback = (issue.labels || []).some((l) => (typeof l === "string" ? l : l?.name) === "feedback");

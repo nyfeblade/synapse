@@ -1,5 +1,9 @@
 /** Model-facing guard and card texts. */
 export const TEXT = {
+  /** Smarter approvals: a plan can only be proposed on the owner's own request, in this chat. */
+  planNotOwner: "Not asked: a plan can only be approved for something the user asked for in this chat. Ask for each step as usual.",
+  planCard: "Approve these steps once for this task.",
+  planApprovedResume: "The user approved your plan. Don't propose it again: run its steps now. Calls that match a step need no card; anything else still asks.",
   ownership: "This changes another Bot's standing instructions, so it needs your OK.",
   macFloor: "This touches a protected part of your Mac (keys, passwords, startup items, app data or a network send), so it needs your OK.",
   ownershipShared: "This changes what every Bot is told or can use (instructions, skills, connectors or tools), so it needs your OK.",
@@ -34,5 +38,7 @@ export const TEXT = {
     settings_change: "The Auto-review settings changed, so this request was cancelled. Re-run the action for a new review.",
   } as Record<string, string>,
   degraded: "Auto-review can't be reached right now, so this action needs your OK.",
+  /** Bug 432. */
+  wakeUnread: "What woke this Bot is longer than Auto-review can read in full, so this action needs your OK.",
   fallbackReason: "Blocked by Auto-review",
 };

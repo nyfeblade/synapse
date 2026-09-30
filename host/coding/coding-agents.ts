@@ -245,7 +245,11 @@ export class CodingAgents {
       }
     } catch (e) {
       this.finish(id, "error", String((e as Error).message ?? e).slice(0, 500));
+      return;
     }
+    // 0.1.4 first-run: the child's stream ended with no result (it exited or was closed): the agent has ended, so it
+    // is never left "Working" until the 5-hour timer. A no-op when a result, a cancel or the timer finished it first.
+    this.finish(id, "error", "The coding agent stopped without a result.");
   }
 
   private finish(id: string, status: CodingAgentView["status"], summary: string): void {

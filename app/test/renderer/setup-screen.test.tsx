@@ -76,6 +76,51 @@ describe("the setup screen", () => {
     await vi.waitFor(() => expect(invoked.map((c) => c[0])).toContain("setup.box.log"));
   });
 
+  it("0.1.4 first-run: a Start refused because the box is busy says why, offers Retry, and starts on its own once free (was: stuck at 0%)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      current = status({ orb: { app: true, cli: true, status: "running", version: "2.2.3" } });
+      let refusals = 2;
+      const inv = (window as unknown as { synapse: { native: { invoke: ReturnType<typeof vi.fn> } } }).synapse.native.invoke;
+      const base = inv.getMockImplementation() as (n: string, a: unknown) => Promise<unknown>;
+      inv.mockImplementation(async (n: string, a: unknown) => {
+        if (n === "setup.box.start") {
+          invoked.push([n, a]);
+          if (refusals-- > 0) return { ok: true, result: { started: false, busy: "The Bots' computer is being updated." } };
+          current = status({ orb: { app: true, cli: true, status: "running", version: "2.2.3" }, box: box({ phase: "running", progress: 0.1 }) });
+          return { ok: true, result: { started: true } };
+        }
+        return base(n, a);
+      });
+      render(<SetupScreen />);
+      const computer = await screen.findByRole("listitem", { name: "Bots' computer" });
+      expect(await within(computer).findByText("The Bots' computer is being updated.")).toBeTruthy();
+      // Retry asks again at once (and is refused once more, still saying why).
+      fireEvent.click(within(computer).getByRole("button", { name: "Retry" }));
+      await vi.waitFor(() => expect(invoked.filter((c) => c[0] === "setup.box.start")).toHaveLength(2));
+      // Then it keeps asking by itself, and starts when the other operation is done.
+      await vi.advanceTimersByTimeAsync(5_100);
+      await vi.waitFor(() => expect(invoked.filter((c) => c[0] === "setup.box.start")).toHaveLength(3));
+      await vi.advanceTimersByTimeAsync(2_600);
+      await vi.waitFor(() => expect(within(step("Bots' computer")).queryByText("The Bots' computer is being updated.")).toBeNull());
+      expect(within(step("Bots' computer")).queryByRole("button", { name: "Retry" })).toBeNull();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(invoked.filter((c) => c[0] === "setup.box.start")).toHaveLength(3);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("0.1.4 first-run: a Start call that fails outright shows the reason and a Retry", async () => {
+    current = status({ orb: { app: true, cli: true, status: "running", version: "2.2.3" } });
+    const inv = (window as unknown as { synapse: { native: { invoke: ReturnType<typeof vi.fn> } } }).synapse.native.invoke;
+    const base = inv.getMockImplementation() as (n: string, a: unknown) => Promise<unknown>;
+    inv.mockImplementation(async (n: string, a: unknown) => (n === "setup.box.start" ? (invoked.push([n, a]), { ok: false, error: { code: "INTERNAL", message: "No handler registered for setup.box.start" } }) : base(n, a)));
+    render(<SetupScreen />);
+    const computer = await screen.findByRole("listitem", { name: "Bots' computer" });
+    expect(await within(computer).findByText(/No handler registered/)).toBeTruthy();
+    fireEvent.click(within(computer).getByRole("button", { name: "Retry" }));
+    await vi.waitFor(() => expect(invoked.filter((c) => c[0] === "setup.box.start").length).toBeGreaterThanOrEqual(2));
+  });
+
   it("connected, but the sign-in check is refused: the Claude step says why instead of spinning forever", async () => {
     current = status({ connected: true, orb: { app: true, cli: true, status: "running", version: "2.2.3" }, box: box({ phase: "ready", progress: 1 }) });
     (window as unknown as { synapse: { call: unknown } }).synapse.call = async () => ({ ok: false, error: { code: "WRONG_HOST", message: "Synapse is running in another account on this Mac and is using this account's connection. Quit Synapse there, then retry." } });

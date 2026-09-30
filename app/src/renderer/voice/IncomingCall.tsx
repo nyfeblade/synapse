@@ -15,13 +15,15 @@ import { useVoice } from "./VoiceOverlay";
  * ring timeout), or withdrawn all clear it the same way, since each just removes this call from
  * `calls`. Silent when Settings → Voice, "Call sounds" is off.
  */
-function useRingTone(on: boolean): void {
+function useRingTone(on: boolean, own = true): void {
   const soundsOn = useCallSoundsEnabled();
   useEffect(() => {
-    if (!on || !soundsOn) return;
+    // 0.1.4 first-run: while the Mac's Focus state can't be read, the app's own ring plays only while it is in front.
+    if (!on || !soundsOn || (!own && !document.hasFocus())) return;
     const ring = startRing();
     return () => ring.stop();
-  }, [on, soundsOn]);
+    // `own` too: when a queued call takes over the ring, its own quiet or normal ring is decided afresh (bug-log 451).
+  }, [on, soundsOn, own]);
 }
 
 /**
@@ -34,25 +36,29 @@ export function IncomingCall() {
   const calls = useBotCalls((s) => s.calls);
   const bots = useUi((s) => s.bots);
   const [ready, setReady] = useState<string[]>([]);
+  /** Calls that ring quietly: the Mac's Focus state is unknown, so macOS's notification carries the sound. */
+  const [quietRing, setQuietRing] = useState<string[]>([]);
   // Decide once per ring: ring it, or answer "missed" with the reason.
   useEffect(() => {
     const handled = useBotCalls.getState().handled;
     for (const c of calls) {
       if (handled.has(c.callId)) continue;
       handled.add(c.callId);
-      void nativeCall<{ ring: boolean; why?: string }>("calls.policy").then((p) => {
+      void nativeCall<{ ring: boolean; why?: string; sound?: boolean }>("calls.policy").then((p) => {
         if (p && p.ring === false) {
           void callQuiet("answerBotCall", { callId: c.callId, answer: "missed", why: p.why ?? "" }).catch(() => {});
           return;
         }
+        const osSound = p?.sound === false;
+        if (osSound) setQuietRing((r) => [...r, c.callId]);
         setReady((r) => [...r, c.callId]);
         const name = useUi.getState().bots[c.botId]?.profile.name ?? "A Bot";
-        void nativeCall("calls.ring", { botId: c.botId, title: STRV.incomingCall(name), body: c.reason }).catch(() => {});
+        void nativeCall("calls.ring", { botId: c.botId, title: STRV.incomingCall(name), body: c.reason, ...(osSound ? { osSound: true } : {}) }).catch(() => {});
       }, () => setReady((r) => [...r, c.callId]));
     }
   }, [calls, setReady]);
   const ring: IncomingCallView | undefined = calls.find((c) => ready.includes(c.callId) && bots[c.botId]);
-  useRingTone(Boolean(ring));
+  useRingTone(Boolean(ring), !ring || !quietRing.includes(ring.callId));
   const accept = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (ring) accept.current?.focus(); }, [ring?.callId]);
   const bot = ring ? bots[ring.botId] : undefined;

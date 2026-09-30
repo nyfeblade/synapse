@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_BOT_MODEL, HELPER_MODEL } from "@synapse/shared";
 import { fillTemplate, loadPrompt } from "../../prompts/index";
 import { SdkFrontSession, type FrontTurn } from "../../voice/front-session";
+import { realHomeForTest } from "../../../scripts/test-home";
 
 /**
  * The user's option (c): Haiku for the call voice only — MEASURED against Sonnet on call-style turns, never switched
@@ -71,7 +72,7 @@ const pct = (v: number[], p: number) => { const s = [...v].sort((a, b) => a - b)
 describe.skipIf(process.env.RUN_HAIKU_EVAL !== "1")("Haiku for the call voice (REAL model; measured, not switched on)", () => {
   it("scores Sonnet and Haiku on the same call-style turns", async () => {
     const env: Record<string, string> = {
-      HOME: os.homedir(), PATH: process.env.PATH ?? "/usr/bin:/bin", USER: process.env.USER ?? "user", LANG: "en_US.UTF-8",
+      HOME: realHomeForTest("the real claude CLI login lives there (opt-in live run)"), PATH: process.env.PATH ?? "/usr/bin:/bin", USER: process.env.USER ?? "user", LANG: "en_US.UTF-8",
       SHELL: "/bin/zsh", TMPDIR: os.tmpdir(), ENABLE_TOOL_SEARCH: "false",
     };
     const system = fillTemplate(loadPrompt("voice-front.md"), { BOT_NAME: "Nova", USER_NAME: "Alex", PERSONA: "Chief of Staff. Warm, quick, a little dry; keeps things moving." });

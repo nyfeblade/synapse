@@ -17,6 +17,8 @@ function eventFor(slot: TurnSlot): WakeOriginEvent | null {
       return { type: "wake-origin", source: "revival", taskId: w.taskId, taskTitle: w.title };
     case "followup":
       return { type: "wake-origin", source: "followup" };
+    case "mcp":
+      return { type: "wake-origin", source: "mcp", client: w.client };
   }
 }
 

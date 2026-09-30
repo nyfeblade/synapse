@@ -15,6 +15,8 @@ export const APP_SETTING_SWITCHES = [
   { get: "calls.sounds.get", set: "calls.sounds.set", key: "callSounds", dflt: true },
   { get: "whisper.inCalls.get", set: "whisper.inCalls.set", key: "whisperInCalls", dflt: false },
   { get: "devTools.get", set: "devTools.set", key: "showDeveloperTools", dflt: false },
+  // 0.1.4 first-run: speech to Apple's servers only with this opt-in (the notice's Allow, or Settings → Voice).
+  { get: "speech.server.get", set: "speech.server.set", key: "serverSpeech", dflt: false },
 ] as const satisfies readonly { get: string; set: string; key: keyof AppSettings; dflt: boolean }[];
 
 export type SwitchKey = (typeof APP_SETTING_SWITCHES)[number]["key"];

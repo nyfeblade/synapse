@@ -162,7 +162,11 @@ export const LIMITS = {
   spendGuardPauseAfterMs: 3 * 86_400_000,
   spendGuardSnoozeMs: 30 * 86_400_000,
   // §5.1 bot-to-bot and ORIG-09
-  b2bMessageMax: 8000,
+  /** Bug 432: kept under what Auto-review reads of a wake (reviewerContextChars, 4,000) once the agent wake's header,
+   *  digest and attributes (up to ~1,900) wrap it; host/b2b/gate.ts also refuses one whose wrapped wake would pass it. */
+  b2bMessageMax: 2000,
+  /** A Bot's post into a group room (group-poster). Not a Bot-to-Bot wake: unchanged by bug 432. */
+  groupPostMaxChars: 8000,
   b2bExpectsMin: 8,
   b2bExpectsMax: 300,
   b2bArtifactsMax: 10,

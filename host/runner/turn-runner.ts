@@ -1,5 +1,7 @@
 import { TEXT } from "../review/texts";
 import { outsideLog } from "../review/outside-log";
+import { OWNER_SOURCES } from "../review/full-auto-intent";
+import { originOf } from "../approvals/origin";
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -42,6 +44,7 @@ import {
 import type { ResumeLedger } from "./resume-ledger";
 import type { SendAcceptanceLedger } from "./send-acceptance";
 import { countsAsSideEffect, type TurnContext } from "./turn-context";
+import type { RoomReview } from "../groups/member-prompt";
 import { newSlot, type TurnSlot } from "./turn-slot";
 import { classifySteer, type SteerIntent } from "./steer-intent";
 import { steerLetsThrough } from "./steer-policy";
@@ -132,12 +135,29 @@ export interface HiddenSpec {
   ackToken?: string | null;
   userSeqMax?: number;
   nudgeRound?: number;
+  /** 0.1.4: a follow-up (a reply or closing nudge) of a turn the owner didn't start: the reviewer, Full auto's
+   *  intent rule, plans and trusted sends follow the causing turn's source, never the nudge's owner-like one. */
+  origin?: FollowUpOrigin;
   /** EVT-16: the wake's turn has actually started. Durable background work (a shell exit code, a
    *  subagent report) clears its pending-wake marker here, not at enqueue time — until this fires the
    *  result exists only as an in-memory scheduler task that a quit or a crash discards. */
   onStart?(): void;
   /** The queued wake was removed (Stop, delete, quiesce, dropQueued) before it ever ran. */
   onDropped?(): void;
+}
+
+/** What a synthetic follow-up turn inherits from the turn that caused it (like a subagent's parent origin). */
+export interface FollowUpOrigin { source: WakeSource; wakeText: string; context: Pick<TurnContext, "wake" | "routineRun">; roomReview?: RoomReview }
+
+/**
+ * 0.1.4: the origin a follow-up of this turn must carry, or null when the owner caused it (it stays an owner turn).
+ * Only a turn whose own (or inherited) source is an owner source is owner-caused; MCP, routines, outside events,
+ * other Bots, broadcasts, approval resumes and every revival keep their non-owner origin through any nudge.
+ */
+export function followUpOrigin(slot: TurnSlot, source: WakeSource): FollowUpOrigin | null {
+  const cause = slot.reviewSource ?? source;
+  if (originOf(cause) === "user" && OWNER_SOURCES.has(cause)) return null;
+  return { source: cause, wakeText: slot.wakeText, context: { wake: slot.context.wake, routineRun: slot.context.routineRun }, ...(slot.roomReview ? { roomReview: slot.roomReview } : {}) };
 }
 
 /** Phase 4 (EVT-01/EVT-02): a typed wake for anything that isn't the user's own message. */
@@ -198,6 +218,8 @@ interface TurnSpec {
   /** The newest user message was spoken in a voice call. */
   voiceCall?: boolean;
   context?: Partial<TurnContext>;
+  /** 0.1.4: see HiddenSpec.origin. */
+  origin?: FollowUpOrigin;
   onStart?(slot: TurnSlot): void;
   onSettle?(slot: TurnSlot, result: TurnResult | null): void;
   /** The turn never started (the Bot is gone, or no supervisor lease was granted), so onSettle never fires. */
@@ -788,6 +810,7 @@ export class TurnRunner {
             ),
             userSeqMax: spec.userSeqMax ?? 0,
             ackToken: spec.ackToken ?? null, acceptedAtMs: this.now(),
+            ...(spec.origin ? { origin: spec.origin, context: { wake: spec.origin.context.wake, routineRun: spec.origin.context.routineRun } } : {}),
             ...(spec.onStart ? { onStart: () => spec.onStart?.() } : {}),
           });
         },
@@ -824,6 +847,8 @@ export class TurnRunner {
       slot.wakeText = spec.prompt.map(messageText).join("\n"); // I2: the reviewer's wake block
       outsideLog.record(botId, slot.wakeText, this.now()); // bug 415: a wake's text is outside content for Full auto's checks
     }
+    // 0.1.4: a follow-up of a non-owner turn reviews as that turn: its source, and its wake text (not the nudge's).
+    if (spec.origin) { slot.reviewSource = spec.origin.source; slot.wakeText = spec.origin.wakeText; if (spec.origin.roomReview) slot.roomReview = spec.origin.roomReview; }
     r.slot = slot;
     for (const o of this.observers) o.onTurnStart?.(botId, slot);
     spec.onStart?.(slot);
@@ -1006,10 +1031,13 @@ export class TurnRunner {
     if (flags.stopNudge) return; // the Stop hook nudged in-turn; ack redrive (onIdle) is the backstop
     if (steerFlushed) return; // bug 198: the user turn queued for the steering messages carries every unanswered one
     const round = spec.nudgeRound + 1;
+    // 0.1.4: a nudge inherits the causing turn's origin; only an owner-caused nudge is an owner turn.
+    const inherit = followUpOrigin(slot, spec.source);
+    const origin = inherit ? { origin: inherit } : {};
     if (owed && round <= LIMITS.replyNudgesMax) {
-      this.enqueueHidden(botId, { source: "reply-nudge", lane: "user", head: true, silenceAllowed: false, text: nudgeText("reply", result.finalText), ackToken: spec.ackToken, userSeqMax: spec.userSeqMax, nudgeRound: round });
+      this.enqueueHidden(botId, { source: "reply-nudge", lane: "user", head: true, silenceAllowed: false, text: nudgeText("reply", result.finalText), ackToken: spec.ackToken, userSeqMax: spec.userSeqMax, nudgeRound: round, ...origin });
     } else if (!owed && result.endedOnSilentToolCalls && spec.source !== "closing-nudge") {
-      this.enqueueHidden(botId, { source: "closing-nudge", lane: "user", head: true, silenceAllowed: false, text: nudgeText("closing", result.finalText), ackToken: spec.ackToken, userSeqMax: spec.userSeqMax, nudgeRound: LIMITS.replyNudgesMax });
+      this.enqueueHidden(botId, { source: "closing-nudge", lane: "user", head: true, silenceAllowed: false, text: nudgeText("closing", result.finalText), ackToken: spec.ackToken, userSeqMax: spec.userSeqMax, nudgeRound: LIMITS.replyNudgesMax, ...origin });
     }
   }
 

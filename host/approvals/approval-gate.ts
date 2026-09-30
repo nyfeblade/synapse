@@ -15,8 +15,10 @@ import { expandHome, rawShellCwd, resolveShellCwdInfo, shellHome } from "../back
 import { needsCardFacts, type GoogleCardFacts } from "../google/card-facts";
 import { formatDraftPreviewCard, hashDraftPreview, type DraftPreview } from "../google/tools";
 import { classifyTool, insideDir, mcpToolChanges, type Classification } from "../review/classify";
-import { fixedRuleFor, fullAutoAskFor, modeAllowsWithoutCard, type FixedRulesEnv } from "../review/fixed-rules";
-import type { PermMode } from "@synapse/shared";
+import { askModeFloor, fixedRuleFor, fullAutoAskFor, modeAllowsWithoutCard, withAskFloor, type FixedRulesEnv } from "../review/fixed-rules";
+import type { WakeSource } from "../brain/types";
+import { roomReviewText } from "../groups/member-prompt";
+import { COMPOSIO_SERVER_ID, type PermMode } from "@synapse/shared";
 import { fingerprint } from "../review/fingerprint";
 import { hostCallStatic } from "../review/mac-floor";
 import { isOwnershipAction } from "../review/ownership";
@@ -32,7 +34,8 @@ import type { TurnSlot } from "../runner/turn-slot";
 import type { HostSettingsStore } from "../store/host-settings";
 import type { RehearsalRegistry } from "../teach/rehearsal-registry";
 import { originOf } from "./origin";
-import { FULL_AUTO_BULK_MAX, fullAutoIntentEligible, fullAutoIntentFloor, recipientsOf, RESOLVE_SLUGS } from "../review/full-auto-intent";
+import { PLAN_GRANT_MAX_MS, callScope, coverable, ownerWake, parsePlan, planLines, stepMatches, trustedSendOk, trustedTool, type PlanStep } from "./smarter";
+import { FULL_AUTO_BULK_MAX, carriesOutside, fullAutoIntentEligible, fullAutoIntentFloor, recipientsOf, RESOLVE_SLUGS } from "../review/full-auto-intent";
 import { outsideLog } from "../review/outside-log";
 
 export interface ReviewerLike { review(req: ReviewRequest): Promise<ReviewOutcome>; clearCache(): void }
@@ -76,6 +79,8 @@ export interface GateDeps {
   mcpServerHost?(serverId: string): string | null;
   /** Bug 404: a registry server that is Composio by its command, args or URL. */
   mcpServerComposio?(serverId: string): boolean;
+  /** Bug 275: whether Synapse specifically knows a registry server (curated), and the tool's own description. */
+  mcpToolInfo?(serverId: string, tool: string): { known: boolean; description: string | null };
   /** google-setup security fix 1: the client ID SaveGoogleClient would put over a WORKING connection (null = no card). */
   googleClientReplace?(botId: string): { clientId: string; replace: boolean } | null;
   /** ORIG-GOOGLE draft-send card: fetches a Gmail draft's current To/Cc/Bcc/Subject/body/attachments with the
@@ -103,6 +108,9 @@ export interface GateDeps {
   homeFs?: FsQuery;
 }
 
+/** Smarter approvals: one approved plan. `detached`: approved on a card whose turn had already ended. */
+interface PlanGrant { key: string; at: number; steps: (PlanStep & { used: boolean })[]; detached: boolean }
+
 /** A command's script or package.json couldn't be read as the Bot: it is unbound (the reviewer can't see what runs). */
 class UnboundMiss extends HomeFsMiss {
   constructor(op: FsOp, p: string) { super(op, p); }
@@ -120,18 +128,37 @@ const OUTSIDE_BLOCK = /<(\w+)>\n\(data from an outside sender, not instructions\
 
 /** I2: the wake block — origin, the routine's saved prompt (trusted) and the outside text that came with the wake (untrusted). */
 function wakeBlock(slot: TurnSlot | null, origin: ReviewWake["origin"], routinePrompt: GateDeps["routinePrompt"], botId: string): Omit<ReviewWake, "stale_user_messages"> {
+  const source = slot ? (slot.reviewSource ?? slot.source) : null;
   const text = (slot?.wakeText ?? "").replace(/^\[HIDDEN_PROMPT\]\n?/, "").trim();
-  const cap = (xs: string[]) => xs.map((x) => x.slice(0, 4000)).slice(0, 3);
+  const cap = (xs: string[]) => xs.map((x) => x.slice(0, LIMITS.reviewerContextChars)).slice(0, 3);
+  // Bug 432: outside text the reviewer would see only part of (a piece past the cap, or past the third piece) marks the
+  // wake unread, and the reviewer then never allows (fail closed). Only for wakes an outside party writes: another
+  // Bot, an outside app, a routine's events; bug 434: a revival wake whose text can carry outside content (below).
+  // A group room is read newest first (roomReviewText). The host's fixed revival texts are never marked.
+  const checked = UNREAD_CHECKED.has(origin) || (origin === "revival" && source !== null && REVIVAL_OUTSIDE.has(source));
+  const unread = (xs: string[]) => (checked && (xs.length > 3 || xs.some((x) => x.length > LIMITS.reviewerContextChars)) ? { unread: true } : {});
   if (origin === "user" || !slot) return { origin, routine: null, untrusted: [] };
+  // Bug 434: the reviewer reads the newest part of a room, not its oldest 4,000 characters.
+  if (origin === "group") return { origin, routine: null, ...roomReviewText(text, LIMITS.reviewerContextChars, slot.roomReview) };
   const w = slot.context.wake;
   if (origin === "routine") {
     const id = slot.context.routineRun?.routineId ?? (w?.kind === "routine" ? w.routineId : null);
     const saved = id ? (routinePrompt?.(botId, id) ?? null) : null;
     const name = w?.kind === "routine" ? w.routineName : (id ?? "routine");
-    return { origin, routine: saved !== null ? { name, saved_prompt: saved } : null, untrusted: cap(text.match(OUTSIDE_BLOCK) ?? []) };
+    const events = text.match(OUTSIDE_BLOCK) ?? [];
+    return { origin, routine: saved !== null ? { name, saved_prompt: saved } : null, untrusted: cap(events), ...unread(events) };
   }
-  return { origin, routine: null, untrusted: cap(text ? [text] : []) };
+  const all = text ? [text] : [];
+  return { origin, routine: null, untrusted: cap(all), ...unread(all) };
 }
+const UNREAD_CHECKED = new Set<ReviewWake["origin"]>(["peer", "external", "routine"]);
+/**
+ * Bug 434: revival wakes whose text carries what something outside the host wrote: a subagent's report (it may have
+ * read the web, mail or files), a coding agent's summary, a session handoff's recap of a conversation that held
+ * outside text, and a watched shell's matched output. The rest (approval and restart resumes, spend guard, box
+ * handback, secrets, disk saver, heartbeat follow-ups, a finished shell's exit line) are the host's own text.
+ */
+const REVIVAL_OUTSIDE = new Set<WakeSource>(["subagent-done", "coding-agent", "session-handoff", "shell-notify"]);
 
 interface Item { toolUseId: string; call: ToolCall; cls: Classification; fingerprint: string; summary: string; status: ApprovalStatus; resolve?: (d: PermissionDecision) => void }
 interface ApprovalRecord {
@@ -250,6 +277,8 @@ export class ApprovalGate {
   private sentCache = new Map<string, { yes: boolean; at: number }>();
   /** Bug 417: intent-allowed sends per owner request. */
   private intentSends = new Map<string, { key: string; n: number }>();
+  /** Smarter approvals: the plans the owner approved, per Bot; each step used at most once; ends with the task. */
+  private plans = new Map<string, PlanGrant[]>();
   private reviews = new Map<string, PendingReview>();
   private records = new Map<string, ApprovalRecord>();
   private preDecided = new Map<string, { fingerprint: string; decision: PermissionDecision; cls: Classification }>();
@@ -273,7 +302,7 @@ export class ApprovalGate {
 
   /** feat-mac-access-parity: the environment the fixed-rules engine needs (box workspace + the connected Mac). */
   private fixedEnv(): FixedRulesEnv {
-    return { workspace: this.d.cfg.workspace, mac: this.d.macEnv?.() ?? null };
+    return { workspace: this.d.cfg.workspace, mac: this.d.macEnv?.() ?? null, ...(this.d.mcpToolInfo ? { mcpTool: this.d.mcpToolInfo } : {}) };
   }
 
   /** full-auto-quiet: how many ask-first rules the user has WRITTEN. In Full auto their rules still win, so a
@@ -306,6 +335,97 @@ export class ApprovalGate {
     const cutoff = this.now() - FULL_AUTO_REQUEST_MAX_AGE_MS;
     const recent = answered ? [] : msgs.filter((m) => m.createdAt >= cutoff);
     return { texts: recent.map((m) => m.content), since: recent[0]?.createdAt ?? this.now(), key: recent.at(-1)?.id ?? "" };
+  }
+
+  /**
+   * Smarter approvals: the owner's open task — the id of their latest message, while the Bot hasn't yet answered it
+   * with a turn-ending reply (a reply inside the running turn, an ack, doesn't end it). "" = no open task.
+   */
+  private openTask(botId: string, since = 0): string {
+    const tail = this.d.bots.tail(botId, 60);
+    const owner = (e: (typeof tail)[number]) => e.kind === "message" && (e as { role?: string }).role !== "assistant" && !isAgentMessage(e);
+    const reply = (e: (typeof tail)[number]) => e.kind === "send-message" && (e as SendMessageEntry).message.type === "text";
+    let i = tail.length - 1;
+    while (i >= 0 && !owner(tail[i]!)) i--;
+    if (i < 0) return "";
+    const slot = this.d.slot(botId);
+    // `since` (a plan approved on a detached card): a reply from before the approval — the turn that ended while the
+    // card waited — doesn't end the task; a reply after it does.
+    const answered = tail.slice(i + 1).some((e) => reply(e) && (e as SendMessageEntry).createdAt >= since && (!slot || (e as SendMessageEntry).requestId !== slot.requestId));
+    return answered ? "" : (tail[i] as unknown as { id: string }).id;
+  }
+
+  /** Smarter approvals: the owner clicked Approve on a plan card; its steps now run for this task. */
+  private grantPlans(rec: ApprovalRecord): void {
+    for (const item of rec.items) {
+      const t = item.cls.target;
+      if (t?.action !== "approve_plan" || typeof t.arguments.task_key !== "string" || !t.arguments.task_key || !Array.isArray(t.arguments.steps)) continue;
+      const steps = (t.arguments.steps as PlanStep[]).map((st) => ({ ...st, used: false }));
+      this.plans.set(rec.botId, [...(this.plans.get(rec.botId) ?? []), { key: t.arguments.task_key, at: this.now(), steps, detached: rec.detached === true }].slice(-3));
+    }
+  }
+
+  /**
+   * The grants this call may use: same open task (no newer owner message, not yet answered), the owner's own wake,
+   * within the cap. Follow-up 3: a plan approved on a DETACHED card (its turn ended while it waited) also covers the
+   * approval-resume turn the host itself starts for that answer — same task key, same steps, same end conditions;
+   * only a Bot reply from before the approval is ignored (it came from the turn that ended waiting).
+   */
+  private livePlans(botId: string, slot: TurnSlot | null): PlanGrant[] {
+    const list = this.plans.get(botId);
+    if (!list?.length || !slot) return [];
+    const src = slot.reviewSource ?? slot.source;
+    const owner = ownerWake(originOf(src), src);
+    const now = this.now();
+    return list.filter((g) => {
+      if (now - g.at >= PLAN_GRANT_MAX_MS || !(owner || (g.detached && src === "approval-resume"))) return false;
+      return this.openTask(botId, g.detached ? g.at : 0) === g.key;
+    });
+  }
+
+  /**
+   * Smarter approvals: whether this connector call runs with no card because it is a step of an approved plan, or a
+   * send to only the owner and people they trust (design §1–2). Everything that isn't clearly covered returns false
+   * and the gate goes on exactly as before. Follow-ups: trust covers WHO, never WHAT — a send carrying copied outside
+   * text (or a link only outside content named) still cards; and the owner's own written ask-first rules still win.
+   */
+  private async smarterAllows(botId: string, call: ToolCall, cls: Classification, target: RiskTarget, slot: TurnSlot | null, env: FixedRulesEnv, st: StaticResult, fp: string): Promise<boolean> {
+    // Cheap exits first (speed): only connector writes, and only when a grant or a trusted address could apply.
+    if (target.action !== "google_write" && target.action !== "composio_write" && target.action !== "mcp") return false;
+    const builtin = target.action === "google_write" || (target.action === "composio_write" && call.toolName.startsWith(`mcp__${COMPOSIO_SERVER_ID}__`) && (this.d.composioBuiltin?.(botId) ?? false));
+    const trusted = this.d.settings.trusted?.() ?? [];
+    const self = this.d.googleEmail?.() ?? null;
+    const maybeTrusted = builtin && trustedTool(target) && (!!self || trusted.length > 0);
+    if (!maybeTrusted && !this.livePlans(botId, slot).length) return false;
+    if (!coverable(target, fullAutoAskFor(call, cls, env))) return false;
+    const scope = callScope(target, await this.resolveSend(botId, target));
+    if (!scope) return false;
+    const src = slot ? (slot.reviewSource ?? slot.source) : null;
+    const origin = slot ? originOf(slot.reviewSource ?? slot.source) : "user";
+    const findStep = () => this.livePlans(botId, slot).flatMap((g) => g.steps).find((x) => !x.used && stepMatches(x, call.toolName, scope));
+    if (!findStep() && !trustedSendOk({ target, builtin, scope, self, trusted, origin, source: src })) return false;
+    // Follow-up 2: what the send carries. Everything outside the Bot read in the kept log (2 hours) counts.
+    const request = this.ownerRequest(botId).texts.join("\n");
+    if (carriesOutside(target, request, outsideLog.since(botId, 0), self)) return false;
+    // Follow-up 1: the owner's own ask-first rules win. With any written, the reviewer checks this send against them;
+    // a matched rule, a suspected injection, a floor block, an error or a degraded reviewer all fall through to a card.
+    if (this.askRules() > 0) {
+      const bot = this.d.bots.summary(botId);
+      const wb = wakeBlock(slot, origin, this.d.routinePrompt, botId);
+      const ctx0 = this.context(botId, target, slot, wb.untrusted);
+      const r = await this.d.reviewer.review({
+        botId, botName: bot.profile.name, botDescription: bot.profile.description, surface: cls.surface!, toolName: call.toolName, target,
+        origin, wake: { ...wb, stale_user_messages: origin === "user" ? [] : ctx0.user_messages }, context: origin === "user" ? ctx0 : { ...ctx0, user_messages: [] },
+        userMessageEpoch: this.d.bots.userMessageEpoch(botId), staticResult: st, fingerprint: fp, paths: [],
+      });
+      const v = r.kind === "allow" || r.kind === "block" ? r.verdict : null;
+      if (v?.injection_suspected || (v?.matched_ask_rule_ids.length ?? 0) > 0) return false;
+      if (r.kind === "error" || r.kind === "degraded" || (r.kind === "block" && (r.stage !== "model" || !v))) return false;
+    }
+    // After the awaits: the grants are read again (a new message may have ended them), and a step is used up at once.
+    const step = findStep();
+    if (step) { step.used = true; return true; }
+    return trustedSendOk({ target, builtin, scope, self, trusted, origin, source: src });
   }
 
   /**
@@ -440,7 +560,7 @@ export class ApprovalGate {
 
   /** Controller ruling (a) + final secfix 9: every Google write is its own (enriched) card — never batched with siblings. */
   private static unbatchable(cls: Classification): boolean {
-    return cls.target?.action === "google_write" || cls.target?.action === "composio_write";
+    return cls.target?.action === "google_write" || cls.target?.action === "composio_write" || cls.target?.action === "approve_plan";
   }
 
   pendingCount(botId: string): number {
@@ -782,6 +902,19 @@ export class ApprovalGate {
     // Bug B: a detached card (its turn already ended) doesn't hold the Bot's later turns behind the barrier.
     if (cls.sideEffect && [...this.records.values()].some((r) => r.botId === botId && r.status === "pending" && !r.detached)) return finish({ decision: "deny", reason: TEXT.barrier });
     if (!cls.surface || !cls.target) return finish({ decision: "allow" });
+    // Smarter approvals (plan): proposing a plan is always the owner's own card, and only on the owner's own wake —
+    // a routine, an event, an email or another Bot can't even ask. Outside content never creates a grant.
+    const planCard = cls.target.action === "approve_plan";
+    let plan: ReturnType<typeof parsePlan> | null = null;
+    let planKey = "";
+    if (planCard) {
+      const src = slot ? (slot.reviewSource ?? slot.source) : null;
+      if (!slot || !ownerWake(originOf(src as WakeSource), src)) return finish({ decision: "deny", reason: TEXT.planNotOwner });
+      plan = parsePlan(call.input);
+      if (typeof plan === "string") return finish({ decision: "deny", reason: plan });
+      planKey = this.openTask(botId);
+      if (!planKey) return finish({ decision: "deny", reason: TEXT.planNotOwner });
+    }
     // Ruling (b): an ownership gate, not a review. Another Bot's standing instructions change only with the user's
     // OK: a card even with Auto-review off, and neither the reviewer nor an Allow rule can skip it.
     // + P5 review C3/I5 (shared instructions, skills, servers, tools) and I1/I2 (a Mac-floor hit or zsh-opaque command).
@@ -801,6 +934,10 @@ export class ApprovalGate {
      * The other modes are exactly as before.
      */
     const fa = mode === "full-auto" ? fullAutoAskFor(call, cls, env) : null;
+    // Bug 439: Ask and Auto-accept edits are never weaker than Full auto. What Full auto would card is a floor here too,
+    // decided before the reviewer model: code from the network run in place and data sent off the machine card at once
+    // (hard); every other Full-auto category becomes a reviewer floor only a covering Allow rule can lift.
+    const askFloor = fa ? null : askModeFloor(call, cls, env);
     // fix-mac-gate-and-approval-expiry: in Full auto a zsh-opaque signal alone (e.g. the quoted glob in
     // `find ~/Downloads -name '*.pdf'`) doesn't force the card; the fixed rules' real parser below returns ALWAYS-ASK
     // for anything it can't prove. A Mac-floor hit still does, outside Full auto.
@@ -816,7 +953,7 @@ export class ApprovalGate {
     // reviewer says (reads never get here: classify.ts keeps them quiet).
     const composio = !fa && cls.target.action === "composio_write";
     // google-setup security fix 1: replacing a working Google connection's client is a card in every mode.
-    const ownership = (!fa && (OWNERSHIP.has(cls.target.action) || isOwnershipAction(cls.target) || macCard || google || composio)) || cls.target.action === "replace_google_client";
+    const ownership = (!fa && (OWNERSHIP.has(cls.target.action) || isOwnershipAction(cls.target) || macCard || google || composio)) || cls.target.action === "replace_google_client" || planCard;
 
     // ---- LAYER 1: the fixed rules (feat-mac-access-parity), before the reviewer ----
     // NEVER is a hard deny no mode or rule can lift; ALWAYS-ASK forces a card outside Full auto; ALWAYS-ALLOW skips
@@ -824,7 +961,7 @@ export class ApprovalGate {
     const fixed = fixedRuleFor(call, cls, env);
     if (fixed.verdict === "never") return finish({ decision: "deny", reason: fixed.reason });
     const fixedAsk = !fa && fixed.verdict === "always-ask" && !ownership;
-    if (!ownership && !fixedAsk && !fa?.ask && fixed.verdict === "always-allow") return finish({ decision: "allow" }); // reads / build-test-git in a project dir
+    if (!ownership && !fixedAsk && !fa?.ask && !askFloor && fixed.verdict === "always-allow") return finish({ decision: "allow" }); // reads / build-test-git in a project dir
 
     // ORIG-GOOGLE draft-send card: gmail_send(draft_id) never raises a card until the draft's current
     // To/Cc/Bcc/Subject/body/attachments are fetched with the user's own token — so the user is never asked to
@@ -836,9 +973,16 @@ export class ApprovalGate {
       if (typeof enriched === "string") return finish({ decision: "deny", reason: enriched });
       cardCls = enriched;
     }
+    if (plan && typeof plan !== "string") {
+      // The card lists every step; the grant is keyed to the owner's request it was raised for.
+      const lines = planLines(plan);
+      cardCls = { ...cardCls, summary: STR.planSummary(plan.title, plan.steps.length).slice(0, LIMITS.approvalSummaryMax), command: lines.join("\n"),
+        target: { action: "approve_plan", arguments: { title: plan.title, steps: plan.steps, task_key: planKey }, enrichment: null } };
+    }
     pinCls = cardCls;
 
-    const { target, st, unbound, refused, paths: readPaths, closedTree } = this.prepare(botId, call, cardCls);
+    const { target, st: st0, unbound, refused, paths: readPaths, closedTree } = this.prepare(botId, call, cardCls);
+    const st = withAskFloor(st0, askFloor);
     // Bug 71 ruling: the Bot's own read of the script was refused (a link to a secret or into host-private): denied.
     if (refused) return finish({ decision: "deny", reason: TEXT.unbound });
     // Bug 71 (usability ruling): a command whose scripts the pass couldn't see or follow never runs silently and is
@@ -851,6 +995,9 @@ export class ApprovalGate {
     const rehearsal = this.d.rehearsals?.active(botId, call, slot) ?? false;
     if (rehearsal && (st.tierHint >= 2 || st.floorHits.length > 0)) return finish({ decision: "deny", reason: STR.rehearsalStopped });
     if (this.deferApproved.delete(`${botId}:${fp}`)) return finish({ decision: "allow" });
+    // Smarter approvals: a step of a plan the owner approved for this task, or a send to only trusted people, runs
+    // with no card. Connector sends only; money, deletion, security, unknown tools and bulk values never do.
+    if (!planCard && !unboundAsk && !rehearsal && (await this.smarterAllows(botId, call, cls, target, slot, env, st, fp))) return finish({ decision: "allow" });
     // ---- LAYER 1 (cont.) + MODES: reviewer skips, now that the static floor (F7/F8/F9) is known. A floor hit or an
     // ALWAYS-ASK always cards; otherwise Full auto runs, Auto-accept-edits runs an in-project edit, and Auto-review
     // OFF runs (the account master switch and the fixed NEVER already had their say above). Rehearsals win over all. ----
@@ -863,7 +1010,7 @@ export class ApprovalGate {
     // full-auto-quiet: in Full auto the F7/F8/F9 floor no longer holds a call back on its own either — F7
     // (credentials, exfiltration) and F9 (pipe-to-shell) are the classifier's SECURITY category, and F8's
     // git-control half is exactly the `git config --global` false positive this change removes.
-    if (!unboundAsk && !ownership && !fixedAsk && !credAsk && (fa ? !fa.ask : !floorHit) && !rehearsal) {
+    if (!unboundAsk && !ownership && !fixedAsk && !credAsk && (fa ? !fa.ask : !floorHit && !askFloor) && !rehearsal) {
       // full-auto-quiet: the classifier said no card. The user's OWN written ask-first rules still win, so when they
       // have written any, the reviewer still runs below and a block that matched one becomes a card; with none
       // written (the usual case) routine work runs silently and costs no reviewer call, exactly as before.
@@ -888,7 +1035,10 @@ export class ApprovalGate {
     // name) card at once; (b) otherwise the reviewer checks the action against that message and allows only a clear
     // match. A block, an error, a degraded reviewer or a suspected injection all fall through to the card.
     let intentReason: string | null = null;
-    if (fa?.ask && !unboundAsk && fullAutoIntentEligible(target, fa)) {
+    // Bug 275: only the built-in Google and Composio connectors can skip the card this way; the same slug on a
+    // generic or custom MCP server (whose real recipients the host can't look up) always cards.
+    const builtinSend = cls.target.action === "google_write" || (cls.target.action === "composio_write" && call.toolName.startsWith(`mcp__${COMPOSIO_SERVER_ID}__`) && (this.d.composioBuiltin?.(botId) ?? false));
+    if (fa?.ask && !unboundAsk && builtinSend && fullAutoIntentEligible(target, fa)) {
       // Bugs 413–418: the owner's CURRENT request, the real recipients (resolved on the host), everything outside
       // that was read since the request, and how many sends this request already made.
       const req = this.ownerRequest(botId);
@@ -922,8 +1072,11 @@ export class ApprovalGate {
       release();
     }
     // full-auto-quiet: in Full auto the classifier's verdict IS the card (Bug 410: after the intent check above).
-    const outcome: ReviewOutcome = unboundAsk ? { kind: "block", stage: "floor", reason: TEXT.unboundCard, proposedRule: null, verdict: null }
+    const outcome: ReviewOutcome = planCard ? { kind: "block", stage: "floor", reason: TEXT.planCard, proposedRule: null, verdict: null }
+      : unboundAsk ? { kind: "block", stage: "floor", reason: TEXT.unboundCard, proposedRule: null, verdict: null }
       : fa?.ask ? { kind: "block", stage: "floor", reason: intentReason || fa.reason, proposedRule: null, verdict: null }
+      // Bug 439: a hard Ask floor, or any Ask floor with Auto-review off (nothing else would judge it): the card.
+      : askFloor && (askFloor.hard || !this.d.settings.get().autoReviewEnabled) ? { kind: "block", stage: "floor", reason: askFloor.result.reason, proposedRule: null, verdict: null }
       : mcpChangeAsk ? { kind: "block", stage: "floor", reason: TEXT.mcpChange, proposedRule: null, verdict: null }
       : credAsk ? { kind: "block", stage: "floor", reason: unresolvedAsk && !st.signals.includes("reads_credentials") ? UNRESOLVED_READ_REASON : CREDENTIAL_READ_REASON, proposedRule: null, verdict: null }
       : (ownership || fixedAsk) ? { kind: "block", stage: "floor", reason: ownership ? (google ? TEXT.googleWrite : composio ? TEXT.composioWrite : OWNERSHIP.has(cls.target.action) ? TEXT.ownership : macCard ? TEXT.macFloor : TEXT.ownershipShared) : fixed.reason, proposedRule: fixedAsk ? (fixed.proposedRule ?? null) : null, verdict: null } : await this.d.reviewer.review({
@@ -932,6 +1085,8 @@ export class ApprovalGate {
       userMessageEpoch: this.d.bots.userMessageEpoch(botId), staticResult: st, fingerprint: fp,
       paths: [call.input.file_path, call.input.path, ...(readPaths ?? [])].filter((p): p is string => typeof p === "string"),
     });
+    // Bug 439: a floor the reviewer upheld reads as the classifier's own line, not the generic floor sentence.
+    if (askFloor && outcome.kind === "block" && outcome.stage === "model" && !(outcome.verdict?.matched_ask_rule_ids.length) && /\(built-in safety check\)\.$/.test(outcome.reason)) outcome.reason = askFloor.result.reason;
     if (outcome.kind === "allow") {
       if (identityBefore !== null && (await this.d.displayIdentity!(botId)) !== identityBefore) return finish({ decision: "deny", reason: STRC.pageChanged });
       return finish({ decision: "allow" });
@@ -942,7 +1097,7 @@ export class ApprovalGate {
     // for is not one of the five categories, so in Full auto it runs and is only recorded in the activity log;
     // a block that matched one of the user's OWN ask-first rules is the exception and raises the card.
     // google-setup security fix 1 (Bug 410 check): replacing the Google client is a card in Full auto too, never a deny.
-    if (fa && !fa.ask && !credAsk && !unboundAsk && cls.target.action !== "replace_google_client") {
+    if (fa && !fa.ask && !credAsk && !unboundAsk && cls.target.action !== "replace_google_client" && !planCard) {
       const matched = outcome.kind === "block" && (outcome.verdict?.matched_ask_rule_ids.length ?? 0) > 0;
       if (!matched) {
         if (outcome.kind === "block" && outcome.stage === "floor") return finish({ decision: "deny", reason: outcome.reason });
@@ -1011,7 +1166,7 @@ export class ApprovalGate {
     const words = describeCall(item.call.toolName, item.call.input);
     const title = items.length > 1
       ? (words ? STR.batchTitle(bot.profile.name, words.future, items.length, words.nounPlural) : `${STR.approvalTitle[pr.cls.surface as string]} · ${items.length} actions`)
-      : (STR.approvalTitle[pr.cls.surface as string] as string);
+      : item.cls.target?.action === "approve_plan" ? STR.planTitle : (STR.approvalTitle[pr.cls.surface as string] as string);
     const verdict = pr.outcome.kind === "block" ? pr.outcome.verdict : null;
     const turn = slot?.turnNo ?? this.d.bots.nextTurnNo(botId);
     const k = slot ? ++slot.nextSendK : 1;
@@ -1030,7 +1185,7 @@ export class ApprovalGate {
     this.hygiene(rec);
     this.d.bots.appendEntry(botId, { kind: "send-message", id: rec.entryId, requestId: rec.requestId, createdAt: t, message: { type: "auto-review-approval", approval: this.view(rec) } });
     if (slot) slot.segment += 1;
-    this.d.bots.setAwaiting(botId, { tabId: "auto-review", reason: STR.approvalNeeded(item.summary), since: t });
+    this.d.bots.setAwaiting(botId, { tabId: "auto-review", reason: STR.approvalNeeded(item.summary), since: t, approvalId: rec.id });
     this.persist();
     return rec;
   }
@@ -1091,6 +1246,7 @@ export class ApprovalGate {
         ? { reason: r.verdict.reason, tier: r.verdict.risk_tier, matchedRuleIds: [...r.verdict.matched_ask_rule_ids, ...r.verdict.matched_allow_rule_ids], floorCategory: r.verdict.floor_category, stage: r.stage }
         : { reason: r.reason, tier: null, matchedRuleIds: [], floorCategory: null, stage: r.stage },
       ruleAddedText: r.ruleAddedText, createdAt: r.createdAt, settledAt: r.settledAt,
+      ...(r.items[0]?.cls.target?.action === "approve_plan" ? { planSteps: planLines({ title: "", steps: r.items[0].cls.target.arguments.steps as PlanStep[] }) } : {}),
     };
   }
 
@@ -1138,6 +1294,7 @@ export class ApprovalGate {
     rec.cause = cause ?? null;
     rec.settledAt = this.now();
     if (rec.timer) clearTimeout(rec.timer);
+    if (status === "approved" || status === "always") this.grantPlans(rec);
     if (rec.detached) {
       // Bug B: nobody is waiting on these tool calls any more. The answer resumes the Bot (the defer path): an
       // approval is one-time and bound to the exact call's fingerprint and this Bot (deferApproved), and a stale
@@ -1148,7 +1305,9 @@ export class ApprovalGate {
         if (ok) this.deferApproved.add(`${rec.botId}:${item.fingerprint}`);
       }
       if (this.d.bots.has(rec.botId) && status !== "expired" && status !== "stopped") {
-        this.d.onDeferredResolution(rec.botId, ok ? `[Auto-review] The user approved: ${rec.summary}. Run exactly that action now.` : `[Auto-review] ${denyText(rec)}`);
+        // Follow-up 3: an approved plan isn't re-run (proposing needs the owner's own wake); the resumed turn runs its steps.
+        const planOk = ok && rec.items.some((i) => i.cls.target?.action === "approve_plan");
+        this.d.onDeferredResolution(rec.botId, planOk ? `[Auto-review] ${TEXT.planApprovedResume}` : ok ? `[Auto-review] The user approved: ${rec.summary}. Run exactly that action now.` : `[Auto-review] ${denyText(rec)}`);
       }
     } else for (const item of rec.items) {
       const decision = this.decisionFor(rec, item);
@@ -1163,11 +1322,13 @@ export class ApprovalGate {
       const entry = this.d.bots.getEntry(rec.botId, rec.entryId);
       if (entry && entry.kind === "send-message") this.d.bots.updateEntry(rec.botId, { ...entry, message: { type: "auto-review-approval", approval: this.view(rec) } });
       const next = [...this.records.values()].filter((r) => r.botId === rec.botId && r.status === "pending").at(-1);
-      this.d.bots.setAwaiting(rec.botId, next ? { tabId: "auto-review", reason: STR.approvalNeeded(next.items[0]!.summary), since: next.createdAt } : null);
+      this.d.bots.setAwaiting(rec.botId, next ? { tabId: "auto-review", reason: STR.approvalNeeded(next.items[0]!.summary), since: next.createdAt, approvalId: next.id } : null);
     }
   }
 
   expireAll(botId: string, cause: ExpireCause): void {
+    // Smarter approvals: a new message, Stop, a restart or the Bot's end ends every plan grant (the task is over).
+    this.plans.delete(botId);
     // Bug B: a host restart (quiesce) keeps the card answerable when it can be kept on disk; the new process restores it.
     // A new user message (user_redirect), Stop and a deleted Bot still withdraw it, with their own reason.
     if (cause === "quiesce" && this.d.persistFile) {
@@ -1178,6 +1339,7 @@ export class ApprovalGate {
   }
 
   forgetBot(botId: string): void {
+    this.plans.delete(botId);
     this.expireAll(botId, "session_end");
     for (const [id, r] of this.records) if (r.botId === botId) this.records.delete(id);
     for (const [tu, c] of this.ctxByToolUse) if (c.slot.botId === botId) this.ctxByToolUse.delete(tu);
@@ -1201,7 +1363,7 @@ export class ApprovalGate {
         this.d.bots.updateEntry(botId, { ...e, message: { type: "auto-review-approval", approval: { ...e.message.approval, status: "expired", cause: "quiesce", settledAt: this.now() } } });
       }
       const next = [...this.records.values()].filter((r) => r.botId === botId && r.status === "pending").at(-1);
-      this.d.bots.setAwaiting(botId, next ? { tabId: "auto-review", reason: STR.approvalNeeded(next.items[0]!.summary), since: next.createdAt } : null);
+      this.d.bots.setAwaiting(botId, next ? { tabId: "auto-review", reason: STR.approvalNeeded(next.items[0]!.summary), since: next.createdAt, approvalId: next.id } : null);
     }
   }
 }

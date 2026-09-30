@@ -5,6 +5,7 @@ import { nativeCall } from "../../native";
 import { BrowserSigninButton } from "../BrowserSigninButton";
 import { MacAppsPanel } from "./MacAppsPanel";
 import { SavedSwitch, useSavedNativeSwitch } from "../SavedSwitch";
+import { askConfirm } from "../ConfirmDialog";
 import { registerSettingsSection } from "./sections";
 
 export function ComputerSection() {
@@ -14,6 +15,13 @@ export function ComputerSection() {
   // settings-persist: null until read. It used to start at the default (on) and swallow a failed read.
   const [keepError, setKeepError] = useState<string | null>(null);
   const keep = useSavedNativeSwitch("keepBoxOnQuit.get", "keepBoxOnQuit.set", setKeepError);
+  // 0.1.4: Local network (off by default). The box's firewall is the truth; turning it on asks once.
+  const [lanError, setLanError] = useState<string | null>(null);
+  const lan = useSavedNativeSwitch("localNetwork.get", "localNetwork.set", setLanError);
+  const toggleLan = () => {
+    if (lan.value) { lan.toggle(); return; }
+    void askConfirm({ title: STR5.localNetworkConfirm, verb: STR5.localNetworkAllow }).then((ok) => { if (ok) lan.toggle(); });
+  };
   const [error, setError] = useState<string | null>(null);
   // Hand-testing round: this load's rejection was swallowed, so opening Settings -> Computer while
   // the box was down (which this modal's own Update/Reset causes) left a heading over an empty
@@ -133,6 +141,11 @@ export function ComputerSection() {
             <span className="dot approved" aria-hidden="true" />
             {STR5.routeTrafficOn}
           </span>
+        </div>
+        <div className="divider" />
+        <div className="settings-row" data-setting="local-network">
+          <span style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: 2 }}><span>{STR5.localNetwork}</span>{lanError && <span className="error" role="alert">{lanError}</span>}</span>
+          <SavedSwitch label={STR5.localNetwork} {...lan} onToggle={toggleLan} />
         </div>
       </div>
     </>

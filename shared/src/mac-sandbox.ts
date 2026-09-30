@@ -1,3 +1,4 @@
+import { realOfDeepest } from "./linear-text";
 import { macPrivateStorePath } from "./mac-private-stores";
 import { appDataWalls } from "./app-data";
 import { parseShell, shPath, type ShCmd, type ShWord } from "./shell-parse";
@@ -450,14 +451,8 @@ const foldP = (p: string): string => p.normalize("NFC").toLowerCase().replace(/\
 const underP = (p: string, dir: string): boolean => { const f = foldP(p); const d = foldP(dir); return d !== "" && (f === d || f.startsWith(`${d}/`)); };
 const realForm = (abs: string, ctx: MacHandoffContext): string => {
   if (!ctx.realpath) return abs;
-  const tail: string[] = [];
-  let cur = abs;
-  for (;;) {
-    try { return [ctx.realpath(cur), ...tail].join("/").replace(/\/+/g, "/"); } catch { /* missing: walk up */ }
-    if (cur === "/" || !cur.includes("/")) return abs;
-    tail.unshift(cur.slice(cur.lastIndexOf("/") + 1));
-    cur = cur.slice(0, cur.lastIndexOf("/")) || "/";
-  }
+  const real = realOfDeepest(abs, ctx.realpath); // bug 433: linear on a deep hostile path
+  return real === null ? abs : real.replace(/\/+/g, "/");
 };
 
 /** Why a path is a high-risk target for an opened file or an AppleScript string, or null. */

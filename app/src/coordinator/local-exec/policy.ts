@@ -2,9 +2,10 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { BROWSER_PERMISSION_PREFIX, LIMITS5, MACAPP_PERMISSION_PREFIX, STRMA, LOCAL_ADOPT_MODE, LOCAL_NEEDS_APPROVAL, STR5, STRB, evaluateFixedRules, fullAutoAsk, localActionOf, localFullAutoAction, localPermAction, macAutoRunEligible, macFloorHits, macFold, macRootAcceptable, macExemptTool, macSandboxExemptSimple, macSandboxInteractive, macUnsandboxedHandoff, macPrivateStoreRead, macPrivateStorePath, macQuietHandoff, localBindTarget, type ExecutionPolicy, type FullAutoResult, type LocalAction, type LocalComputer, type LocalExecRequest, type MacHandoffContext, type PermMode, type PermResult } from "@synapse/shared";
+import { readScriptCapped } from "./script-read";
+import { BROWSER_PERMISSION_PREFIX, LIMITS5, MACAPP_PERMISSION_PREFIX, STRMA, LOCAL_ADOPT_MODE, LOCAL_NEEDS_APPROVAL, MAC_UNCHECKED_RULES, STR5, STRB, evaluateFixedRules, fullAutoAsk, localActionOf, localFullAutoAction, localPermAction, macAutoRunEligible, macFloorHits, macFold, macRootAcceptable, macExemptTool, macSandboxExemptSimple, macSandboxInteractive, macUnsandboxedHandoff, macPrivateStoreRead, macPrivateStorePath, macQuietHandoff, localBindTarget, realOfDeepest, type ExecutionPolicy, type FullAutoResult, type LocalAction, type LocalComputer, type LocalExecRequest, type MacHandoffContext, type PermMode, type PermResult } from "@synapse/shared";
 
-import { macAllowedApp } from "./app-trust";
+import { macAllowedApp, warmAllowedApps } from "./app-trust";
 import { readRaw, writeRaw } from "./policy-io";
 import { policyMac } from "./policy-key";
 import { exemptInstallTrees, pinTool, samePin, type ToolPin } from "./tool-path";
@@ -19,7 +20,15 @@ export function bindHash(action: string, target: string): string {
 
 /** A check's answer. `quiet`: an everyday hand-off with no card (the executor runs it in the light sandbox);
  *  `noLimits`: the Bot is in No limits (the sandbox drops the private-store rules). Bug 258. */
-export type CheckResult = { ok: true; pin?: ToolPin; quiet?: boolean; noLimits?: boolean } | { ok: false; reason: string };
+export type CheckResult = { ok: true; pin?: ToolPin; quiet?: boolean; noLimits?: boolean; target?: string } | { ok: false; reason: string };
+
+/**
+ * Bug 433: the most distinct paths one gate decision resolves on disk. Each check (fixed rules, Full auto, hand-offs,
+ * private stores) resolves every path a command names, and a failed realpath costs a syscall and an exception: a
+ * command naming tens of thousands of paths could stall the gate for seconds. Past this, the call needs its own card.
+ */
+const REALPATH_BUDGET = 4096;
+const MISSING = Object.freeze(new Error("ENOENT (memoized)"));
 
 interface Approval { botId: string; expiresAt: number; bind: string; /** bug 235: the exempt tool as its card showed it. */ pin?: ToolPin }
 interface Grant { botId: string; action: LocalAction }
@@ -36,6 +45,22 @@ export class LocalPolicyStore {
 
   private home: () => string;
   private userData: () => string | null;
+  /** Bug 433: the current decision's resolved paths (null outside check()). */
+  private resolved: { memo: Map<string, string | null>; calls: number; exhausted: boolean } | null = null;
+  /** realpath on this Mac: memoized and budgeted within one check(), plain otherwise. */
+  private realpath = (x: string): string => {
+    const m = this.resolved;
+    if (!m) return fs.realpathSync.native(x);
+    const hit = m.memo.get(x);
+    if (hit !== undefined) { if (hit === null) throw MISSING; return hit; }
+    if (m.calls >= REALPATH_BUDGET) { m.exhausted = true; throw MISSING; }
+    m.calls++;
+    let real: string | null = null;
+    try { real = fs.realpathSync.native(x); } catch { /* missing */ }
+    m.memo.set(x, real);
+    if (real === null) throw MISSING;
+    return real;
+  };
 
   constructor(dir: string, private now: () => number = Date.now, key?: Buffer, o: { home?: () => string; userData?: () => string | null } = {}) {
     this.home = o.home ?? (() => os.homedir());
@@ -118,7 +143,7 @@ export class LocalPolicyStore {
    *  ignores a stored root that no longer passes macRootAcceptable or whose realpath no longer equals the stored value. */
   autoRunEligible(req: LocalExecRequest): boolean {
     const c = this.current();
-    return macAutoRunEligible(req, { home: this.home(), root: c.localRoot, roots: c.autoRunRoots ?? [], userData: this.userData(), realpath: (x) => fs.realpathSync.native(x) });
+    return macAutoRunEligible(req, { home: this.home(), root: c.localRoot, roots: c.autoRunRoots ?? [], userData: this.userData(), realpath: this.realpath });
   }
 
   recordApproval(approvalId: string, rec: Approval): void {
@@ -311,7 +336,7 @@ export class LocalPolicyStore {
     const home = this.home();
     const action = localPermAction(req, c.localRoot || home, home);
     if (!action) return null;
-    return evaluateFixedRules(action, { home, projectDirs: c.autoRunRoots ?? [], userData: this.userData(), realpath: (x) => fs.realpathSync.native(x), noLimits, ...(action.kind === "write" || action.kind === "edit" ? { toolTrees: exemptInstallTrees(home) } : {}) });
+    return evaluateFixedRules(action, { home, projectDirs: c.autoRunRoots ?? [], userData: this.userData(), realpath: this.realpath, readScript: readScriptCapped, noLimits, ...(action.kind === "write" || action.kind === "edit" ? { toolTrees: exemptInstallTrees(home) } : {}) });
   }
 
   /** Bug 258: No limits applies to this request: this Mac's own record, Full auto in effect, and no lower host claim. */
@@ -333,7 +358,7 @@ export class LocalPolicyStore {
       noLimits,
       // On this Mac the Bot owns exactly the auto-run roots the user added (none by default).
       workspaces: c.autoRunRoots ?? [],
-      realpath: (x) => fs.realpathSync.native(x),
+      realpath: this.realpath,
       exists: (p) => { try { return fs.existsSync(p); } catch { return true; } },
     });
   }
@@ -365,6 +390,33 @@ export class LocalPolicyStore {
 
   /** LOC-05: a request runs only if the Mac's own settings allow it, whatever the host says. */
   check(req: LocalExecRequest): CheckResult {
+    // Bug 433: one decision resolves each path once, and at most REALPATH_BUDGET of them; past that, what it found
+    // can't be trusted to allow: a card (an approval this call brought still counts).
+    if (this.resolved) return this.checkOnce(req);
+    this.resolved = { memo: new Map(), calls: 0, exhausted: false };
+    try {
+      const v = this.checkOnce(req);
+      if (v.ok && this.resolved.exhausted && !req.approvalId) {
+        return { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STR5.macRefused.alwaysAsk("This command names more paths than can be checked ahead of time.")}` };
+      }
+      // Bug 441: a file write is judged by where its path really is; the executor writes only there (a link swapped in
+      // between the check and the write is refused).
+      if (v.ok && (req.op === "write-file" || req.op === "edit-file" || req.op === "copy-from-box")) return { ...v, target: this.realTarget(req.path ?? "") };
+      return v;
+    } finally {
+      this.resolved = null;
+    }
+  }
+
+  /** Bug 441: the real path a file request names, as this decision resolved it (the same base the checks use). */
+  private realTarget(p: string): string {
+    const home = this.home();
+    const base = this.current().localRoot || home;
+    const abs = p === "~" || p.startsWith("~/") ? `${home.replace(/\/$/, "")}${p.slice(1)}` : path.resolve(base, p);
+    return path.resolve(realOfDeepest(abs, this.realpath) ?? abs);
+  }
+
+  private checkOnce(req: LocalExecRequest): CheckResult {
     const c = this.current();
     const policy = c.executionPolicy;
     // The account switch is the master: Never allow blocks everything, whatever the Bot's mode.
@@ -378,6 +430,11 @@ export class LocalPolicyStore {
     // app's own data (the policy key and files) and the keychain.
     const fixed = this.fixed(req, c, noLimits);
     if (fixed?.verdict === "never") return { ok: false, reason: STR5.macRefused.neverRule(fixed.reason) };
+    // Bug 433: a command the fixed rules couldn't check (too long, or too many scripts to read) needs this call's own
+    // approval in EVERY mode, and nothing else here reads its text (a huge hostile command can't stall the gate).
+    if (fixed?.verdict === "always-ask" && MAC_UNCHECKED_RULES.has(fixed.rule)) {
+      return req.approvalId ? tag(this.consume(req.approvalId, req)) : { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STR5.macRefused.alwaysAsk(fixed.reason)}` };
+    }
     // Bug 229: a command that runs outside the command sandbox (a known self-sandboxing program, run unwrapped) or
     // hands code to something that will (launchd, cron, an opened script/app, Terminal told to run a line) needs this
     // call's own approval in EVERY mode, whatever the grants or the computer-wide Always.
@@ -409,7 +466,7 @@ export class LocalPolicyStore {
       // Private-store hardening: a single plain read of one private store runs outside the sandbox (which denies it)
       // once approved, so like a hand-off it needs this call's own card in every mode. Bug 258: in No limits the
       // sandbox has no store rules, so the read runs inside it with no card.
-      const storeRead = !noLimits && !handoff && !exempt && macPrivateStoreRead(req.command ?? "", { home: this.home(), cwd, realpath: (x) => fs.realpathSync.native(x) });
+      const storeRead = !noLimits && !handoff && !exempt && macPrivateStoreRead(req.command ?? "", { home: this.home(), cwd, realpath: this.realpath });
       const strict = handoff ? `${handoff}${shown}` : exempt ? `${STR5.macOutsideSandbox(exempt)}${shown}` : storeRead ? STR5.macPrivateStoreRead : null;
       if (strict) return req.approvalId ? tag(this.consume(req.approvalId, req)) : { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STR5.macRefused.alwaysAsk(strict)}` };
     }
@@ -433,14 +490,18 @@ export class LocalPolicyStore {
     // the Mac floor no longer ask on their own in that mode. The fixed NEVER wall above is untouched.
     const fa = this.fullAuto(req, c, noLimits);
     // Bug 256: in Full auto the classifier alone decides; a plain command never needs a matching fixed rule to pass.
+    // Bug 440: Auto-accept edits is never weaker than Full auto: an edit Full auto would card (a git hook, the agent's
+    // settings, a key or credentials file, even inside a project) needs this call's own approval here too. (No limits
+    // counts only while Full auto is in effect, so `fa` here is the strict verdict whenever Auto-accept edits is asked.)
     const passes = (m: PermMode) => m === "full-auto"
       ? !fa.ask
-      : (!!fixed && fixed.verdict !== "always-ask" && !floor && m === "accept-edits" && fixed.verdict === "always-allow" && (req.op === "edit-file" || req.op === "write-file"));
+      : (!!fixed && fixed.verdict !== "always-ask" && !floor && !fa.ask && m === "accept-edits" && fixed.verdict === "always-allow" && (req.op === "edit-file" || req.op === "write-file"));
     if (passes(mode)) return pass();
     if (!req.approvalId && claim && claim !== "ask" && RANK[claim] > RANK[own] && passes(claim) && !this.declined(req.botId, claim)) {
       return { ok: false, reason: `${LOCAL_ADOPT_MODE}${STR5.localAdoptRefused}` };
     }
     if (!req.approvalId && mode === "full-auto" && fa.ask) return { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STR5.macRefused.alwaysAsk(fa.reason)}` };
+    if (!req.approvalId && mode === "accept-edits" && fa.ask && (req.op === "edit-file" || req.op === "write-file")) return { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STR5.macRefused.alwaysAsk(fa.reason)}` };
     if (!req.approvalId && mode !== "full-auto" && fixed?.verdict === "always-ask") return { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STR5.macRefused.alwaysAsk(fixed.reason)}` };
     if (!req.approvalId && mode === "accept-edits" && floor) return { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STR5.macRefused.alwaysAsk("it touches a protected place: credentials, a startup item, a pipe into a shell or a network send")}` };
     return tag(this.consume(req.approvalId, req));
@@ -451,11 +512,20 @@ export class LocalPolicyStore {
     return this.effectiveMode(req) === "full-auto";
   }
 
+  /** 0.1.4 first-run: check (off the thread) every app this command's hand-off check will ask about, so the sync
+   *  `check` that follows only reads the cache and never runs codesign in the coordinator's thread. */
+  async warm(req: LocalExecRequest): Promise<void> {
+    if (req.op !== "run-command" || !req.command) return;
+    const cwd = req.cwd ?? this.current().localRoot;
+    if (!macUnsandboxedHandoff(req.command, { home: this.home(), cwd })) return;
+    await warmAllowedApps(req.command, this.handoffCtx(cwd, this.noLimitsFor(req))).catch(() => {});
+  }
+
   /** Bug 258: what the Full-auto hand-off split needs to know about this Mac. */
   handoffCtx(cwd: string | null | undefined, noLimits: boolean): MacHandoffContext {
     return {
       home: this.home(), cwd: cwd ?? null, userData: this.userData(), noLimits,
-      realpath: (x) => fs.realpathSync.native(x),
+      realpath: this.realpath,
       isExecFile: (p) => { try { const st = fs.statSync(p); return st.isFile() && (st.mode & 0o111) !== 0; } catch { return false; } },
       isAllowedApp: (n) => macAllowedApp(n, this.home()),
       isDir: (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } },

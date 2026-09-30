@@ -14,7 +14,9 @@ export type WakeSource =
   // Phase 5: wakes #22, #11, #13
   | "heartbeat" | "coding-agent" | "mcp-auth"
   // Bug 142: the voice fast path — the Bot's voice on a call handed its full self a task.
-  | "voice-delegate";
+  | "voice-delegate"
+  // 0.1.4: an outside app asked over Synapse's MCP server (host/mcp-server). Never an owner source.
+  | "mcp";
 
 /** CHAT-09: images ≤ LIMITS.imageBlockMaxBytes go to the model as image content blocks. */
 export interface ImagePart { mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; dataBase64: string }

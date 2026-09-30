@@ -90,6 +90,51 @@ describe("Settings → Computer (Settings.dc.html)", () => {
     expect(sw.getAttribute("aria-checked")).toBe("false");
   });
 
+  // 0.1.4: Local network, off by default; turning it on asks once (Allow / Cancel); turning it off doesn't ask.
+  it("Local network: off by default, one confirmation to turn on, none to turn off", async () => {
+    let on = false;
+    const invoke = vi.fn(async (n: string, a: { on?: boolean }) => {
+      if (n === "localNetwork.get") return { ok: true, result: { on } };
+      if (n === "localNetwork.set") { on = a.on === true; return { ok: true, result: { on } }; }
+      return { ok: true, result: {} };
+    });
+    (window as unknown as { synapse: { native: { invoke: unknown } } }).synapse.native.invoke = invoke;
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<ComputerSection />);
+    const sw = await screen.findByRole("switch", { name: "Local network" });
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(sw); // Cancel
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    expect(confirm).toHaveBeenCalledWith("Let Bots reach your local network?");
+    expect(invoke).not.toHaveBeenCalledWith("localNetwork.set", expect.anything());
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(sw); // Allow
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("localNetwork.set", { on: true }));
+    await vi.waitFor(() => expect(sw.getAttribute("aria-checked")).toBe("true"));
+    fireEvent.click(sw); // off: no question
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("localNetwork.set", { on: false }));
+    expect(confirm).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(sw.getAttribute("aria-checked")).toBe("false"));
+    confirm.mockRestore();
+  });
+
+  it("Local network: a turn-on the box refused reads back off, with the not-saved line", async () => {
+    const invoke = vi.fn(async (n: string) => {
+      if (n === "localNetwork.get") return { ok: true, result: { on: false } };
+      if (n === "localNetwork.set") return { ok: true, result: { on: false } };
+      return { ok: true, result: {} };
+    });
+    (window as unknown as { synapse: { native: { invoke: unknown } } }).synapse.native.invoke = invoke;
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<ComputerSection />);
+    const sw = await screen.findByRole("switch", { name: "Local network" });
+    fireEvent.click(sw);
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("localNetwork.set", { on: true }));
+    await vi.waitFor(() => expect(sw.getAttribute("aria-checked")).toBe("false"));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    confirm.mockRestore();
+  });
+
   it("Network: locked state shown as status, not a dead switch; honest copy, live counter (LOC-09, C7)", async () => {
     render(<ComputerSection />);
     // This was never a real control (box/route.env only pins bind addresses to 127.0.0.1), so it must not

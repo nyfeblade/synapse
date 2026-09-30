@@ -1,12 +1,14 @@
 import type { Surface } from "@synapse/shared";
 
-export type OriginKind = "user" | "routine" | "peer" | "revival" | "group" | "teach";
+/** `external`: an outside app over Synapse's MCP server (0.1.4): outside text, never the owner's words. */
+export type OriginKind = "user" | "routine" | "peer" | "revival" | "group" | "teach" | "external";
 /**
  * I2: what woke the Bot, for the reviewer. The routine's saved prompt is the user's own (trusted);
  * `untrusted` is outside text that arrived with the wake (event payloads, peer or group messages, task reports).
  * For a non-user wake the 1:1 user messages are stale — they are moved here, not shown as the current request.
  */
-export interface ReviewWake { origin: OriginKind; routine: { name: string; saved_prompt: string } | null; untrusted: string[]; stale_user_messages: string[] }
+/** `unread` (bug 432): the outside text that woke the Bot is longer than Auto-review reads, so it can't vouch for the turn. */
+export interface ReviewWake { origin: OriginKind; routine: { name: string; saved_prompt: string } | null; untrusted: string[]; stale_user_messages: string[]; unread?: boolean }
 export interface RiskTarget { action: string; arguments: Record<string, unknown>; enrichment: { file: string; hash: string; head: string } | null }
 /** devFastPath: the S1 lean engineering profile's dev command (static.ts engineeringDevCommand), set by the gate for an engineering-mode Bot only. */
 export interface StaticResult { tierHint: 0 | 1 | 2 | 3 | 4; signals: string[]; floorHits: string[]; readOnly: boolean; segments?: number; devFastPath?: boolean }

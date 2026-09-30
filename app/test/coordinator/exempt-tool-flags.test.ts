@@ -17,6 +17,7 @@ import { LocalExecutor, ownDataSandboxProfile } from "../../src/coordinator/loca
 import { LocalPolicyStore } from "../../src/coordinator/local-exec/policy";
 import { POLICY_KEY_FILE, loadPolicyKey } from "../../src/coordinator/local-exec/policy-key";
 import { FIXED_PATH } from "../../src/coordinator/local-exec/tool-path";
+import { realHomeForTest } from "../../../scripts/test-home";
 
 let home: string;
 let userData: string;
@@ -121,7 +122,7 @@ describe.runIf(process.platform === "darwin")("live: claude and codex run inside
   });
 
   const realClaude = (() => {
-    try { return execFileSync("/bin/sh", ["-c", "command -v claude"], { env: { PATH: `${process.env.PATH}:${os.homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin` }, encoding: "utf8" }).trim() || null; } catch { return null; }
+    try { return execFileSync("/bin/sh", ["-c", "command -v claude"], { env: { PATH: `${process.env.PATH}:${realHomeForTest("locates the installed claude binary; the run itself gets a temp HOME")}/.local/bin:/opt/homebrew/bin:/usr/local/bin` }, encoding: "utf8" }).trim() || null; } catch { return null; }
   })();
   it.runIf(!!realClaude)("the REAL claude runs wrapped (--version: no prompt, no network, no tokens)", async () => {
     process.env.PATH = `${path.dirname(realClaude!)}:${FIXED_PATH}`;

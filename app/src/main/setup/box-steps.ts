@@ -3,6 +3,7 @@ import readline from "node:readline";
 import { boxPortEnv, userPorts, WRONG_HOST_MESSAGE } from "@synapse/shared";
 import { macNetsEnv } from "../mac-nets";
 import type { Exec } from "../box-provider";
+import { ORB_LIMITS, SCRIPT_LIMITS, orbCall } from "../orb-exec";
 import type { BoxStep, StepContext } from "./provisioner";
 import { adoptable, CREATED_MARKER, listMachines, machineMarks, machineSize, type MachineInfo, type MachineMarks } from "./orb";
 
@@ -10,7 +11,8 @@ import { adoptable, CREATED_MARKER, listMachines, machineMarks, machineSize, typ
 export type RunStreamed = (cmd: string, args: string[], o: { env: Record<string, string>; ctx: StepContext; timeoutMs: number }) => Promise<void>;
 
 export const runStreamed: RunStreamed = (cmd, args, o) => new Promise((resolve, reject) => {
-  const c = spawn(cmd, args, { env: { ...process.env, ...o.env }, stdio: ["ignore", "pipe", "pipe"] });
+  // Bug 435: its own process group, so a stop reaches the script's `orb` children too (a stuck one held the pipes).
+  const c = spawn(cmd, args, { env: { ...process.env, ...o.env }, stdio: ["ignore", "pipe", "pipe"], detached: true });
   let tail = "";
   const onLine = (l: string) => {
     const m = /^::step (\d+)\/(\d+)\s*(.*)$/.exec(l.trim());
@@ -26,12 +28,15 @@ export const runStreamed: RunStreamed = (cmd, args, o) => new Promise((resolve, 
   };
   readline.createInterface({ input: c.stdout! }).on("line", onLine);
   readline.createInterface({ input: c.stderr! }).on("line", onLine);
-  const kill = () => { try { c.kill("SIGTERM"); } catch { /* gone */ } };
+  const group = (sig: NodeJS.Signals) => { try { if (c.pid) process.kill(-c.pid, sig); else c.kill(sig); } catch { try { c.kill(sig); } catch { /* gone */ } } };
+  let hard: NodeJS.Timeout | null = null;
+  const kill = () => { group("SIGTERM"); hard ??= setTimeout(() => group("SIGKILL"), 5_000); };
   const t = setTimeout(() => { kill(); }, o.timeoutMs);
   o.ctx.signal.addEventListener("abort", kill, { once: true });
   c.on("error", (e) => { clearTimeout(t); reject(e); });
   c.on("close", (code, signal) => {
     clearTimeout(t);
+    if (hard) clearTimeout(hard);
     o.ctx.signal.removeEventListener("abort", kill);
     if (code === 0) resolve();
     else reject(new Error(`${signal ? `stopped (${signal})` : `exit ${code}`}${tail ? `:${tail.slice(-1500)}` : ""}`));
@@ -74,8 +79,8 @@ export function boxSteps(d: BoxStepDeps): BoxStep[] {
     return listed.find((m) => m.name === d.machine);
   };
   const readMarks = async (): Promise<MachineMarks> => (marks = await machineMarks(d.exec, d.orb(), d.machine, userPorts(uid).gateway));
-  const orb = async (args: string[], timeoutMs: number, what: string) => {
-    const r = await d.exec(d.orb(), args, { timeoutMs });
+  const orb = async (args: string[], timeoutMs: number, what: string, idempotent: boolean) => {
+    const r = await orbCall(d.exec, d.orb(), args, { timeoutMs, idempotent });
     if (r.code !== 0) throw new Error(`${what}: ${(r.stderr || r.stdout).trim().slice(0, 600)}`);
     return r;
   };
@@ -90,9 +95,9 @@ export function boxSteps(d: BoxStepDeps): BoxStep[] {
         const size = machineSize(d.mac);
         ctx.line(`orb create ${d.machine} (Debian 12, ${size.cpus} CPUs, ${size.memoryMib} MiB, ${size.disk})`);
         ctx.progress(0.1);
-        await orb(["create", "--isolated", "-a", "arm64", "--cpus", String(size.cpus), "--memory", String(size.memoryMib), "--disk", size.disk, "-u", "synapse-admin", "debian:bookworm", d.machine], 20 * 60_000, "OrbStack couldn't create the machine");
+        await orb(["create", "--isolated", "-a", "arm64", "--cpus", String(size.cpus), "--memory", String(size.memoryMib), "--disk", size.disk, "-u", "synapse-admin", "debian:bookworm", d.machine], ORB_LIMITS.create, "OrbStack couldn't create the machine", false);
         // Marked the moment it exists, so a retry after any later failure adopts it instead of refusing it.
-        await orb(["-m", d.machine, "-u", "root", "sh", "-c", `install -d -m 0755 /etc/bots && date -u +%FT%TZ > ${CREATED_MARKER}`], 60_000, "Couldn't mark the new machine");
+        await orb(["-m", d.machine, "-u", "root", "sh", "-c", `install -d -m 0755 /etc/bots && date -u +%FT%TZ > ${CREATED_MARKER}`], ORB_LIMITS.inBox, "Couldn't mark the new machine", true);
         d.forgetPin();
         ctx.progress(1);
       },
@@ -100,7 +105,7 @@ export function boxSteps(d: BoxStepDeps): BoxStep[] {
     {
       id: "start", label: "Starting the Bots' computer", weight: 2,
       done: async () => (await machine())?.state === "running",
-      run: async () => { await orb(["start", d.machine], 5 * 60_000, "The machine didn't start"); },
+      run: async () => { await orb(["start", d.machine], ORB_LIMITS.start, "The machine didn't start", true); },
     },
     {
       id: "provision", label: "Installing the system software", weight: 70,
@@ -115,7 +120,7 @@ export function boxSteps(d: BoxStepDeps): BoxStep[] {
         if (!adoptable(await machine(), marks ?? (await readMarks()))) {
           throw new Error(`A machine called "${d.machine}" already exists in OrbStack and wasn't made by Synapse. Synapse won't touch it. Rename or delete it in OrbStack, then retry.`);
         }
-        await run("/bin/bash", [`${d.boxDir}/provision-from-mac.sh`], { env: env(), ctx, timeoutMs: 60 * 60_000 });
+        await run("/bin/bash", [`${d.boxDir}/provision-from-mac.sh`], { env: env(), ctx, timeoutMs: SCRIPT_LIMITS.provision });
         marks = null;
       },
     },
@@ -127,7 +132,7 @@ export function boxSteps(d: BoxStepDeps): BoxStep[] {
         return want !== null && m.hostBuild === want && m.gateway;
       },
       run: async (ctx) => {
-        await run("/bin/bash", [`${d.boxDir}/deploy.sh`], { env: env(), ctx, timeoutMs: 20 * 60_000 });
+        await run("/bin/bash", [`${d.boxDir}/deploy.sh`], { env: env(), ctx, timeoutMs: SCRIPT_LIMITS.deploy });
       },
     },
     {

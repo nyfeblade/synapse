@@ -377,6 +377,8 @@ declare module "./gateway" {
     completeOnboarding: { args: None; result: None };
     // Coding agent (TOOL-20)
     listCodingAgents: { args: { id: string }; result: { agents: CodingAgentView[] } };
+    /** 0.1.4 first-run: the coding-agent card's Stop. */
+    cancelCodingAgent: { args: { id: string }; result: { agent: CodingAgentView } };
     // Memory, follow-ups, extras
     getPhase5Settings: { args: None; result: Phase5SettingsView };
     setMemoryMode: { args: { mode: "standard" | "dreaming" }; result: Phase5SettingsView };

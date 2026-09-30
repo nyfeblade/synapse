@@ -58,7 +58,10 @@ describe("ApprovalGate hard guards (APR-01 step 1)", () => {
     const s = setup();
     expect((await s.gate.preToolUse(s.id, { toolName: "WebFetch", input: { url: "https://x.com" }, toolUseId: "a" })).decision).toBe("allow");
     s.settings.update({ autoReviewEnabled: false });
-    expect((await s.gate.preToolUse(s.id, s.call("rm -rf /workspace/old"))).decision).toBe("allow");
+    expect((await s.gate.preToolUse(s.id, s.call(`rm -rf ${s.cfg.workspace}/old`))).decision).toBe("allow");
+    expect(s.reviews()).toBe(0);
+    // Bug 439: what Full auto would card still cards with Auto-review off (here: a delete outside the workspace).
+    expect((await s.gate.preToolUse(s.id, s.call("rm -rf /home/box/old", "off2"))).decision).toBe("ask");
     expect(s.reviews()).toBe(0);
   });
 

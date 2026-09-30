@@ -36,6 +36,8 @@ export function CallFeelCard() {
   // Bug 134: call sounds, and keep the natural voice loaded while the app runs (both default on).
   const sounds = useSavedNativeSwitch("calls.sounds.get", "calls.sounds.set", setErr);
   const ready = useSavedNativeSwitch("kokoro.keepReady.get", "kokoro.keepReady.set", setErr);
+  // 0.1.4 first-run: speech to Apple's servers only with this opt-in (off by default; the notice's Allow turns it on).
+  const server = useSavedNativeSwitch("speech.server.get", "speech.server.set", setErr);
   // Bug 224: the bug-161 question-intonation switch is gone — no voice lifts a question any more.
   const [shortcut, setShortcut] = useState<string | null | undefined>(undefined);
   const [recording, setRecording] = useState(false);
@@ -66,6 +68,10 @@ export function CallFeelCard() {
       <div className="settings-row">
         <span style={{ flexGrow: 1 }}>{STRV.callSounds}</span>
         <SavedSwitch label={STRV.callSounds} {...sounds} onToggle={sounds.toggle} />
+      </div>
+      <div className="settings-row">
+        <span style={{ flexGrow: 1 }}>{STRV.speechServer}</span>
+        <SavedSwitch label={STRV.speechServer} {...server} onToggle={server.toggle} />
       </div>
       <div className="settings-row">
         <span style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: 2 }}>

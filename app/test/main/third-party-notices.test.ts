@@ -25,11 +25,13 @@ describe("third-party notices (bug 283)", () => {
     expect(pkgs.host.has("imapflow")).toBe(true);    // inlined into host.mjs
     expect(pkgs.host.has("libmime")).toBe(true);     // imapflow's own dependency
     expect(pkgs.box.has("playwright-core")).toBe(true);
+    expect(pkgs.mcp.has("@modelcontextprotocol/sdk")).toBe(true); // 0.1.4: inlined into the MCP helper
+    expect(pkgs.mcp.has("zod")).toBe(true);
     expect(pkgs.app.has("@synapse/shared")).toBe(false); // ours
   });
 
   it("names every JavaScript package the app, the host bundle and the box ship", () => {
-    const missing = [...pkgs.app.keys(), ...pkgs.host.keys(), ...pkgs.box.keys()].filter((n) => !named(n));
+    const missing = [...pkgs.app.keys(), ...pkgs.mcp.keys(), ...pkgs.host.keys(), ...pkgs.box.keys()].filter((n) => !named(n));
     expect(missing).toEqual([]);
   });
 

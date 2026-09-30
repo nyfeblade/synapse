@@ -1,5 +1,6 @@
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { LIMITS } from "@synapse/shared";
 import { ChainStore } from "../../b2b/chains";
 import { installChainTracking, Mailbox, type Delivery } from "../../b2b/mailbox";
 import { RequestStore } from "../../b2b/requests";
@@ -167,6 +168,17 @@ describe("Mailbox", () => {
     expect(s.runner.run(s.b).text.match(/<message /g)).toHaveLength(2);
   });
 
+  it("bug 432: a batch stops growing before its wake would pass what Auto-review reads; the rest wake next", () => {
+    const s = setup();
+    for (let i = 0; i < 3; i++) s.mailbox.deliverWaking(s.b, s.del({ kind: "request", message: `${i} ${"m".repeat(1500)}`, rid: `r_aaaaaaa${i}` }));
+    s.flush();
+    const first = s.runner.run(s.b).text;
+    expect(first.match(/<message /g)).toHaveLength(1);
+    expect(first.length).toBeLessThanOrEqual(LIMITS.reviewerContextChars + "[HIDDEN_PROMPT]\n".length);
+    expect(s.runner.run(s.b).text.match(/<message /g)).toHaveLength(1);
+    expect(s.runner.run(s.b).text.match(/<message /g)).toHaveLength(1);
+  });
+
   it("a message that arrives after a follow-up wake is already queued is not dropped when the earlier wake settles (fix round 1)", () => {
     const s = setup();
     s.mailbox.deliverWaking(s.b, s.del({ kind: "request", message: "first", rid: "r_aaaaaaa1", expects: "x" }));
@@ -282,5 +294,16 @@ describe("installChainTracking", () => {
     const peer = { source: "agent", context: { ...emptyContext(), chainId: s.chain.chainId } } as unknown as TurnSlot;
     s.runner.observers[0]?.onTurnStart?.(s.b, peer);
     expect(peer.context.chainId).toBe(s.chain.chainId);
+  });
+  it("0.1.4: a nudge roots as the turn that caused it, not as a user chain", () => {
+    const s = setup();
+    installChainTracking(s.runner as unknown as TurnRunner, s.chains);
+    const owner = { source: "reply-nudge", context: emptyContext() } as unknown as TurnSlot;
+    const routine = { source: "reply-nudge", reviewSource: "routine", context: emptyContext() } as unknown as TurnSlot;
+    const mcp = { source: "closing-nudge", reviewSource: "mcp", context: emptyContext() } as unknown as TurnSlot;
+    for (const x of [owner, routine, mcp]) s.runner.observers[0]?.onTurnStart?.(s.a, x);
+    expect(s.chains.get(owner.context.chainId as string)?.rootKind).toBe("user");
+    expect(s.chains.get(routine.context.chainId as string)?.rootKind).toBe("routine");
+    expect(s.chains.get(mcp.context.chainId as string)?.rootKind).toBe("system");
   });
 });

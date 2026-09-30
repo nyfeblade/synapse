@@ -28,7 +28,7 @@ const vncReady = vnc.start();
 
 const policy = new NotificationPolicy({
   now: Date.now,
-  notify: (n) => process.parentPort.postMessage({ type: "notify", botId: n.botId, title: n.title, body: n.body }),
+  notify: (n) => process.parentPort.postMessage({ type: "notify", botId: n.botId, title: n.title, body: n.body, ...(n.approvalId ? { approvalId: n.approvalId } : {}) }),
   badge: (count) => process.parentPort.postMessage({ type: "badge", count }),
 });
 
@@ -91,6 +91,13 @@ process.parentPort.on("message", (e) => {
     else if (m.op === "clear") { try { macKey.clear(); reply({ ok: true }); } catch (e) { reply({ ok: false, error: (e as Error).message }); } }
     else if (m.op === "has") reply({ ok: true, result: macKey.has() });
     else reply({ ok: false, error: "unknown" });
+  } else if (msg.type === "approval-answer") {
+    // Smarter approvals: Approve / Deny on a card's macOS notification. The same gateway command as the in-app card
+    // (resolveAutoReviewApproval), so the host's gate is the one code path (fingerprint re-check, stale cards).
+    const m = msg as unknown as { botId?: unknown; approvalId?: unknown; choice?: unknown };
+    if (client && typeof m.botId === "string" && typeof m.approvalId === "string" && (m.choice === "once" || m.choice === "deny")) {
+      void client.call("resolveAutoReviewApproval", { id: m.botId, approvalId: m.approvalId, choice: m.choice }).catch(() => {});
+    }
   } else if (msg.type === "renderer-port") {
     rport = e.ports[0] ?? null;
     rport?.on("message", (m) => void onRendererMessage(m.data));

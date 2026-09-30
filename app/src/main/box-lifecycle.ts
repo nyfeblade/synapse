@@ -5,6 +5,7 @@ import path from "node:path";
 import type { ForeverBoxStep, SnapshotInfo } from "@synapse/shared";
 import { boxPortEnv, STRC } from "@synapse/shared";
 import type { Exec } from "./box-provider";
+import { ORB_LIMITS, SCRIPT_LIMITS, orbCall } from "./orb-exec";
 import { resolveOrb } from "./orb-path";
 import { macNetsEnv } from "./mac-nets";
 import { BoxOpsLock, boxBusyMessage } from "./setup/box-ops-lock";
@@ -63,28 +64,34 @@ export class OrbBoxOps implements BoxOps {
   private orb() { return (this.o.orb ?? resolveOrb)(); }
   private m() { return this.o.machine ?? "box"; }
   private env() { return { ORB: this.orb(), BOX_MACHINE: this.m(), ...boxPortEnv(this.o.uid ?? process.getuid?.() ?? 501), ...macNetsEnv() }; }
-  private async run(cmd: string, args: string[], timeoutMs = 30 * 60_000, env?: Record<string, string>): Promise<void> {
+  private async run(cmd: string, args: string[], timeoutMs: number, env?: Record<string, string>): Promise<void> {
     const r = await this.o.exec(cmd, args, { timeoutMs, ...(env ? { env } : {}) });
     if (r.code !== 0) throw new Error(`${cmd} ${args[0]} failed: ${r.stderr.trim().slice(0, 300)}`);
   }
-  async restartMachine() { await this.run(this.orb(), ["restart", this.m()], 180_000); }
+  /** Bug 435: every orb call is bounded (orbCall); a timed-out one that isn't safe to repeat surfaces its error. */
+  private async orbRun(args: string[], timeoutMs: number, idempotent: boolean): Promise<void> {
+    const r = await orbCall(this.o.exec, this.orb(), args, { timeoutMs, idempotent });
+    if (r.code !== 0) throw new Error(r.timedOut ? r.stderr : `orb ${args[0]} failed: ${r.stderr.trim().slice(0, 300)}`);
+  }
+  async restartMachine() { await this.orbRun(["restart", this.m()], ORB_LIMITS.restart, false); }
   async recreateMachine() {
     const m = (await listMachines(this.o.exec, this.orb())).find((x) => x.name === this.m());
     if (m && !adoptable(m, await machineMarks(this.o.exec, this.orb(), this.m()))) {
       throw new Error(`A machine called "${this.m()}" exists in OrbStack and wasn't made by Synapse. Synapse won't delete it.`);
     }
-    if (m) await this.run(this.orb(), ["delete", "-f", this.m()], 180_000);
+    if (m) await this.orbRun(["delete", "-f", this.m()], ORB_LIMITS.delete, false);
     const size = machineSize(this.o.mac ?? { cpus: os.cpus().length, totalMemBytes: os.totalmem() });
-    await this.run(this.orb(), ["create", "--isolated", "-a", "arm64", "--cpus", String(size.cpus), "--memory", String(size.memoryMib), "--disk", size.disk, "-u", "synapse-admin", "debian:bookworm", this.m()], 600_000);
-    await this.run(this.orb(), ["-m", this.m(), "-u", "root", "sh", "-c", `install -d -m 0755 /etc/bots && date -u +%FT%TZ > ${CREATED_MARKER}`], 60_000);
+    await this.orbRun(["create", "--isolated", "-a", "arm64", "--cpus", String(size.cpus), "--memory", String(size.memoryMib), "--disk", size.disk, "-u", "synapse-admin", "debian:bookworm", this.m()], ORB_LIMITS.create, false);
+    await this.orbRun(["-m", this.m(), "-u", "root", "sh", "-c", `install -d -m 0755 /etc/bots && date -u +%FT%TZ > ${CREATED_MARKER}`], ORB_LIMITS.inBox, true);
     this.o.onRecreated?.();
   }
-  async provision(o?: { perBotUid?: "on" | "off" }) { await this.run("bash", [`${this.o.boxDir}/provision-from-mac.sh`], undefined, { ...this.env(), ...(o?.perBotUid ? { PER_BOT_UID: o.perBotUid } : {}) }); }
+  async provision(o?: { perBotUid?: "on" | "off" }) { await this.run("bash", [`${this.o.boxDir}/provision-from-mac.sh`], SCRIPT_LIMITS.provision, { ...this.env(), ...(o?.perBotUid ? { PER_BOT_UID: o.perBotUid } : {}) }); }
   async perBotUidMode(): Promise<"on" | "off"> {
-    const r = await this.o.exec(this.orb(), ["-m", this.m(), "-u", "root", "test", "-f", "/etc/systemd/system/bothost.service.d/50-per-bot-uid.conf"], { timeoutMs: 60_000 });
+    const r = await orbCall(this.o.exec, this.orb(), ["-m", this.m(), "-u", "root", "test", "-f", "/etc/systemd/system/bothost.service.d/50-per-bot-uid.conf"], { timeoutMs: ORB_LIMITS.inBox, idempotent: true });
+    if (r.timedOut) throw new Error(r.stderr);
     return r.code === 0 ? "on" : "off";
   }
-  async deploy() { await this.run("bash", [`${this.o.boxDir}/deploy.sh`], undefined, this.env()); }
+  async deploy() { await this.run("bash", [`${this.o.boxDir}/deploy.sh`], SCRIPT_LIMITS.deploy, this.env()); }
   async waitHealthy(timeoutMs: number) {
     const until = Date.now() + timeoutMs;
     while (!(await this.o.health().catch(() => false))) {

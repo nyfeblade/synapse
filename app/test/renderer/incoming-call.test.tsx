@@ -20,9 +20,27 @@ let policy: Record<string, unknown> = { ring: true };
 const bot = (id: string, name: string) => ({ id, profile: { name, avatarShape: "pebble", avatarColor: "#3b82f6" }, settings: {} });
 const ring = (over: Partial<IncomingCallView> = {}): IncomingCallView => ({ callId: "r1", botId: "n", reason: "The build finished. Want me to deploy?", since: 1, expiresAt: 45_001, firstCall: false, ...over });
 const ringStop = vi.fn();
+/** Resolved when IncomingCall sends "calls.ring": the same step in which it marks the ring ready to show. */
+let onRingSent: () => void = () => {};
+/** Per-call policies, answered in order (one "calls.policy" per call); empty → `policy`. */
+let policies: Record<string, unknown>[] = [];
+
+/**
+ * Puts one Bot call in the list and waits, INSIDE act, for IncomingCall's policy decision to land. act
+ * then flushes the render and its passive effects together, so the ring tone (useRingTone, an effect)
+ * has started by the time the dialog can be seen. Waiting on the dialog alone (findByRole) races them:
+ * the dialog is in the DOM a React scheduler task before the effect that starts the ring runs, and
+ * findByRole's trailing setTimeout(0) can win that task (bug-log 450).
+ */
+async function showRing(...views: IncomingCallView[]): Promise<void> {
+  if (!views.length) views = [ring()];
+  let left = views.length;
+  const sent = new Promise<void>((res) => { onRingSent = () => { if (--left === 0) res(); }; });
+  await act(async () => { useBotCalls.getState().set(views); await sent; });
+}
 
 beforeEach(() => {
-  subs.clear(); invoked.length = 0; calls.length = 0; policy = { ring: true };
+  subs.clear(); invoked.length = 0; calls.length = 0; policy = { ring: true }; policies = [];
   ringStop.mockClear();
   vi.mocked(CallSounds.useCallSoundsEnabled).mockReturnValue(true);
   vi.mocked(CallSounds.startRing).mockImplementation(() => ({ stop: ringStop }));
@@ -40,7 +58,8 @@ beforeEach(() => {
     native: {
       invoke: vi.fn(async (n: string, a: Record<string, unknown>) => {
         invoked.push([n, a]);
-        return { ok: true, result: n === "calls.policy" ? policy : n === "dictation.speak" ? { spoken: true } : {} };
+        if (n === "calls.ring") onRingSent();
+        return { ok: true, result: n === "calls.policy" ? (policies.shift() ?? policy) : n === "dictation.speak" ? { spoken: true } : {} };
       }),
       on: (ch: string, cb: (p: unknown) => void) => { subs.set(ch, cb); return () => subs.delete(ch); },
     },
@@ -71,6 +90,27 @@ describe("a Bot calls you", () => {
     await vi.waitFor(() => expect(answered()).toEqual([{ callId: "r1", answer: "missed", why: "quiet hours" }]));
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(invoked.some(([n]) => n === "calls.ring")).toBe(false);
+  });
+
+  it("0.1.4 first-run: Focus unknown (unreadable): the call rings quietly, with the sound left to macOS's notification", async () => {
+    policy = { ring: true, sound: false };
+    const focus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    try {
+      render(<IncomingCall />);
+      act(() => useBotCalls.getState().set([ring()]));
+      expect(await screen.findByRole("alertdialog")).toBeTruthy();
+      await vi.waitFor(() => expect(invoked.find(([n]) => n === "calls.ring")?.[1]).toMatchObject({ botId: "n", osSound: true }));
+      expect(CallSounds.startRing).not.toHaveBeenCalled();
+    } finally { focus.mockRestore(); }
+  });
+
+  it("Focus known off: the app's own ring plays and the notification stays silent", async () => {
+    policy = { ring: true, sound: true };
+    render(<IncomingCall />);
+    act(() => useBotCalls.getState().set([ring()]));
+    await vi.waitFor(() => expect(invoked.some(([n]) => n === "calls.ring")).toBe(true));
+    expect(invoked.find(([n]) => n === "calls.ring")?.[1].osSound).toBeUndefined();
+    await vi.waitFor(() => expect(CallSounds.startRing).toHaveBeenCalled());
   });
 
   it("decline and message-instead answer the host; a first call can be refused for good", async () => {
@@ -107,8 +147,8 @@ describe("a Bot calls you", () => {
 describe("the ring while a Bot's call sits unanswered", () => {
   it("starts once the ring shows, and stops (with its fade) the instant the user accepts", async () => {
     render(<><IncomingCall /><VoiceOverlay botId="n" /></>);
-    act(() => useBotCalls.getState().set([ring()]));
-    const accept = await screen.findByRole("button", { name: STRV.acceptCall });
+    await showRing();
+    const accept = screen.getByRole("button", { name: STRV.acceptCall });
     expect(CallSounds.startRing).toHaveBeenCalledTimes(1);
     expect(ringStop).not.toHaveBeenCalled();
     await act(async () => { fireEvent.click(accept); });
@@ -117,8 +157,8 @@ describe("the ring while a Bot's call sits unanswered", () => {
 
   it("stops on decline", async () => {
     render(<IncomingCall />);
-    act(() => useBotCalls.getState().set([ring()]));
-    const decline = await screen.findByRole("button", { name: STRV.declineCall });
+    await showRing();
+    const decline = screen.getByRole("button", { name: STRV.declineCall });
     expect(CallSounds.startRing).toHaveBeenCalledTimes(1);
     await act(async () => { fireEvent.click(decline); });
     expect(ringStop).toHaveBeenCalledTimes(1);
@@ -126,8 +166,8 @@ describe("the ring while a Bot's call sits unanswered", () => {
 
   it("stops when the host times out an unanswered ring or the Bot withdraws it (both just clear the list)", async () => {
     render(<IncomingCall />);
-    act(() => useBotCalls.getState().set([ring()]));
-    await screen.findByRole("alertdialog");
+    await showRing();
+    screen.getByRole("alertdialog");
     expect(CallSounds.startRing).toHaveBeenCalledTimes(1);
     // The host publishes the calls list without this ring, on a 30 s timeout (missed) exactly as it
     // would on a withdrawal — the app doesn't tell the two apart, so it can't ring after either.
@@ -136,11 +176,40 @@ describe("the ring while a Bot's call sits unanswered", () => {
     expect(ringStop).toHaveBeenCalledTimes(1);
   });
 
+  it("a queued call gets its own ring: a quiet call, then a normal one, rings once the normal one shows", async () => {
+    policies = [{ ring: true, sound: false }, { ring: true, sound: true }];
+    const focus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    try {
+      render(<IncomingCall />);
+      await showRing(ring({ callId: "r1" }), ring({ callId: "r2" }));
+      expect(CallSounds.startRing).not.toHaveBeenCalled();
+      await act(async () => { fireEvent.click(screen.getByRole("button", { name: STRV.declineCall })); });
+      expect(answered()).toEqual([{ callId: "r1", answer: "decline" }]);
+      expect(screen.getByRole("alertdialog")).toBeTruthy();
+      expect(CallSounds.startRing).toHaveBeenCalledTimes(1);
+    } finally { focus.mockRestore(); }
+  });
+
+  it("a queued call gets its own ring: a normal call, then a quiet one, goes silent once the quiet one shows", async () => {
+    policies = [{ ring: true, sound: true }, { ring: true, sound: false }];
+    const focus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    try {
+      render(<IncomingCall />);
+      await showRing(ring({ callId: "r1" }), ring({ callId: "r2" }));
+      expect(CallSounds.startRing).toHaveBeenCalledTimes(1);
+      await act(async () => { fireEvent.click(screen.getByRole("button", { name: STRV.declineCall })); });
+      expect(answered()).toEqual([{ callId: "r1", answer: "decline" }]);
+      expect(screen.getByRole("alertdialog")).toBeTruthy();
+      expect(ringStop).toHaveBeenCalledTimes(1);
+      expect(CallSounds.startRing).toHaveBeenCalledTimes(1);
+    } finally { focus.mockRestore(); }
+  });
+
   it("never rings when Settings → Voice, 'Call sounds' is off", async () => {
     vi.mocked(CallSounds.useCallSoundsEnabled).mockReturnValue(false);
     render(<IncomingCall />);
-    act(() => useBotCalls.getState().set([ring()]));
-    await screen.findByRole("alertdialog");
+    await showRing();
+    screen.getByRole("alertdialog");
     expect(CallSounds.startRing).not.toHaveBeenCalled();
   });
 

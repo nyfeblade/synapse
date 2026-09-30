@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { BROWSER_UNREVIEWED, COMPOSIO_SERVER_ID, isComposioHost, COMPUTER_NAME, composioAppName, composioToolReadOnly, composioToolkitOf, REVIEWED_COMPUTER_ACTIONS, STRC, browserBindTarget, browserReadOnly, macAppBindTarget, macAppReadOnly, macAppSummary, messagesSend, messagesSendSummary, type BrowserArgs, type MacAppArgs, type Surface } from "@synapse/shared";
+import { BROWSER_UNREVIEWED, COMPOSIO_SERVER_ID, isComposioHost, COMPUTER_NAME, composioAppName, composioToolReadOnly, composioToolkitOf, REVIEWED_COMPUTER_ACTIONS, STRC, browserBindTarget, browserReadOnly, macAppBindTarget, macAppReadOnly, macAppSummary, messagesSend, messagesSendSummary, realOfDeepest, type BrowserArgs, type MacAppArgs, type Surface } from "@synapse/shared";
 import type { ToolCall } from "../brain/types";
 import type { HostConfig } from "../config";
 import { privateRoots, privateToAnother } from "../walls/registry";
@@ -19,6 +19,10 @@ const UI_AUTOMATION = /\b(xdotool|wmctrl|xte|ydotool|osascript|cliclick|pyautogu
 const READ_ONLY_MCP = /(^|_)(get|list|search|read|fetch|find|query|lookup|describe)(_|$)/i;
 
 const realOr = (p: string): string => { try { return fs.realpathSync(p); } catch { return p; } };
+/** Bug 441: a box path's real form: the deepest existing ancestor resolved, the missing tail kept. */
+const realBoxPath = (abs: string): string => path.resolve(realOfDeepest(abs, (x) => fs.realpathSync.native(x)) ?? abs);
+/** `p` is `root` or below it (a whole path segment, not a name prefix). */
+const inside = (p: string, root: string): boolean => { const r = root.replace(/\/+$/, ""); return p === r || p.startsWith(`${r}/`); };
 
 /** True when p (resolved against the workspace) is root or inside it. */
 export function insideDir(workspace: string, p: string, root: string): boolean {
@@ -182,10 +186,15 @@ export function classifyTool(call: ToolCall, o: { workspace: string; hostPrivate
   }
   if (name === "Edit" || name === "Write") {
     const p = String(input.file_path ?? "");
-    if (under(p, o.hostPrivate)) return deny(TEXT.protectedPath);
-    if (walledPath(p)) return deny(TEXT.otherBotPrivate);
+    // Bug 441: a write is judged by where the file REALLY is: a link in the workspace (to the file, or in any folder
+    // on its way) that leads outside it is a write outside it.
+    const lex = p ? path.resolve(o.workspace, p) : "";
+    const real = lex ? realBoxPath(lex) : "";
+    if (under(p, o.hostPrivate) || (real && (inside(real, o.hostPrivate) || inside(real, realOr(o.hostPrivate))))) return deny(TEXT.protectedPath);
+    if (walledPath(p) || (real && real !== lex && walledPath(real))) return deny(TEXT.otherBotPrivate);
     // D9-A: workspace writes are ordinary Bot work, except git control files (item 1c ruling: reviewed, F8 floor).
-    if (under(p, o.workspace) && !GIT_CONTROL_PATH.test(path.resolve(o.workspace, p))) return none(true);
+    const inWs = !!real && (inside(real, o.workspace) || inside(real, realOr(o.workspace)));
+    if (under(p, o.workspace) && inWs && !GIT_CONTROL_PATH.test(lex) && !GIT_CONTROL_PATH.test(real)) return none(true);
     return { surface: "box_shell", sideEffect: true, hardDeny: null, command: `${name.toLowerCase()} ${p}`, summary: `Write the file ${p}`, target: { action: "write_file", arguments: { path: p, tool: name }, enrichment: null } };
   }
   if (name === "WebFetch" || name === "WebSearch" || name === "TodoWrite" || name === "Skill") return none(false);
@@ -441,6 +450,14 @@ export function classifyTool(call: ToolCall, o: { workspace: string; hostPrivate
         ? `Replace your connected Google client with ${id} (this signs Google out until you connect again)`
         : `Save the Google client ${id} that the Bot read from Google Cloud. Check it matches the Client ID in your console.`,
       target: { action: "replace_google_client", arguments: { client_id: id, replace }, enrichment: null },
+    };
+  }
+  // Smarter approvals: a plan is always the owner's own card (approval-gate.ts); the gate checks and parses it.
+  if (name === "mcp__bot__ProposePlan") {
+    return {
+      surface: "control_plane", sideEffect: true, hardDeny: null, command: JSON.stringify(input).slice(0, 4000),
+      summary: `Approve plan: ${String(input.title ?? "").slice(0, 120)}`,
+      target: { action: "approve_plan", arguments: { title: input.title ?? null, steps: input.steps ?? null }, enrichment: null },
     };
   }
   if (name.startsWith("mcp__bot__")) return none(true);

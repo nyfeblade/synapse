@@ -15,7 +15,35 @@ export ORB
 # machine is "synapse-box"; a Mac that already had "box" keeps it). A hand run defaults to "box".
 BOX_MACHINE="${BOX_MACHINE:-box}"
 export BOX_MACHINE
-orb() { command "$ORB" "$@"; }
+# Bug 435: every orb call is bounded. OrbStack 2.2.3's agent now and then leaves a finished command unreaped (seen
+# within minutes of the box host restarting) and the orb client then waits forever. ORB_TIMEOUT (seconds, default 120)
+# sets the limit per call: `ORB_TIMEOUT=3600 orb ...` for a long one. On timeout orb gets TERM, then KILL (a stuck orb
+# ignores TERM, and a bare alarm; only KILL ends it: seen live on a throwaway machine), and the call
+# exits 124 with "OrbStack didn't answer" on stderr (the app's setup error keys on it). ORB_TIMEOUT_MARK, when set,
+# names a file each timeout appends a line to (verify-box uses it so a negated check can't pass on a hang).
+# perl is on every Mac (no modules loaded: ~3 ms a call); its fork/wait adds no polling to the normal path. stdin passes through (tar | orb ...).
+orb() {
+  perl -e '
+    my ($t, $mark) = (shift, shift);
+    my $pid = fork; defined $pid or die "orb: fork: $!\n";
+    # Its own process group (not from a terminal: job control needs the terminal group), so the kill reaches all of it.
+    my $g = -t STDIN ? 0 : 1;
+    if (!$pid) { setpgrp(0, 0) if $g; exec { $ARGV[0] } @ARGV; print STDERR "orb: $ARGV[0]: $!\n"; exit 127 }
+    my $who = $g ? -$pid : $pid;
+    for my $s (qw(TERM INT HUP)) { $SIG{$s} = sub { kill $s, $who } }
+    my $ok = eval { local $SIG{ALRM} = sub { die "t\n" }; alarm $t; my $w; do { $w = waitpid($pid, 0) } until $w == $pid || $w == -1; alarm 0; 1 };
+    if (!$ok) {
+      kill "TERM", $who;
+      for (1 .. 15) { last if waitpid($pid, 1) == $pid; select(undef, undef, undef, 0.1) }
+      kill "KILL", $who; waitpid($pid, 0);
+      my @a = @ARGV[1 .. ($#ARGV < 5 ? $#ARGV : 5)];
+      print STDERR "OrbStack didn\x27t answer within $t s (orb @a)\n";
+      if ($mark ne "" && open(my $f, ">>", $mark)) { print $f "@a\n"; close $f }
+      exit 124;
+    }
+    exit($? & 127 ? 128 + ($? & 127) : $? >> 8);
+  ' "${ORB_TIMEOUT:-120}" "${ORB_TIMEOUT_MARK:-}" "$ORB" "$@"
+}
 export -f orb
 # Two macOS accounts on one Mac: each account's OrbStack forwards its machine's ports to the Mac's shared 127.0.0.1,
 # so each Mac user gets their own (shared/src/user-ports.ts computes the same numbers; a test keeps them in step).

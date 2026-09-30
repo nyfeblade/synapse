@@ -13,6 +13,28 @@ describe("supervisor ledger (ORIG-16 §16.8)", () => {
     expect(l.read()).toEqual({ hostBootId: "boot-1", procs: [{ pid: 42, botId: "b", kind: "bot", sessionId: "s", startedAt: 1 }] });
   });
 
+  it("0.1.4 first-run: an idle host doesn't rewrite supervisor.json every second; it writes only on change", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "led-"));
+    try {
+      const file = path.join(dir, "supervisor.json");
+      const l = new SupervisorLedger(file, "boot-1");
+      expect(l.write([])).toBe(true); // boot: always written once
+      const old = new Date(Date.now() - 3_600_000);
+      fs.utimesSync(file, old, old);
+      // 60 idle ticks of the host's 1 s ticker: nothing changed, nothing written.
+      for (let i = 0; i < 60; i++) expect(l.write([])).toBe(false);
+      expect(fs.statSync(file).mtimeMs).toBe(old.getTime());
+      // A Bot's process appears: written, then quiet again.
+      const p = [{ pid: 42, botId: "b", kind: "bot" as const, sessionId: "s", startedAt: 1 }];
+      expect(l.write(p)).toBe(true);
+      expect(l.write([{ ...p[0]! }])).toBe(false);
+      expect(l.read()?.procs).toEqual(p);
+      expect(l.write([])).toBe(true);
+      expect(l.read()?.procs).toEqual([]);
+      expect(fs.readdirSync(dir)).toEqual(["supervisor.json"]);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it("reaps orphans at boot only for the real brain", async () => {
     let reaped = 0;
     await bootSweep({ brain: "fake", reap: async () => { reaped++; } });

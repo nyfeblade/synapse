@@ -32,8 +32,13 @@ function v6Network(addr: string, prefix: number): string {
   return `${s}/${prefix}`;
 }
 
-/** The Mac's networks the fixed ranges don't cover, as normalized CIDRs, sorted. */
-/** Bug 368: shorter prefixes than these are dropped (and logged), so a misread netmask never blocks a huge range. */
+/**
+ * The Mac's networks the fixed ranges don't cover, plus (0.1.4, Local network) every address of the Mac's own as a
+ * /32 or /128, as normalized CIDRs, sorted. The fixed ranges stop covering the Mac's RFC 1918 and ULA addresses when
+ * the owner lets the Bots reach the local network, so the box denies the Mac's own addresses by name in every state.
+ * Bug 368: shorter prefixes than these are dropped (and logged), so a misread netmask never blocks a huge range; the
+ * address itself is still denied.
+ */
 export const MIN_PREFIX = { v4: 16, v6: 32 } as const;
 
 export function macGuardNets(ifaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces(), log: (l: string) => void = (l) => process.stderr.write(`${l}\n`)): string[] {
@@ -42,8 +47,11 @@ export function macGuardNets(ifaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os
     if (i.internal || !i.cidr) continue;
     const prefix = Number(i.cidr.split("/")[1]);
     const addr = i.address.replace(/%.*$/, "");
-    const v4 = isIPv4(addr) && !COVERED.check(addr, "ipv4");
-    const v6 = !v4 && isIPv6(addr) && !COVERED.check(addr, "ipv6");
+    const fam = isIPv4(addr) ? 4 : isIPv6(addr) ? 6 : 0;
+    if (!fam || (fam === 4 ? addr.startsWith("127.") : addr === "::1")) continue;
+    out.add(fam === 4 ? `${addr}/32` : v6Network(addr, 128));
+    const v4 = fam === 4 && !COVERED.check(addr, "ipv4");
+    const v6 = fam === 6 && !COVERED.check(addr, "ipv6");
     if (!v4 && !v6) continue;
     if (!Number.isInteger(prefix) || prefix < (v4 ? MIN_PREFIX.v4 : MIN_PREFIX.v6) || prefix > (v4 ? 32 : 128)) {
       log(`mac-nets: skipping ${addr}/${i.cidr.split("/")[1]} (prefix too short to block safely)`);
@@ -69,8 +77,9 @@ export class MacNetsWatcher {
   private since = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private busy = false;
+  private ticking = false;
 
-  constructor(private d: { apply(nets: string[]): Promise<boolean>; nets?: () => string[]; now?: () => number; pollMs?: number; debounceMs?: number; log?(s: string): void }) {}
+  constructor(private d: { apply(nets: string[]): Promise<boolean>; nets?: () => string[]; now?: () => number; pollMs?: number; debounceMs?: number; log?(s: string): void; /** 0.1.4: runs on every tick (the Local network tamper check). */ everyTick?(): Promise<unknown> }) {}
 
   start(): void {
     if (this.timer) return;
@@ -82,7 +91,12 @@ export class MacNetsWatcher {
   stop(): void { if (this.timer) clearInterval(this.timer); this.timer = null; }
 
   async tick(): Promise<void> {
-    if (this.busy) return;
+    if (this.busy || this.ticking) return;
+    this.ticking = true;
+    try { await this.nets(); } finally { try { await this.d.everyTick?.().catch(() => undefined); } finally { this.ticking = false; } }
+  }
+
+  private async nets(): Promise<void> {
     const now = (this.d.now ?? Date.now)();
     const nets = (this.d.nets ?? macGuardNets)();
     const key = nets.join(" ");

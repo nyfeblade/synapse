@@ -1,3 +1,4 @@
+import type { RoomReview } from "../groups/member-prompt";
 import type { ToolCallEntry } from "@synapse/shared";
 import type { Lane, TurnCounters, WakeSource } from "../brain/types";
 import { emptyContext, type TurnContext } from "./turn-context";
@@ -66,6 +67,9 @@ export interface TurnSlot {
   /** A subagent's slot: the wake source of the parent turn that launched it, which the reviewer's origin follows
    *  (its own source stays "subagent-done"). Unset → the slot's own source. */
   reviewSource?: WakeSource;
+  /** Bug 434 follow-up: a room member turn's posts with their structured authors, for Auto-review's trust (never
+   *  from display names). Set by the group orchestrator; a follow-up or subagent of that turn inherits it. */
+  roomReview?: RoomReview;
 }
 
 export function newSlot(

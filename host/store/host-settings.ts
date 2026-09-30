@@ -7,6 +7,7 @@ import { LIVE_PERCEPTION_ENABLED, LIVE_SHELVED_MESSAGE } from "../computer/perce
 import { GatewayError } from "../gateway/errors";
 import { readJsonOrQuarantine, writeJsonAtomic } from "../util/atomic-json";
 import { log } from "../util/log";
+import { normalizeTrusted } from "../approvals/smarter";
 
 export interface HostSettings {
   autoReviewEnabled: boolean;
@@ -33,6 +34,9 @@ export interface HostSettings {
   promptCacheTtl: PromptCacheTtl;
   callReplies: CallReplies;
   longContext: LongContextMode;
+  /** Smarter approvals: people the owner trusts; a send to only them (and the owner) skips the card. Set only in
+   *  Settings (setHostSettings from the app); a Bot's update_state can't change it. */
+  trustedRecipients: string[];
   /** settings-persist: bumped on every save and kept on disk, so a view carries its age (HostSettingsView.rev). */
   rev: number;
 }
@@ -53,6 +57,7 @@ export const DEFAULT_HOST_SETTINGS: HostSettings = {
   webhookLan: false,
   saveUsage: false,
   computerPerception: "screenshots",
+  trustedRecipients: [],
   ...DEFAULT_SAVINGS,
   rev: 0,
 };
@@ -102,6 +107,19 @@ export class HostSettingsStore {
     return this.s.userTimeZoneOverride ?? this.s.userTimeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   }
 
+  /**
+   * 0.1.4 first-run (code audit 6.1 / 6.2): the Mac's own time zone, reported by the app at connect and whenever the
+   * Mac's zone changes. "Auto" follows it (the box's own zone, fixed when the host started, is only the fallback).
+   * Saved (and published) only when it changed; an unknown zone name is refused. Returns whether it changed.
+   */
+  setMacTimeZone(zone: string): boolean {
+    if (typeof zone !== "string" || !zone || zone.length > 64) throw new GatewayError("BAD_ZONE", "That isn't a time zone.");
+    try { new Intl.DateTimeFormat("en-US", { timeZone: zone }); } catch { throw new GatewayError("BAD_ZONE", "That isn't a time zone."); }
+    if (this.s.userTimeZone === zone) return false;
+    this.save({ ...structuredClone(this.s), userTimeZone: zone });
+    return true;
+  }
+
   view(): HostSettingsView {
     return {
       autoReviewEnabled: this.s.autoReviewEnabled,
@@ -121,6 +139,7 @@ export class HostSettingsStore {
       saveUsage: this.s.saveUsage,
       computerPerception: this.s.computerPerception ?? "screenshots",
       ...this.savings(),
+      trustedRecipients: this.trusted(),
       rev: this.revNow(),
       epoch: this.epoch,
     };
@@ -163,8 +182,19 @@ export class HostSettingsStore {
       if (!isLongContextMode(patch.longContext)) throw new GatewayError("BAD_SETTING", "Long-context model must be On or Only when needed.");
       next.longContext = patch.longContext;
     }
+    if (patch.trustedRecipients !== undefined) {
+      const list = normalizeTrusted(patch.trustedRecipients);
+      if (typeof list === "string") throw new GatewayError("BAD_SETTING", list);
+      next.trustedRecipients = list;
+    }
     this.save(next);
     return this.view();
+  }
+
+  /** Smarter approvals: the trusted list, re-checked on read (a hand-edited file can't smuggle in a non-address). */
+  trusted(): string[] {
+    const list = normalizeTrusted(this.s.trustedRecipients ?? []);
+    return typeof list === "string" ? [] : list;
   }
 
   /**

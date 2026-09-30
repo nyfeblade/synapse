@@ -15,6 +15,9 @@ export function originOf(source: WakeSource): OriginKind {
       return "group";
     case "teach":
       return "teach"; // I2
+    // 0.1.4: an MCP client's request is outside text (like another Bot's message), never the owner's words.
+    case "mcp":
+      return "external";
     default:
       return "revival"; // approval-resume, restart-resume, listener-connected, spend-guard, teach, Phase 2/3 background wakes
   }

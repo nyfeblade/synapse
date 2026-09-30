@@ -11,7 +11,7 @@ import { fastPathAllowed, ruleCards } from "./rules";
 import { TEXT } from "./texts";
 import type { ReviewOutcome, ReviewRequest, Verdict } from "./types";
 
-export const FLOOR_VERSION = "floor-v1";
+export const FLOOR_VERSION = "floor-v2"; // bug 439: the Ask floor from the Full-auto classifier
 
 export interface ReviewerDeps {
   settings: HostSettingsStore;
@@ -137,6 +137,13 @@ export class Reviewer {
         logIt("exact", o);
         return o;
       }
+    }
+    // Bug 432: outside wake text Auto-review can't read whole (see approval-gate wakeBlock) never gets a model allow:
+    // an instruction could sit past the part it sees. Fail closed, before any model call.
+    if (req.wake?.unread) {
+      const o: ReviewOutcome = { kind: "block", stage: "guard", reason: TEXT.wakeUnread, proposedRule: null, verdict: null };
+      logIt("guard", o);
+      return o;
     }
     // S5: cache
     // Lever 5 (cost-diet-2): a shell command's cache identity is its SHAPE: an output trim's count (`| tail -30` vs

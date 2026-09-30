@@ -74,6 +74,7 @@ export interface HostSettingsView {
   promptCacheTtl?: PromptCacheTtl;                     // saving-settings "Keep conversations ready": 1h (default) | 5m
   callReplies?: CallReplies;                           // saving-settings "Call replies": default | fast | match
   longContext?: LongContextMode;                       // saving-settings "Long-context model": on (default) | when-needed
+  trustedRecipients?: string[];                        // smarter approvals: sends to only these (and the owner) skip the card
   /** settings-persist: bumped on every saved change, so the app can tell a stale answer from a newer one. */
   rev?: number;
   /** settings-persist: this settings store's load id; changes on every host start (and so on a quarantined, reset file). */
@@ -117,6 +118,10 @@ export interface GatewayCommands {
   resolveAutoReviewApproval: { args: { id: string; approvalId: string; choice: ApprovalChoice; note?: string }; result: { status: ApprovalStatus } };
   getHostSettings: { args: NoArgs; result: HostSettingsView };
   setHostSettings: { args: Partial<Omit<HostSettingsView, "pinnedAgentIds" | "userTimeZoneOverride">>; result: HostSettingsView };
+  /** 0.1.4 first-run: the Mac's own time zone (what "Auto" follows); sent at connect and when the Mac's zone changes. */
+  setMacTimeZone: { args: { zone: string }; result: HostSettingsView };
+  /** 0.1.4: the app found the box's Local network state differs from the owner's choice: no Bot turn runs until it matches. */
+  setNetworkPause: { args: { on: boolean }; result: { on: boolean } };
   getTrays: { args: NoArgs; result: { trays: Tray[] } };
   dismissTray: { args: { trayId: string; action?: "retry" | "resume-routines" }; result: NoArgs };
   clearTrays: { args: { botId?: string }; result: NoArgs };

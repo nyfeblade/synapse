@@ -10,6 +10,7 @@ import { APP_BUNDLE_ID, extendInfo } from "./info-plist.mjs";
 import { chooseSigningIdentity, signApp } from "./sign-app.mjs";
 import { IDENTITY_NAME } from "./signing-identity.mjs";
 import { stageBox } from "./stage-box.mjs";
+import { mcpProblems, stageMcp } from "./stage-mcp.mjs";
 import { asarEntriesFrom, builderPathLeaks, helperProblems, machOFiles, unsignedMachO, verifyBundle } from "./verify-bundle.mjs";
 import { stageKokoro } from "./kokoro-runtime.mjs";
 import { releaseArtifacts } from "./release-lib.mjs";
@@ -67,11 +68,13 @@ const stagedLicence = path.join(stage, "LICENSE");
 const stagedNotice = path.join(stage, "NOTICE");
 fs.copyFileSync(path.join(repoRoot, "LICENSE"), stagedLicence);
 fs.copyFileSync(path.join(repoRoot, "NOTICE"), stagedNotice);
+// 0.1.4: Synapse's MCP helper and its launcher (Contents/Resources/mcp), outside app.asar.
+const stagedMcp = stageMcp(here, stage);
 const SHIPPED_TOP = new Set(["dist", "node_modules", "package.json"]);
 const [appDir] = await packager({
   dir: here, name: bundleName, platform: "darwin", arch: "arm64", out, overwrite: true, prune: true,
   icon: path.join(here, "build", "icon.icns"),
-  extraResource: [stagedBox, stagedHost, stagedKokoro, stagedNotices, stagedLicence, stagedNotice],
+  extraResource: [stagedBox, stagedHost, stagedKokoro, stagedNotices, stagedLicence, stagedNotice, stagedMcp],
   // A shipped *.map carries the whole TypeScript source; test-results/ and *.config.ts are build-time
   // only. verify-bundle.mjs fails the build if any of them get in anyway.
   // ALLOWLIST, not a denylist: only these top-level entries ship. The denylist needed a new entry for
@@ -114,7 +117,8 @@ fs.rmSync(stage, { recursive: true, force: true });
     hasWhisper: (h) => fs.readFileSync(h).includes("whisper_init_from_file_with_params"),
   }));
   // Bug 295: nothing Synapse builds itself carries the build machine's home folder.
-  problems.push(...builderPathLeaks([path.join(native, "bots-dictation"), path.join(native, "bots-mac"), path.join(hostDir, "dist", "host.mjs")]));
+  problems.push(...mcpProblems(app));
+  problems.push(...builderPathLeaks([path.join(native, "bots-dictation"), path.join(native, "bots-mac"), path.join(hostDir, "dist", "host.mjs"), path.join(app, "Contents", "Resources", "mcp", "synapse-mcp.cjs")]));
   if (problems.length) throw new Error(`package: the bundle is not shippable:\n  - ${problems.join("\n  - ")}`);
 }
 // Bug 99: sign with the stable local identity ("Synapse Local Signing", created once in the login

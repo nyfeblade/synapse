@@ -18,7 +18,8 @@ fi
 BIND="127.0.0.1"
 if [ -f "$HERE/route.env" ]; then BIND="$(grep -E '^HOST_BIND=' "$HERE/route.env" | cut -d= -f2)"; fi
 echo "::step 1/3 copying the Bots' software"
-host_stream | orb -m "$BOX_MACHINE" -u root sh -c '
+# Bounded like every orb call (orb.sh, bug 435): 15 min covers a cold npm install.
+host_stream | ORB_TIMEOUT=900 orb -m "$BOX_MACHINE" -u root sh -c '
   set -e
   rm -rf /opt/bothost/app.new && mkdir -p /opt/bothost/app.new
   tar -xzf - -C /opt/bothost/app.new
@@ -38,10 +39,10 @@ host_stream | orb -m "$BOX_MACHINE" -u root sh -c '
 '
 # HOST_BIND goes in its own drop-in: /etc/bothost.env holds the host's other switches, which a deploy
 # must never wipe.
-printf '[Service]\nEnvironment=HOST_BIND=%s\nEnvironment=WEBHOOK_HOST=%s.orb.local\n' "$BIND" "$BOX_MACHINE" | orb -m "$BOX_MACHINE" -u root sh -c \
+printf '[Service]\nEnvironment=HOST_BIND=%s\nEnvironment=WEBHOOK_HOST=%s.orb.local\n' "$BIND" "$BOX_MACHINE" | ORB_TIMEOUT=60 orb -m "$BOX_MACHINE" -u root sh -c \
   'install -d -m 0755 /etc/systemd/system/bothost.service.d && cat > /etc/systemd/system/bothost.service.d/10-bind.conf && systemctl daemon-reload'
 # Two accounts on one Mac: this Mac user's own ports (orb.sh). A box that was on another account's ports moves here.
 box_apply_ports
 echo "::step 3/3 starting the Bots' software"
-orb -m "$BOX_MACHINE" -u root systemctl restart bothost
+ORB_TIMEOUT=180 orb -m "$BOX_MACHINE" -u root systemctl restart bothost
 "$HERE/check-gateway.sh"

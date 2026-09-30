@@ -10,6 +10,7 @@ import { buildBotEnv } from "../brain/spawn-options";
 import { claudeExecutableFor } from "../brain/tool-policy";
 import type { BotToolDef } from "../brain/types";
 import { CodingAgents, boxGit, umaskGit } from "../coding/coding-agents";
+import { CodingCardIds } from "../coding/card-ids";
 import { codingHooks, createCodingModule } from "../coding/module";
 import { gateForCoding, sdkChildFactory } from "../coding/sdk-child";
 import { homeWorktreePrep, shellRunAsBot } from "../coding/home-worktree";
@@ -34,6 +35,7 @@ import { PluginMarketplaces } from "../marketplace/plugin-marketplaces";
 import { createPluginMarketplacesModule } from "../marketplace/plugins-module";
 import { createMcpModule, createMcpServices } from "../mcp/module";
 import { mcpReadOnly } from "../mcp/registry";
+import { createPlanTool } from "../tools/plan-tool";
 import { mergeMcpServers } from "../mcp/reserved";
 import { createGoogleModule, createGoogleServices, runGoogleToolForFake, type GoogleDraftFetchResult, type GoogleServices } from "../google/module";
 import { createComposioModule, createComposioServices, runComposioToolForFake, type ComposioServices } from "../composio/module";
@@ -87,6 +89,8 @@ export interface Phase5 {
   mcpServerHost(serverId: string): string | null;
   /** Bug 404: a registry server whose command, args or URL mention Composio. */
   mcpServerComposio(serverId: string): boolean;
+  /** Bug 275: a registry server Synapse specifically knows (curated), and the tool's own description. */
+  mcpToolInfo(serverId: string, tool: string): { known: boolean; description: string | null };
   /** Bug 402: this Bot's composio_apps server is the built-in one. */
   composioBuiltin(botId: string): boolean;
   /** feat-mac-access-parity: the connected Mac's home and project dirs (auto-run roots) for the fixed-rules engine. */
@@ -193,7 +197,7 @@ export function wirePhase5(ctx: ModuleContext, o: {
     wake: (botId, text) => { if (ctx.bots.has(botId)) ctx.enqueueHidden(botId, { source: "approval-resume", lane: "user", head: true, silenceAllowed: false, text }); } });
   // mac-browser: the per-session chat card and the week's browser usage (screenshots counted apart).
   const browserCards = new BrowserCards({ bots: ctx.bots, now: ctx.now, file: hp("browser-usage.json"), log: (l) => console.log(l) });
-  const cardIds = new Map<string, { botId: string; entryId: string }>();
+  const cardIds = new CodingCardIds(hp("coding-agent-cards.json"));
   const cHooks = codingHooks(fullCtx, cardIds, () => agents);
   flushCodingWakes = () => cHooks.flushDeferred();
   const agents: CodingAgents = new CodingAgents({ workspace: ctx.cfg.workspace, registryFile: hp("coding-agents.json"), now: ctx.now,
@@ -263,6 +267,9 @@ export function wirePhase5(ctx: ModuleContext, o: {
         const extra = m.botTools?.(botId, slot, tools) ?? [];
         tools = [...tools.filter((t) => !extra.some((x) => x.name === t.name)), ...extra];
       }
+      // Smarter approvals: ProposePlan only for a Bot with a connector (Google, Composio or an MCP server).
+      const connectors = Object.keys(mergeMcpServers(modules.map((m) => m.mcpServers?.(botId) ?? {}))).filter((k) => !["bot", "computer", "probe"].includes(k));
+      if (connectors.length && !tools.some((t) => t.name === "ProposePlan")) tools = [...tools, createPlanTool()];
       return tools.filter((t) => !base.includes(t));
     },
     // Final secfix item 4: under a reserved id (google, bot, computer, probe, claude_ai_*) only the built-in is mounted.
@@ -273,6 +280,7 @@ export function wirePhase5(ctx: ModuleContext, o: {
     mcpServerHost: (sid) => { const u = mcp.registry.get(sid)?.url; try { return u ? new URL(u).hostname : null; } catch { return null; } },
     mcpServerComposio: (sid) => { const r = mcp.registry.get(sid); return !!r && /composio/i.test([r.url ?? "", r.command ?? "", ...(r.args ?? [])].join(" ")); },
     composioBuiltin: (botId) => composio.grantedApps(botId).length > 0,
+    mcpToolInfo: (sid, t) => ({ known: mcp.registry.get(sid)?.source === "curated", description: mcp.pool.toolDescriptions(sid).get(t) || null }),
     mcpReadOnly: (() => { const ro = mcpReadOnly(mcp.registry, (sid, t) => mcp.pool.readOnlyHint(sid, t)); return (sid: string, t: string) => ro(sid, t); })(),
     macEnv: () => { const c = bridge.computer(); return c ? { home: c.home ?? c.localRoot, projectDirs: c.autoRunRoots ?? [] } : null; },
     removeBot: (botId) => {

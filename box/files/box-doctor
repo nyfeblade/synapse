@@ -1,6 +1,8 @@
 #!/bin/sh
-# CMP-16: self-check of the box; PASS/FAIL lines to stdout and /tmp/box-doctor.log.
-L=/tmp/box-doctor.log; : > "$L" 2>/dev/null || L=/dev/null
+# CMP-16: self-check of the box; PASS/FAIL lines to stdout and /tmp/box-doctor.<uid>.log.
+# 0.1.4 first-run: one log per account. The host (bothost) runs this first on a new box; box then couldn't truncate
+# bothost's /tmp/box-doctor.log, and dash EXITS on a failed redirection of `:` (even in braces), so the doctor printed nothing. A subshell contains it.
+L="/tmp/box-doctor.$(id -u).log"; ( : > "$L" ) 2>/dev/null || L=/dev/null
 r() { if sh -c "$2" >/dev/null 2>&1; then echo "PASS $1" | tee -a "$L"; else echo "FAIL $1" | tee -a "$L"; fi; }
 r machine-id  'test -s /etc/machine-id'
 r chromium    'curl -fs http://127.0.0.1:9223/json/version'

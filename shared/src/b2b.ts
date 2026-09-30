@@ -7,7 +7,7 @@ export type ResultStatus = "done" | "partial" | "declined" | "failed";
 export interface SendToAgentArgs {
   target_id: string;
   kind: B2BKind;
-  message: string;           // ≤ 8,000
+  message: string;           // ≤ 2,000 (bug 432: under what Auto-review reads of a wake)
   expects?: string;          // ≤ 300; required for request, question, handoff
   in_reply_to?: string;      // required for result
   status?: ResultStatus;     // results only; default "done"

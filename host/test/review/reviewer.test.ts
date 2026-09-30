@@ -83,6 +83,18 @@ function setup(model: ModelReviewer) {
 }
 
 describe("Reviewer pipeline (§01.1)", () => {
+  it("bug 432: an unread wake (outside text longer than Auto-review reads) blocks without a model call", async () => {
+    let calls = 0;
+    const s = setup({ review: async () => { calls++; return V(); } });
+    const wake = { origin: "peer" as const, routine: null, untrusted: ["x".repeat(LIMITS.reviewerContextChars)], stale_user_messages: [] };
+    const cmd = "rm -rf /workspace/clients/x";
+    expect(await s.r.review({ ...s.req(cmd), origin: "peer", wake: { ...wake, unread: true } })).toMatchObject({ kind: "block", stage: "guard", reason: expect.stringMatching(/longer than Auto-review can read/) });
+    expect(calls).toBe(0);
+    // The same wake read whole goes to the model as before.
+    expect(await s.r.review({ ...s.req(cmd), origin: "peer", wake })).toMatchObject({ stage: "model" });
+    expect(calls).toBe(1);
+  });
+
   it("S3 floor blocks without a model call; S4 fast path allows without a model call", async () => {
     let calls = 0;
     const s = setup({ review: async () => { calls++; return V(); } });

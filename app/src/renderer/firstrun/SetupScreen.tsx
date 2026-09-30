@@ -45,7 +45,7 @@ function Meter({ value, label }: { value: number; label: string }) {
   );
 }
 
-function ComputerBody({ box, state }: { box: BoxState; state: SetupStepState }) {
+function ComputerBody({ box, state, busy, onStart }: { box: BoxState; state: SetupStepState; busy: string | null; onStart(): void }) {
   const [open, setOpen] = useState(false);
   const [log, setLog] = useState("");
   const pre = useRef<HTMLPreElement>(null);
@@ -61,8 +61,9 @@ function ComputerBody({ box, state }: { box: BoxState; state: SetupStepState }) 
     <>
       {state !== "done" && <Meter value={box.progress} label={STR_SETUP.computer} />}
       {box.error && <Announce><p role="alert" className="error">{box.error}</p></Announce>}
+      {busy && box.phase !== "running" && <Announce><p role="status" className="muted">{busy}</p></Announce>}
       <div className="setup-row-actions">
-        {(box.phase === "failed" || box.phase === "cancelled") && <button type="button" className="btn-primary" onClick={() => void nativeCall("setup.box.start")}>{STR_SETUP.retry}</button>}
+        {(box.phase === "failed" || box.phase === "cancelled" || (busy && box.phase === "idle")) && <button type="button" className="btn-primary" onClick={onStart}>{STR_SETUP.retry}</button>}
         {box.phase === "running" && <button type="button" className="btn-outline small" onClick={() => void nativeCall("setup.box.cancel")}>{STR_SETUP.stop}</button>}
         {box.phase !== "idle" && <button type="button" className="btn-outline small" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? STR_SETUP.hideLog : STR_SETUP.log}</button>}
       </div>
@@ -181,13 +182,29 @@ export function SetupScreen({ onClose }: { onClose?(): void }) {
     return () => { live = false; clearInterval(t); };
   }, [connected]);
 
+  /** Why the last Start didn't start: another operation holds the Bots' computer, or the call itself failed. */
+  const [busy, setBusy] = useState<string | null>(null);
+  const startBox = useCallback(() => {
+    void nativeCall<{ started: boolean; busy?: string }>("setup.box.start")
+      .then((r) => setBusy(!r?.started && r?.busy ? r.busy : null))
+      .catch((e: unknown) => setBusy(e instanceof Error && e.message ? e.message : String(e)))
+      .finally(refresh);
+  }, [refresh]);
   const view = status?.orb && status.box ? setupView({ orb: status.orb, box: status.box, connected, signedIn }) : null;
   useEffect(() => {
     if (view?.startBox && !started.current) {
       started.current = true;
-      void nativeCall("setup.box.start").then(refresh);
+      startBox();
     }
-  }, [view?.startBox, refresh]);
+  }, [view?.startBox, startBox]);
+  // Refused because another operation holds the Bots' computer (a relaunch mid-setup starts the box update first):
+  // the reason shows under the step, and Start is asked again every few seconds, so setup starts on its own the moment that operation lets go.
+  const waiting = !!status && status.box.phase !== "running" && status.box.phase !== "ready";
+  useEffect(() => {
+    if (!busy || !waiting) return;
+    const t = setTimeout(startBox, 5000);
+    return () => clearTimeout(t);
+  }, [busy, waiting, startBox]);
 
   if (!status || !view) return <main className="onb setup" aria-busy="true"><h1>{STR_SETUP.title}</h1></main>;
   const gb = status.mac.freeBytes !== null ? Math.floor(status.mac.freeBytes / 1e9) : null;
@@ -202,7 +219,7 @@ export function SetupScreen({ onClose }: { onClose?(): void }) {
             : view.orbAction === "start" ? <button type="button" className="btn-primary" onClick={() => void nativeCall("setup.orb.start").then(refresh)}>{STR_SETUP.startOrbStack}</button> : null
         } />
         <Step title={STR_SETUP.computer} state={view.steps.computer}>
-          <ComputerBody box={status.box} state={view.steps.computer} />
+          <ComputerBody box={status.box} state={view.steps.computer} busy={busy} onStart={startBox} />
         </Step>
         <Step title={STR_SETUP.claude} state={view.steps.claude}>
           {view.steps.claude === "needs-you" && (

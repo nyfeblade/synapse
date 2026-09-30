@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Exec } from "../box-provider";
+import { ORB_LIMITS, orbCall } from "../orb-exec";
 import { isExecutableFile, orbAppCandidates, orbCandidates } from "../orb-path";
 import type { OrbReport } from "./state";
 
@@ -33,11 +34,11 @@ export async function detectOrb(o: { exec: Exec; home: string; exists?: (p: stri
   const cliPath = orbCandidates(o.home).find((p) => isExec(p)) ?? null;
   if (!cliPath) return { app, cli: false, cliPath: null, version: null, status: app ? "stopped" : "unknown" };
   // `orb status`: Running = 0, Starting = 2, Stopped = 1 (its own help text).
-  const r = await o.exec(cliPath, ["status"], { timeoutMs: 10_000 });
+  const r = await orbCall(o.exec, cliPath, ["status"], { timeoutMs: ORB_LIMITS.query, idempotent: true });
   const status: OrbReport["status"] = r.code === 0 ? "running" : r.code === 2 || /starting/i.test(r.stdout) ? "starting" : "stopped";
   let version: string | null = null;
   if (status === "running") {
-    const v = await o.exec(cliPath, ["version"], { timeoutMs: 10_000 });
+    const v = await orbCall(o.exec, cliPath, ["version"], { timeoutMs: ORB_LIMITS.query, idempotent: true });
     version = /Version:\s*([\d.]+)/.exec(v.stdout)?.[1] ?? null;
   }
   return { app, cli: true, cliPath, version, status };
@@ -55,9 +56,10 @@ export async function startOrbStack(exec: Exec, o: { home: string; exists?: (p: 
 
 export interface MachineInfo { name: string; state: string; isolated: boolean }
 
-/** `orb list -f json`; [] when OrbStack can't answer. */
+/** `orb list -f json`; [] when OrbStack can't answer. Bug 435: a call that ran out of time throws (it must never read as "no machine", which would create one). */
 export async function listMachines(exec: Exec, orb: string): Promise<MachineInfo[]> {
-  const r = await exec(orb, ["list", "-f", "json"], { timeoutMs: 30_000 });
+  const r = await orbCall(exec, orb, ["list", "-f", "json"], { timeoutMs: ORB_LIMITS.query, idempotent: true });
+  if (r.timedOut) throw new Error(r.stderr);
   if (r.code !== 0) return [];
   try {
     const rows = JSON.parse(r.stdout) as Array<{ name?: unknown; state?: unknown; config?: { isolated?: unknown } }>;
@@ -83,7 +85,9 @@ export async function machineMarks(exec: Exec, orb: string, name: string, gatewa
       ? "test -s /home/box/.host/gateway.json && echo yes"
       : `grep -Eq '"port"[[:space:]]*:[[:space:]]*${port}[^0-9]' /home/box/.host/gateway.json 2>/dev/null && echo yes`,
   ].join("; ");
-  const r = await exec(orb, ["-m", name, "-u", "root", "sh", "-c", script], { timeoutMs: 60_000 });
+  const r = await orbCall(exec, orb, ["-m", name, "-u", "root", "sh", "-c", script], { timeoutMs: ORB_LIMITS.inBox, idempotent: true });
+  // Bug 435: out of time is not "not ours": a hung orb must never read as someone else's machine.
+  if (r.timedOut) throw new Error(r.stderr);
   const parts = r.stdout.split("|");
   const [image, provisioned, created, hostBuild, gateway] = parts.map((s) => s.trim());
   const v = (s: string | undefined) => (s && /^[0-9a-f]{16}$/.test(s) ? s : null);

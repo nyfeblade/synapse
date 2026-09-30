@@ -110,7 +110,9 @@ describe("secfix 403 (pre-existing): an older custom Composio server, and write-
       await perm;
     }
     expect((await s.gate.preToolUse(s.me, { toolName: "mcp__notes__list_notes", input: {}, toolUseId: "r1" })).decision).toBe("allow");
-    expect((await s.gate.preToolUse(s.me, { toolName: "mcp__notes__notebook_summary", input: {}, toolUseId: "r2" })).decision).toBe("allow");
+    // Bug 439: a tool Synapse can't judge (no read name, no description, a server it doesn't know) cards in Full auto,
+    // so it cards here too: Ask is never weaker than Full auto.
+    expect((await s.gate.preToolUse(s.me, { toolName: "mcp__notes__notebook_summary", input: {}, toolUseId: "r2" })).decision).toBe("ask");
   });
 });
 

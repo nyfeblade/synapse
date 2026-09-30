@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { STR, STRS, timeSeparator, type AgentMessageEntry, type EventEntry, type TranscriptEntry } from "@synapse/shared";
+import { STR, STR_MCP, STRS, timeSeparator, type AgentMessageEntry, type EventEntry, type TranscriptEntry } from "@synapse/shared";
 import { useUi } from "../store";
 import { ExchangeMessageList, ExchangeToggle } from "./ExchangeShared";
 import { MiniAvatars } from "./MiniAvatars";
@@ -55,6 +55,7 @@ export function EventRow({ entry, entries }: { entry: EventEntry; entries: Trans
         return <div className="event-row"><span>{label}</span></div>;
       }
       if (ev.source === "revival") return <div className="event-row"><span>{STR.revivalOrigin(ev.taskTitle ?? "")}</span></div>;
+      if (ev.source === "mcp") return <div className="event-row"><span>{STR_MCP.fromApp(ev.client ?? "")}</span></div>;
       return <div className="event-row"><span>{STR.followupOrigin}</span></div>;
     }
     case "member-pass":

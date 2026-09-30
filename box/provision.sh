@@ -79,6 +79,11 @@ chmod 1755 /home/box
 install -d -o box -g bots -m 2775 /workspace
 install -d -o box -g bots -m 2775 /home/box/.claude
 install -d -o box -g bots -m 2775 /home/box/.claude/skills   # SKL-01 library: host writes 0664, the CLI reads and edits
+# 0.1.4 first-run: an older verify-box made ~/.claude/projects{,/-workspace} as root on a new box (install -d gives -o to
+# the last level only), and then the CLI, running as box, couldn't save a session. Give them back (never through a link).
+for d in /home/box/.claude/projects /home/box/.claude/projects/-workspace; do
+  if [ -d "$d" ] && [ ! -L "$d" ] && [ "$(stat -c %U "$d")" = root ]; then chown box:bots "$d"; chmod 2775 "$d"; fi
+done
 # Live-box finding (final box verification): on a box provisioned by an older build the managed teach skill directory
 # /home/box/.claude/skills/learn-from-demonstration was created by the host process itself and is bothost-owned, but
 # since final secfix round 3 (ruling 1) the publishing helper runs as box and its mktemp there fails, so the skill can
@@ -204,7 +209,14 @@ for u in bot-display@.service bot-chrome@.service bot-vnc@.service bots-hidepid.
 /usr/local/bin/bot-wallpaper generate
 install -d -o box -g bots -m 2775 /workspace/.bot /workspace/.bot/terminals /workspace/.bot/screens /workspace/.bot/tools
 # Dock: browser, files, terminal — so Take over has a place to type (CMP desktop).
-install -d -o box -g box -m 0755 /home/box/.config/plank/dock1/launchers
+# 0.1.4 first-run: every level is box's own. `install -d` gives -o only to the LAST directory, so on a new box
+# ~/.config and ~/.config/plank{,/dock1} were root's: Chromium couldn't make ~/.config/chromium, its crash handler got
+# no database and it died with SIGTRAP in a restart loop (the Bots' browser never came up), and plank couldn't save.
+# Made one level at a time (never through a link), so a box provisioned before this is repaired too.
+for d in /home/box/.config /home/box/.config/plank /home/box/.config/plank/dock1 /home/box/.config/plank/dock1/launchers; do
+  if [ -L "$d" ]; then echo "provision: $d is a link; refusing" >&2; exit 1; fi
+  install -d -o box -g box -m 0755 "$d"
+done
 install -d -m 0755 /usr/local/share/bots/plank
 for item in chromium thunar xfce4-terminal; do
   install -m 0644 -o root -g root "$HERE/files/plank-$item.dockitem" "/usr/local/share/bots/plank/${item}.dockitem"

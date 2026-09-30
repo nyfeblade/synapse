@@ -14,7 +14,7 @@ import { isPass, mentionedMembers } from "./addressing";
 import { lastUserPost, pickCallResponder } from "./call-routing";
 import type { FloorManager } from "./floor";
 import type { GroupService } from "./group-service";
-import { renderMemberTurn, type RoomMessage } from "./member-prompt";
+import { renderMemberTurn, roomReviewOf, type RoomMessage, type RoomReview } from "./member-prompt";
 import { runRoomTurn, type MemberTurnResult, type RoomTurnOutcome } from "./room-turn";
 
 interface RoomState {
@@ -216,6 +216,7 @@ export class GroupOrchestrator {
       let settled = false;
       let idleChecks = 0;
       const id = `grp:${room.groupId}:${room.roomTurnId}:${key}`;
+      let review: RoomReview | null = null;
       const finish = (r: TurnResult | null) => {
         if (settled) return;
         settled = true;
@@ -231,19 +232,21 @@ export class GroupOrchestrator {
         silenceAllowed: true,
         hidden: true,
         context: { group: { groupId: room.groupId, roomTurnId: room.roomTurnId, epoch: room.epoch }, chainId: room.chainId },
-        prompt: () => [
-          ...renderMemberTurn({
-            groupName: this.roomName(room.groupId),
-            joinContext: this.d.calls?.takeContext(room.groupId, memberId),
-            members: this.memberRefs(room.groupId),
-            me: { id: memberId, name: this.d.bots.summary(memberId).profile.name },
-            history: this.historyForTurn(room, memberId),
-            redriveNote: attempt > 0 ? REDRIVE(attempt + 1) : undefined,
-            voiceCall: room.voiceCall,
-          }),
-          ...this.takeAttachments(room, memberId),
-        ],
-        onStart: () => { started = true; },
+        prompt: () => {
+          const joinContext = this.d.calls?.takeContext(room.groupId, memberId);
+          const history = this.historyForTurn(room, memberId);
+          const me = { id: memberId, name: this.d.bots.summary(memberId).profile.name };
+          // Bug 434 follow-up: the reviewer's trust comes from these structured authors, never from display names.
+          review = roomReviewOf({ me, history, joinContext });
+          return [
+            ...renderMemberTurn({
+              groupName: this.roomName(room.groupId), joinContext, members: this.memberRefs(room.groupId), me, history,
+              redriveNote: attempt > 0 ? REDRIVE(attempt + 1) : undefined, voiceCall: room.voiceCall,
+            }),
+            ...this.takeAttachments(room, memberId),
+          ];
+        },
+        onStart: (slot) => { started = true; if (review) slot.roomReview = review; },
         onSettle: (_slot, result) => {
           if (result) {
             // I6: every member turn is charged to the room's chain budget and summed for routine spend accounting.

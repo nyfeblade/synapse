@@ -1,3 +1,4 @@
+import { LIMITS } from "@synapse/shared";
 import { fillTemplate, loadPrompt } from "../prompts/index";
 import type { Delivery } from "./mailbox";
 
@@ -14,7 +15,7 @@ export function messageBlock(m: Delivery): string {
   attrs.push(`from="${esc(m.fromName)} (id ${m.from.slice(0, 4)}…)"`);
   if (m.kind === "result" && m.status) attrs.push(`status="${m.status}"`);
   if (m.expects) attrs.push(`expects="${esc(m.expects)}"`);
-  if (m.taskId) attrs.push(`task="${m.taskId}"`);
+  if (m.taskId) attrs.push(`task="${esc(m.taskId)}"`);
   if (m.artifacts?.length) attrs.push(`artifacts="${esc(m.artifacts.join(" "))}"`);
   if (m.images?.length) attrs.push(`images="${esc(m.images.map((i) => i.url).join(" "))}"`);
   if (m.priority) attrs.push(`priority="true"`);
@@ -33,3 +34,18 @@ export function renderAgentWake(p: { messages: Delivery[]; digests: string[]; na
     MESSAGES: p.messages.map(messageBlock).join("\n"),
   }).trim();
 }
+
+/**
+ * Bug 432: the longest this batch's wake can be, whatever the thread digests hold by the time it runs (each sender's
+ * digest at its cap) and with the priority and question lines in. Auto-review reads LIMITS.reviewerContextChars of a
+ * wake's text, so a message is refused at send (b2b/gate.ts) and a batch stops growing (mailbox batchOf) before
+ * this passes that cap: the reviewer always sees the whole wake, never its first part only.
+ */
+export function agentWakeMaxChars(messages: Delivery[]): number {
+  const senders = new Set(messages.map((m) => m.from)).size;
+  const text = renderAgentWake({ messages: messages.map((m) => ({ ...m, priority: true })), digests: Array.from({ length: senders }, () => "x".repeat(LIMITS.digestMaxChars)), nameOf: (id) => id });
+  return text.length + (messages.some((m) => m.kind === "question") ? 0 : QUESTION_LINE.length + 1);
+}
+
+/** Bug 432: whether this batch's wake always fits what Auto-review reads. */
+export const agentWakeFits = (messages: Delivery[]): boolean => agentWakeMaxChars(messages) <= LIMITS.reviewerContextChars;

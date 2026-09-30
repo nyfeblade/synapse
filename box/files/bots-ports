@@ -7,7 +7,7 @@
 # run, so a load that failed once is fixed by the next run. R/SYSTEMCTL/NFT/GETENT exist for tests only.
 # Bug 362: the same three callers also load the Mac guard (guard below), so the Bots can't reach the Mac's private services.
 set -euo pipefail
-R="${R:-}"; SYSTEMCTL="${SYSTEMCTL:-systemctl}"; NFT="${NFT:-/usr/sbin/nft}"; GETENT="${GETENT:-getent}"; VISUDO="${VISUDO:-/usr/sbin/visudo}"
+R="${R:-}"; SYSTEMCTL="${SYSTEMCTL:-systemctl}"; NFT="${NFT:-/usr/sbin/nft}"; GETENT="${GETENT:-getent}"; VISUDO="${VISUDO:-/usr/sbin/visudo}"; IP="${IP:-ip}"
 DROPIN="$R/etc/systemd/system/bothost.service.d/20-ports.conf"
 RULE="$R/etc/bots/auth-proxy.nft"
 TEMPLATE="$R/etc/bots/auth-proxy.nft.in"
@@ -46,6 +46,19 @@ ORB6="fd07:b51a:cc66:f0::/64"
 # Everything stays blocked by default. These are the defaults written into the config when it lacks them.
 LAN4_DEFAULT="0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4"
 LAN6_DEFAULT="64:ff9b::/96 64:ff9b:1::/48 fc00::/7 fe80::/10 ff00::/8"
+# 0.1.4 "Local network" (Settings, owner only): LAN_BLOCK=off opens these private ranges (RFC 1918, ULA) to box and the
+# Bots. The rest of the LAN list stays blocked either way: link-local and multicast (the box's link is OrbStack's, whose
+# neighbour is the Mac), OrbStack's machines (198.18.0.0/15: other machines and boxes on this Mac), CGNAT/Tailscale,
+# NAT64 and reserved space. The Mac's own addresses (mac4/mac6/orb4/orb6/macnet4/macnet6, which include every address of
+# the Mac's from mac-nets.ts) are denied before any of this, to every account but root and bothost, in both states.
+OPEN4="10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16"
+OPEN6="fc00::/7"
+# OrbStack's machine network (the box's own link: other machines on this Mac, this Mac's other boxes, OrbStack's router)
+# sits inside those ranges (192.168.139.0/24 and fd07:b51a:cc66::/64 today), so it is denied to box and the Bots ahead
+# of them in both states: OrbStack's whole ULA /48, plus the networks on the box's default-route interfaces, found on
+# every run and kept in net-guard.conf (BOX_NETS: merged, never replaced, so a boot before the network is up still
+# has them). The host's guarded fetch reads the same line.
+BOXNET6_FIXED="fd07:b51a:cc66::/48"
 GUARD="$R/etc/bots/mac-guard.nft"
 MACHOSTS="$R/etc/bots/mac-hosts"
 # Bug 365: the box's one network-guard config. MAC_NETS: the Mac's own global IPv6 prefixes and any LAN IPv4 outside
@@ -140,6 +153,20 @@ guard() {
   lan6="$(for c in $(conf_get LAN6); do if is_cidr "$c" && is_ipv6 "${c%/*}"; then echo "$c"; fi; done | paste -sd, - | sed 's/,/, /g')"
   [ -n "$lan4" ] || lan4="$(echo "$LAN4_DEFAULT" | sed 's/ /, /g')"
   [ -n "$lan6" ] || lan6="$(echo "$LAN6_DEFAULT" | sed 's/ /, /g')"
+  # The networks on the default-route interfaces (IPv4 and IPv6, global scope), normalized, merged into BOX_NETS.
+  local devs d found_nets="" boxnets boxnet4 boxnet6
+  devs="$( { $IP -o -4 route show default 2>/dev/null; $IP -o -6 route show default 2>/dev/null; } | awk '{for(i=1;i<NF;i++) if($i=="dev") print $(i+1)}' | sort -u || true)"
+  for d in $devs; do
+    for c in $($IP -o addr show dev "$d" scope global 2>/dev/null | awk '$3=="inet"||$3=="inet6"{print $4}'); do
+      if is_cidr "$c"; then found_nets="$found_nets $(norm_cidr "$c")"; fi
+    done
+  done
+  boxnets="$(printf '%s\n' $BOXNET6_FIXED $(conf_get BOX_NETS) $found_nets | while read -r c; do if [ -n "$c" ] && is_cidr "$c"; then echo "$c"; fi; done | sort -u | paste -sd' ' -)"
+  [ "$boxnets" = "$(conf_get BOX_NETS)" ] || conf_set BOX_NETS "$boxnets"
+  # shellcheck disable=SC2086
+  boxnet4="$(for c in $boxnets; do if is_ipv4 "${c%/*}"; then echo "$c"; fi; done | paste -sd, - | sed 's/,/, /g')"
+  # shellcheck disable=SC2086
+  boxnet6="$(for c in $boxnets; do if is_ipv6 "${c%/*}"; then echo "$c"; fi; done | paste -sd, - | sed 's/,/, /g')"
   local nets macnet4 macnet6; nets="$(conf_get MAC_NETS)"
   # shellcheck disable=SC2046
   macnet4="$(printf '%s\n' $(for c in $nets; do if is_cidr "$c" && is_ipv4 "${c%/*}"; then echo "$c"; fi; done) | sort -u | paste -sd, - | sed 's/,/, /g')"
@@ -158,13 +185,20 @@ guard() {
     set_line dns6 ipv6_addr "$dns6"
     echo "  set orb4 { type ipv4_addr; flags interval; elements = { $ORB4 } }"
     echo "  set orb6 { type ipv6_addr; flags interval; elements = { $ORB6 } }"
-    set_line macnet4 "ipv4_addr; flags interval" "$macnet4"
-    set_line macnet6 "ipv6_addr; flags interval" "$macnet6"
+    # auto-merge: the Mac's own addresses (/32, /128) may sit inside one of its networks.
+    set_line macnet4 "ipv4_addr; flags interval; auto-merge" "$macnet4"
+    set_line macnet6 "ipv6_addr; flags interval; auto-merge" "$macnet6"
     echo "  set lan4 { type ipv4_addr; flags interval; elements = { $lan4 } }"
     echo "  set lan6 { type ipv6_addr; flags interval; elements = { $lan6 } }"
+    set_line boxnet4 "ipv4_addr; flags interval; auto-merge" "$boxnet4"
+    set_line boxnet6 "ipv6_addr; flags interval; auto-merge" "$boxnet6"
+    echo "  set open4 { type ipv4_addr; flags interval; elements = { $OPEN4 } }"
+    echo "  set open6 { type ipv6_addr; flags interval; elements = { $OPEN6 } }"
     echo "  chain output {"
     echo "    type filter hook output priority 0; policy accept;"
-    echo "    ct state established,related accept"
+    # Replies only: a connection a Bot opened is checked on every packet, so turning Local network off (or a guard
+    # loaded after it) cuts it at once instead of letting it run on.
+    echo "    ct state established,related ct direction reply accept"
     echo '    meta skuid { "root", "bothost" } accept'
     echo "    fib daddr type local accept"
     echo "    ip daddr @dns4 meta l4proto { tcp, udp } th dport 53 accept"
@@ -179,12 +213,15 @@ guard() {
     echo "    meta skuid 60200-61099 goto bots"
     echo "  }"
     echo "  chain bots {"
+    echo "    ip daddr @boxnet4 goto deny"
+    echo "    ip6 daddr @boxnet6 goto deny"
     if [ "$lanblock" = off ]; then
-      echo "    # LAN_BLOCK=off in /etc/bots/net-guard.conf: the owner let the Bots reach the local network."
-    else
-      echo "    ip daddr @lan4 goto deny"
-      echo "    ip6 daddr @lan6 goto deny"
+      echo "    # LAN_BLOCK=off in /etc/bots/net-guard.conf: the owner let the Bots reach the local network (Settings)."
+      echo "    ip daddr @open4 accept"
+      echo "    ip6 daddr @open6 accept"
     fi
+    echo "    ip daddr @lan4 goto deny"
+    echo "    ip6 daddr @lan6 goto deny"
     echo "  }"
     echo "  chain deny {"
     echo "    meta l4proto tcp counter reject with tcp reset"
@@ -194,6 +231,22 @@ guard() {
   } > "$GUARD.new"
   mv "$GUARD.new" "$GUARD"
   sh -c "$NFT -f '$GUARD'"
+}
+# The loaded guard (`nft list table inet bots_mac_guard`) enforces the configured state: the Mac's addresses are denied
+# in every state, and unless net-guard.conf says LAN_BLOCK=off the LAN is denied with nothing opened ahead of it.
+guard_ok() {
+  local t="$1" r
+  for r in "ip daddr @mac4 goto deny" "ip6 daddr @mac6 goto deny" "ip daddr @orb4 goto deny" "ip6 daddr @orb6 goto deny" \
+    "ip daddr @macnet4 goto deny" "ip6 daddr @macnet6 goto deny" "ip daddr @boxnet4 goto deny" "ip6 daddr @boxnet6 goto deny" \
+    "ip daddr @lan4 goto deny" "ip6 daddr @lan6 goto deny"; do
+    printf '%s\n' "$t" | grep -qF "$r" || return 1
+  done
+  if [ "$(conf_get LAN_BLOCK)" != off ]; then ! printf '%s\n' "$t" | grep -qE "@open[46] accept"; fi
+}
+# on when the loaded guard lets box and the Bots reach the local network, else off (also when nothing is loaded).
+lan_state() {
+  local t; t="$(sh -c "$NFT list chain inet bots_mac_guard bots" 2>/dev/null || true)"
+  if printf '%s\n' "$t" | grep -qF "ip daddr @open4 accept"; then echo on; else echo off; fi
 }
 # Bug 364: the host (bothost) asks `bots-ports check` through sudo whether the firewall is loaded, at start and every
 # minute, and refuses Bot turns without it. Only that exact command; installed on every run so a deploy brings it.
@@ -213,8 +266,32 @@ case "${1:-}" in
     guard
     ;;
   check)
-    # Both tables must be there: the auth proxy's rule and the Mac guard.
-    sh -c "$NFT list table inet bots_auth_proxy" >/dev/null 2>&1 && sh -c "$NFT list table inet bots_mac_guard" >/dev/null 2>&1
+    # Both tables must be there: the auth proxy's rule and the Mac guard, and the guard must enforce what
+    # net-guard.conf says (the Mac denied in every state; the LAN too unless LAN_BLOCK=off).
+    sh -c "$NFT list table inet bots_auth_proxy" >/dev/null 2>&1 || exit 1
+    loaded="$(sh -c "$NFT list table inet bots_mac_guard" 2>/dev/null)" || exit 1
+    guard_ok "$loaded"
+    ;;
+  local-network)
+    # 0.1.4: Settings -> Local network. Only the app runs this, as root through OrbStack (never bothost: no sudoers
+    # line), so no Bot, tool or approval can flip it. `status` prints what the LOADED guard does: on or off.
+    case "${2:-status}" in
+      status) lan_state ;;
+      # The app's tamper check (every watcher tick): what is loaded, then what net-guard.conf says, e.g. "off off".
+      state) if [ "$(conf_get LAN_BLOCK)" = off ]; then c=on; else c=off; fi; echo "$(lan_state) $c" ;;
+      on|off)
+        if [ "$2" = on ]; then conf_set LAN_BLOCK off; else conf_set LAN_BLOCK on; fi
+        if ! (guard) >/dev/null; then
+          # Fail closed: the config goes back to blocking and that is loaded; the answer is what is loaded now.
+          conf_set LAN_BLOCK on
+          (guard) >/dev/null 2>&1 || true
+          lan_state; exit 1
+        fi
+        [ "$(lan_state)" = "$2" ] || { lan_state; exit 1; }
+        lan_state
+        ;;
+      *) echo "usage: bots-ports local-network [status|state|on|off]" >&2; exit 2 ;;
+    esac
     ;;
   apply)
     gw="${2:-}"; wh="${3:-}"; px="${4:-}"
@@ -242,5 +319,5 @@ case "${1:-}" in
     guard
     sudoers
     ;;
-  *) echo "usage: bots-ports apply GATEWAY WEBHOOK AUTH_PROXY | bots-ports load | bots-ports mac-nets LIST | bots-ports check" >&2; exit 2 ;;
+  *) echo "usage: bots-ports apply GATEWAY WEBHOOK AUTH_PROXY | bots-ports load | bots-ports mac-nets LIST | bots-ports check | bots-ports local-network [status|state|on|off]" >&2; exit 2 ;;
 esac

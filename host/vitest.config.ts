@@ -6,7 +6,7 @@ export default defineConfig({
     include: ["test/**/*.test.ts"],
     testTimeout: 20_000,
     // One temp root per test file, removed when the file ends (test/setup-tmpdir.ts).
-    setupFiles: ["test/setup-tmpdir.ts"],
+    setupFiles: ["../scripts/vitest-test-home.ts", "test/setup-tmpdir.ts"],
     // The temp-dir and disk guard (bug-log 128); a no-op when the root config already runs it.
     globalSetup: ["../scripts/vitest-disk-guard.ts"],
     // The suite writes through the real atomic writers but does not wait on the device. fsync is a

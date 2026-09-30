@@ -7,6 +7,7 @@ import type { SseHub } from "../gateway/sse-hub";
 import type { Redactor } from "../history/archive";
 import { fillTemplate, loadPrompt } from "../prompts";
 import type { TurnContext } from "../runner/turn-context";
+import type { RoomReview } from "../groups/member-prompt";
 import { newSlot, type TurnSlot } from "../runner/turn-slot";
 import type { Supervisor } from "../supervisor/supervisor";
 import type { PendingWakes } from "./pending-wakes";
@@ -16,7 +17,7 @@ import type { Revivals } from "./revivals";
 export interface ChildSpec { id: string; parentBotId: string; type: SubagentType; title: string; model: string; systemAppend: string; rehearsal?: boolean;
   /** "Computer perception: Live (beta)" for a computerUse child: Look/Act/Screenshot instead of the Computer tool. */
   perception?: "live";
-  origin?: { source: WakeSource; wakeText: string; context: Pick<TurnContext, "wake" | "routineRun"> } }
+  origin?: { source: WakeSource; wakeText: string; context: Pick<TurnContext, "wake" | "routineRun">; roomReview?: RoomReview } }
 export interface ChildHooks { slot(): TurnSlot; setSessionId(id: string): void; getSessionId(): string | null; onAction(line: string): void }
 export interface SubagentDeps {
   /** Bug 195 S2: a child is starting for this Bot (a pending GitHub sign-in is cancelled). */
@@ -97,7 +98,7 @@ export class SubagentService {
     const title = String(a.description ?? "").replace(/\s+/g, " ").trim().slice(0, LIMITSC.taskTitleMax) || "Task";
     const model = COMPUTER_TYPES.has(type) ? "claude-sonnet-5" : this.d.bots.summary(botId).profile.model ?? DEFAULT_BOT_MODEL;
     const p = this.d.parentSlot?.(botId) ?? null;
-    const origin = p ? { source: p.reviewSource ?? p.source, wakeText: p.wakeText, context: { wake: p.context.wake, routineRun: p.context.routineRun } } : undefined;
+    const origin = p ? { source: p.reviewSource ?? p.source, wakeText: p.wakeText, context: { wake: p.context.wake, routineRun: p.context.routineRun }, ...(p.roomReview ? { roomReview: p.roomReview } : {}) } : undefined;
     const perception = type === "computerUse" && this.d.perception?.(botId) === "live" ? ("live" as const) : undefined;
     const spec: ChildSpec = { id, parentBotId: botId, type, title, model, systemAppend: childSystemAppend(type, perception), ...(perception ? { perception } : {}), ...(a.rehearsal === true ? { rehearsal: true } : {}), ...(origin ? { origin } : {}) };
     const slot = this.freshSlot(spec);
@@ -124,7 +125,7 @@ export class SubagentService {
       hidden: true, silenceAllowed: true, userSeqMax: 0, ackToken: null, userMessageEpoch: this.d.bots.userMessageEpoch(spec.parentBotId), startedAt: this.now(),
       ...(spec.origin ? { context: spec.origin.context } : {}),
     });
-    if (spec.origin) { slot.reviewSource = spec.origin.source; slot.wakeText = spec.origin.wakeText; }
+    if (spec.origin) { slot.reviewSource = spec.origin.source; slot.wakeText = spec.origin.wakeText; if (spec.origin.roomReview) slot.roomReview = spec.origin.roomReview; }
     return slot;
   }
 

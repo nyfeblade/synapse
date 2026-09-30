@@ -8,7 +8,7 @@ import { createHandler } from "../../api/feedback/index.js";
 // @ts-expect-error plain ESM serverless function, no types
 import { createThreadHandler } from "../../api/feedback/thread.js";
 // @ts-expect-error plain ESM, no types
-import { UNTRUSTED_HEADER, CAPS, footerMatches, threadFooter } from "../../api/_lib/feedback-core.js";
+import { UNTRUSTED_HEADER, CAPS, footerMatches, threadFooter, threadHash, parseDeleted } from "../../api/_lib/feedback-core.js";
 
 const OWNER = "repo-owner-login";
 const ENV = { FEEDBACK_REPO: `${OWNER}/private-repo`, FEEDBACK_GITHUB_TOKEN: "test-token" };
@@ -22,16 +22,23 @@ function fakeGitHub() {
   const issues: { number: number; body: string; title: string; state: string; created_at: string; labels: { name: string }[] }[] = [];
   const comments: Record<number, { user: { login: string; avatar_url: string; html_url: string }; body: string; created_at: string }[]> = {};
   const calls: { method: string; url: string; body: any; headers: any }[] = [];
+  /** The deleted-threads list the admin app keeps (null: no branch yet), deleted issue numbers (410), and a failure switch. */
+  const state = { deletedLines: null as string[] | null, gone: new Set<number>(), deletedListStatus: 200 };
   const fetch = vi.fn(async (url: string, init: RequestInit) => {
     const body = init.body ? JSON.parse(String(init.body)) : null;
     calls.push({ method: String(init.method), url, body, headers: init.headers });
     const path = url.replace("https://api.github.com", "");
     if (path.startsWith("/search/")) throw new Error("search must not be used");
+    if (/\/contents\/deleted-threads\.txt\?ref=feedback-deleted$/.test(path)) {
+      if (state.deletedListStatus !== 200) return new Response("{}", { status: state.deletedListStatus });
+      return state.deletedLines ? new Response(JSON.stringify({ content: Buffer.from(state.deletedLines.join("\n") + "\n").toString("base64"), encoding: "base64" })) : new Response("{}", { status: 404 });
+    }
     if (/\/issues\/comments\?/.test(path)) return new Response(JSON.stringify(Object.values(comments).flat().filter((c) => c.created_at >= new Date().toISOString().slice(0, 10))));
     if (/\/issues\?/.test(path)) return new Response(JSON.stringify(issues));
     let m = path.match(/^\/repos\/[^/]+\/[^/]+\/issues$/);
     if (m && init.method === "POST") { const n = issues.length + 1; issues.push({ number: n, ...body, labels: body.labels.map((name: string) => ({ name })), state: "open", created_at: "2026-09-29T10:15:42Z" }); return new Response(JSON.stringify({ number: n }), { status: 201 }); }
     m = path.match(/^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)$/);
+    if (m && state.gone.has(Number(m[1]))) return new Response(JSON.stringify({ message: "This issue was deleted" }), { status: 410 });
     if (m) { const i = issues.find((x) => x.number === Number(m![1])); return i ? new Response(JSON.stringify(i)) : new Response("{}", { status: 404 }); }
     m = path.match(/^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/comments/);
     if (m && init.method === "POST") { (comments[Number(m[1])] ??= []).push({ user: { login: OWNER, avatar_url: "https://avatars.test/u/1", html_url: `https://github.com/${OWNER}` }, body: body.body, created_at: "2026-09-29T11:00:00Z" }); return new Response("{}", { status: 201 }); }
@@ -40,7 +47,7 @@ function fakeGitHub() {
     return new Response("{}", { status: 404 });
   });
   const comment = (n: number, login: string, body: string) => (comments[n] ??= []).push({ user: { login, avatar_url: "https://avatars.test/u/9", html_url: `https://github.com/${login}` }, body, created_at: "2026-09-29T12:34:56Z" });
-  return { fetch, issues, comments, calls, comment };
+  return { fetch, issues, comments, calls, comment, state };
 }
 
 async function send(g: ReturnType<typeof fakeGitHub>, message = "The sidebar froze after a call") {
@@ -245,5 +252,98 @@ describe("long follow-ups are refused before any cleaning", () => {
     expect(r.statusCode).toBe(400);
     expect(performance.now() - t0).toBeLessThan(200);
     expect(g.comments[1] ?? []).toHaveLength(0);
+  });
+});
+
+describe("deleted conversations", () => {
+  /** What the admin app does: add "<n> <hash of the secret>" to the list, then delete the issue (GitHub then answers 410). */
+  const deleteIssue = (g: ReturnType<typeof fakeGitHub>, code: string) => {
+    const [n, secret] = code.split(".");
+    g.state.deletedLines = [...(g.state.deletedLines ?? []), `${n} ${threadHash(secret)}`];
+    g.state.gone.add(Number(n));
+  };
+  const get = async (h: ReturnType<typeof thread>, code: string) => { const r = res(); await h(req("GET", { "x-feedback-code": code }), r); return r; };
+
+  it("the sender's code shows 'deleted': no messages, no old content, not an error", async () => {
+    const g = fakeGitHub();
+    const s = await send(g, "Private words that must disappear");
+    g.comment(1, OWNER, "/reply An owner reply that must disappear");
+    let t = Date.now();
+    const h = createThreadHandler({ env: ENV, fetch: g.fetch, log: vi.fn(), now: () => t });
+    expect(JSON.parse((await get(h, s.thread)).body).messages).toHaveLength(2);
+    deleteIssue(g, s.thread);
+    t += 3_000; // the list is cached for a minute, but a missing issue looks again after 2 s
+    const r = await get(h, s.thread);
+    expect(r.statusCode).toBe(200);
+    expect(JSON.parse(r.body)).toEqual({ ok: true, status: "deleted", messages: [] });
+    expect(r.body).not.toMatch(/Private words|owner reply/);
+    // A fresh instance (list read first) says the same.
+    expect(JSON.parse((await get(thread(g), s.thread)).body)).toEqual({ ok: true, status: "deleted", messages: [] });
+  });
+
+  it("'deleted' wins even while GitHub still has the issue (list written first, delete pending)", async () => {
+    const g = fakeGitHub();
+    const s = await send(g);
+    const [n, secret] = s.thread.split(".");
+    g.state.deletedLines = [`${n} ${threadHash(secret)}`];
+    expect(JSON.parse((await get(thread(g), s.thread)).body).status).toBe("deleted");
+  });
+
+  it("a follow-up to a deleted conversation is refused with 410 and nothing is posted", async () => {
+    const g = fakeGitHub();
+    const s = await send(g);
+    deleteIssue(g, s.thread);
+    const r = res();
+    await thread(g)(req("POST", { "x-feedback-code": s.thread, "content-type": "application/json" }, { message: "hello?" }), r);
+    expect(r.statusCode).toBe(410);
+    expect(JSON.parse(r.body)).toEqual({ ok: false, status: "deleted", error: "This conversation was deleted." });
+    expect(g.calls.some((c) => c.method === "POST" && /\/comments$/.test(c.url))).toBe(false);
+  });
+
+  it("no enumeration: without the secret, a deleted issue, a never-existing one and a wrong secret all get the same bare 404", async () => {
+    const g = fakeGitHub();
+    const a = await send(g, "first");
+    const b = await send(g, "second");
+    deleteIssue(g, a.thread);
+    const wrong = () => crypto.randomBytes(16).toString("base64url");
+    const h = thread(g);
+    const bodies = new Set<string>();
+    for (const code of [`1.${wrong()}`, `2.${wrong()}`, `999.${wrong()}`, `1.${b.thread.split(".")[1]}`, `999.${a.thread.split(".")[1]}`]) {
+      const r = await get(h, code);
+      expect(r.statusCode).toBe(404);
+      bodies.add(r.body);
+      const p = res();
+      await h(req("POST", { "x-feedback-code": code, "content-type": "application/json" }, { message: "hi" }), p);
+      expect(p.statusCode).toBe(404);
+      bodies.add(p.body);
+    }
+    expect([...bodies]).toEqual([JSON.stringify({ ok: false })]);
+    // And the secret holder still sees "deleted"; the other thread is untouched.
+    expect(JSON.parse((await get(h, a.thread)).body).status).toBe("deleted");
+    expect(JSON.parse((await get(h, b.thread)).body).status).toBe("open");
+  });
+
+  it("the list stores only a number and the secret's hash; junk lines are ignored", () => {
+    const set = parseDeleted(`1 ${threadHash("x")}\nnot a line\n0 ft00\n2 ${threadHash("y")} extra\n`);
+    expect([...set]).toEqual([`1 ${threadHash("x")}`]);
+  });
+
+  it("an unreadable list fails closed (503) for every code alike, never shows content", async () => {
+    const g = fakeGitHub();
+    const s = await send(g, "Secret words");
+    g.state.deletedListStatus = 500;
+    const log = vi.fn();
+    for (const code of [s.thread, `1.${crypto.randomBytes(16).toString("base64url")}`, `42.${crypto.randomBytes(16).toString("base64url")}`]) {
+      const r = await get(thread(g, log), code);
+      expect(r.statusCode).toBe(503);
+      expect(r.body).not.toContain("Secret words");
+    }
+    expect(JSON.stringify(log.mock.calls)).not.toContain(s.thread.split(".")[1]);
+  });
+
+  it("no branch yet (404 on the list) means nothing was deleted", async () => {
+    const g = fakeGitHub();
+    const s = await send(g);
+    expect(JSON.parse((await get(thread(g), s.thread)).body).status).toBe("open");
   });
 });

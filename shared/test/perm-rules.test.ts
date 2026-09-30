@@ -177,7 +177,7 @@ describe("ALWAYS ALLOW — reads and common build/test/git-status/diff in a proj
 
 // ---------------------------------------------------------------------------------------------------------------
 describe("DEFER — the fixed rules stay silent and the reviewer decides", () => {
-  it.each(["some-unknown-binary --flag", "docker run x", "osascript -e 'tell app'", "git push origin feature-x", "cat /etc/passwd"])(
+  it.each(["some-unknown-binary --flag", "osascript -e 'tell app'", "git push origin feature-x", "cat /etc/passwd"])(
     "defer: %s", (c) => expect(decide(c)).toBe("defer"),
   );
 });
@@ -239,4 +239,149 @@ describe("tool schema token cost (the Mac tool stays small)", () => {
     // description + schema (~250–400 chars each = ~1,500+). The ceiling here is the ratchet.
     expect(mac, `Mac tool wire size ${mac} chars`).toBeLessThan(900);
   });
+});
+
+// 0.1.4 (concern 1): a Bot's Mac command never runs OrbStack's CLI, whatever its arguments: `orb -u root` is root in
+// the Bots' computer, its firewall and Local network included.
+describe("NEVER — OrbStack's CLI from the Mac", () => {
+  it.each([
+    "orb list",
+    "orb -m box uname -a",
+    "orb -m box -u root /usr/local/lib/bots/bots-ports local-network on",
+    "orbctl status",
+    "/Applications/OrbStack.app/Contents/MacOS/bin/orb -m box -u root id",
+    "/Applications/OrbStack.app/Contents/MacOS/xbin/orbctl list",
+    "~/.orbstack/bin/orb list",
+    "$HOME/.orbstack/bin/orbctl list",
+    "env orb list",
+    "env FOO=1 orb -u root sh",
+    "echo box | xargs orb -m",
+    "command orb list",
+    "exec orb list",
+    "nohup orb -m box true &",
+    "sudo orb list",
+    "sh -c 'orb -m box -u root nft flush ruleset'",
+    "bash -c \"cd /tmp && orb list\"",
+    "zsh -c 'echo hi; orbctl list'",
+    "eval 'orb list'",
+    "echo hi; orb list",
+    "ls | orb -m box -u root sh",
+    "python3 -c \"import os; os.system('orb -u root id')\"",
+    "node -e \"require('child_process').execSync('orb list')\"",
+    "cp x ~/.orbstack/bin/orb",
+  ])("refuses %s", (c) => { const r = evaluateFixedRules({ side: "mac", kind: "command", command: c, cwd: "/Users/me/proj" }, { ...ctx, noLimits: true }); expect(r.rule).toBe("never.orbstack"); expect(r.reason).toBe("Bots can't use OrbStack."); });
+  it.each(["git diff box/files/bots-ports", "vim /Users/me/proj/box/orb.sh", "echo orbit", "npm run orbital", "grep -r orb src", "ls ~/Orbs", "bash box/two-account-sim.sh"])("leaves %s alone", (c) => expect(rule(c)).not.toBe("never.orbstack"));
+  it("only on the Mac: a box-side command is the box gate's", () => expect(evaluateFixedRules({ side: "box", kind: "command", command: "orb list" }, ctx).rule).not.toBe("never.orbstack"));
+});
+
+// Bug 431: the ways round the OrbStack NEVER that only got a card. Script files the command runs (read on the Mac, one
+// level, capped), a program name built at run time, the container engines, and `open` of OrbStack's app.
+describe("NEVER — bug 431: scripts, computed names, container engines, OrbStack's app", () => {
+  const files: Record<string, string> = {
+    "/Users/me/proj/x.sh": "#!/bin/sh\nset -e\norb -m box -u root nft flush ruleset\n",
+    "/Users/me/proj/plain.sh": "echo hi\nORB list\n",
+    "/Users/me/proj/env.sh": "#!/usr/bin/env bash\nexec orbctl list\n",
+    "/Users/me/proj/x.py": "import subprocess\nsubprocess.run(['orb', '-u', 'root', 'id'])\n",
+    "/Users/me/proj/x.js": "require('child_process').execSync('orb list')\n",
+    "/Users/me/proj/x.rb": "system('orbctl', 'list')\n",
+    "/Users/me/proj/x.pl": "system('/Applications/OrbStack.app/Contents/MacOS/bin/orb list');\n",
+    "/Users/me/proj/tool": "#!/usr/bin/env python3\nimport os\nos.system('orb list')\n",
+    "/Users/me/proj/shebang-orb": "#!/usr/local/bin/orb -m box -u root sh\nid\n",
+    "/Users/me/proj/dock.sh": "docker run --privileged -it alpine sh\n",
+    "/Users/me/proj/nested.sh": "bash /Users/me/proj/x.sh\n",
+    "/Users/me/proj/orbit.sh": "#!/bin/sh\n# plots an orbit\necho orbit > orbit.txt\ngrep -r orbital src\n",
+    "/Users/me/proj/orbit.py": "print('orbit')\n",
+    "/Users/me/proj/deploy.py": "# builds the image; run it in docker later\nimport json\nprint(json.dumps({'ok': True}))\n",
+    "/Users/me/proj/notes.js": "// OrbStack users: see the README\nconsole.log('orb is a word')\n",
+    "/Users/me/proj/run.js": "const { execFile } = require('node:child_process');\nexecFile('orbctl', ['list'], () => {});\n",
+    "/Users/me/proj/spawn.js": "require('child_process').spawn(\"docker\", [\"ps\"]);\n",
+    "/Users/me/proj/bin": "\u0000\u0001orb list",
+  };
+  const reads: string[] = [];
+  const readScript = (p: string): string | null => { reads.push(p); return files[p] ?? null; };
+  const sctx: PermContext = { ...ctx, readScript };
+  const judge = (c: string, cwd = "/Users/me/proj", x: PermContext = sctx) => evaluateFixedRules({ side: "mac", kind: "command", command: c, cwd }, x);
+
+  it.each([
+    "bash x.sh", "sh ./x.sh", "zsh -e x.sh", "bash -- x.sh", "./x.sh", "/Users/me/proj/x.sh --go", "source x.sh", ". ./x.sh",
+    "sh < x.sh", "bash plain.sh", "./plain.sh", "./env.sh", "python3 x.py", "python x.py", "node x.js", "ruby x.rb", "perl x.pl",
+    "python3 < x.py", "./tool", "./shebang-orb", "cd /Users/me/proj && ./x.sh", "sudo ./x.sh", "nohup bash x.sh &", "sh -c './x.sh'",
+  ])("a script that runs OrbStack: %s", (c) => { const r = judge(c); expect(r.rule).toBe("never.orbstack"); expect(r.reason).toBe("Bots can't use OrbStack."); });
+  it("a script that runs docker is the container NEVER", () => {
+    expect(judge("bash dock.sh").rule).toBe("never.containers");
+    expect(judge("node spawn.js").rule).toBe("never.containers");
+    expect(judge("node run.js").rule).toBe("never.orbstack");
+  });
+  it("a non-shell script that only NAMES docker or OrbStack (a comment, a string) is a card, not a refusal", () => {
+    const d = judge("python3 deploy.py");
+    expect(d.verdict).toBe("always-ask");
+    expect(d.rule).toBe("ask.containers");
+    expect(judge("node notes.js")).toMatchObject({ verdict: "always-ask", rule: "ask.orbstack" });
+  });
+  it.each([
+    ["python3 -c \"print('docker')\"", "ask.containers"],
+    ["python3 -c \"# orb\nprint(1)\"", "ask.orbstack"],
+    ["node -e \"console.log('OrbStack')\"", "ask.orbstack"],
+    ["ruby -e 'puts \"kubectl\"'", "ask.containers"],
+    ["python3 <<'EOF'\n# docker\nprint(1)\nEOF", "ask.containers"],
+  ])("inline code that only names one is a card: %s", (c, r) => expect(judge(c)).toMatchObject({ verdict: "always-ask", rule: r }));
+  it("linear time on hostile code: 300 KB of unterminated calls stays fast", () => {
+    for (const body of ["exec('orb ".repeat(30_000), "subprocess.run([\"".repeat(20_000) + "orb", "os.system(\"orb \\\"".repeat(20_000)]) {
+      const t = performance.now();
+      files["/Users/me/proj/big.py"] = body;
+      judge("python3 big.py");
+      judge(`node -e '${body.replace(/'/g, "\"")}'`); // bug 433: inline too (messagesSend was quadratic on the second shape)
+      expect(performance.now() - t).toBeLessThan(200);
+    }
+  });
+  it("code piped into an interpreter that names orb is a card", () => expect(judge("echo 'print(\"orb\")' | python3").verdict).toBe("always-ask"));
+  it.each([
+    "python3 -c \"import subprocess; subprocess.run(['orb', '-u', 'root', 'id'])\"",
+    "python3 -c \"import subprocess as s; s.check_output(['/usr/local/bin/orbctl','list'])\"",
+    "node -e \"require('child_process').execFile('orb', ['list'])\"",
+    "node -e \"require('child_process').spawnSync('orbctl', ['status'])\"",
+    "node -e \"require('child_process').exec(`orb -m box -u root id`)\"",
+    "perl -e 'system(\"orb list\")'",
+    "perl -e 'system \"orb\", \"list\"'",
+    "ruby -e 'system(\"orbctl\", \"list\")'",
+    "osascript -e 'do shell script \"orb list\"'",
+    "python3 <<'EOF'\nimport os\nos.system('orb list')\nEOF",
+  ])("inline code that plainly runs orb is NEVER: %s", (c) => expect(judge(c).rule).toBe("never.orbstack"));
+  it("one level only: a script's own scripts aren't read", () => {
+    reads.length = 0;
+    expect(judge("bash nested.sh").rule).not.toBe("never.orbstack");
+    expect(reads).toEqual(["/Users/me/proj/nested.sh"]);
+  });
+  it("an unreadable or too-big script (the reader says null) keeps today's verdict", () => {
+    expect(judge("bash missing.sh").verdict).toBe(evaluateFixedRules({ side: "mac", kind: "command", command: "bash missing.sh", cwd: "/Users/me/proj" }, ctx).verdict);
+    expect(judge("./missing").rule).not.toMatch(/^never/);
+  });
+  it("no reader (the host) reads nothing and keeps today's verdict", () => expect(judge("bash x.sh", "/Users/me/proj", ctx).rule).not.toMatch(/^never/));
+  it("a command that runs no script reads nothing", () => {
+    reads.length = 0;
+    for (const c of ["ls -la", "npm test", "git status", "cat x.sh", "vim x.sh", "grep -r orb src", "python3 -c 'print(1)'", "node -e 1", "bash -c 'echo hi'"]) judge(c);
+    expect(reads).toEqual([]);
+  });
+  it("a binary run by path isn't scanned as a script", () => expect(judge("./bin").rule).not.toMatch(/^never/));
+
+  it.each([
+    "o=orb; $o list", "O=ORB; $O -u root id", "$(echo orb) list", "`echo orb` list", "${x} list # orb", "p=orbctl; \"$p\" status",
+    "x=OrbStack; $x", "echo 'orb list' | sh", "echo orb | xargs -I% % list", "echo orb | xargs -I {} {} list", "ORB list", "Orbctl status",
+  ])("a computed or case-folded program name with OrbStack in the text: %s", (c) => expect(judge(c).rule).toBe("never.orbstack"));
+  it.each(["${x} list", "o=or; ${o}b list", "$EDITOR notes.txt"])("a computed name that names none of them keeps today's card: %s", (c) => expect(judge(c).verdict).toBe("always-ask"));
+
+  it.each([
+    "docker ps", "docker run --privileged -v /:/host alpine", "/usr/local/bin/docker ps", "sudo docker ps", "env docker ps", "docker-compose up",
+    "nerdctl run alpine", "kubectl get pods", "limactl shell default", "DOCKER ps", "echo x | xargs docker rm", "sh -c 'docker ps'",
+    "python3 -c \"import os; os.system('docker ps')\"", "d=docker; $d ps",
+  ])("container engines: %s", (c) => { const r = judge(c); expect(r.verdict).toBe("never"); expect(r.rule).toBe("never.containers"); expect(r.reason).toBe("Bots can't use Docker or other container tools."); });
+  it.each([
+    "open -a OrbStack", "open -a orbstack", "open -a OrbStack.app", "open -a /Applications/OrbStack.app", "open /Applications/OrbStack.app",
+    "open -b dev.kdrag0n.MacVirt", "open orbstack://machines/box", "open -g -a OrbStack --args x", "osascript -e 'tell application \"OrbStack\" to activate'",
+  ])("OrbStack's app: %s", (c) => expect(judge(c).rule).toBe("never.orbstack"));
+
+  it.each([
+    "echo orbit", "grep -r orb src", "cat orbit.txt", "bash orbit.sh", "./orbit.sh", "python3 orbit.py", "open orbit.txt", "open -a Preview orbstack-notes.pdf",
+    "cat Dockerfile", "vim docker-compose.yml", "ls ~/.docker", "npm run orbital", "git log --grep orb", "echo docker-compose.yml",
+  ])("look-alikes stay as they were: %s", (c) => expect(judge(c).rule).not.toMatch(/^never\.(orbstack|containers)$/));
 });

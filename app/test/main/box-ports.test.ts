@@ -159,7 +159,9 @@ describe("box/files/bots-ports: the Mac guard (Bots can't reach the Mac or the L
     const out = g.slice(g.indexOf("chain output"), g.indexOf("chain bots"));
     // Order: replies and root/bothost first, the box's own addresses, then the Mac (no port match: all ports), then the Bots.
     const at = (s: string) => { const i = out.indexOf(s); expect(i, s).toBeGreaterThan(-1); return i; };
-    expect(at("ct state established,related accept")).toBeLessThan(at('meta skuid { "root", "bothost" } accept'));
+    expect(at("ct state established,related ct direction reply accept")).toBeLessThan(at('meta skuid { "root", "bothost" } accept'));
+    // 0.1.4: only replies skip the checks, so a connection a Bot opened is cut the moment the guard denies it.
+    expect(out).not.toMatch(/ct state established,related accept/);
     expect(at("fib daddr type local accept")).toBeLessThan(at("ip daddr @mac4 goto deny"));
     expect(at("ip6 daddr @mac6 goto deny")).toBeLessThan(at('meta skuid "box" goto bots'));
     expect(out).toContain("meta skuid 60200-61099 goto bots");
@@ -236,11 +238,108 @@ describe("box/files/bots-ports: fail closed (bug 364)", () => {
     encoding: "utf8", env: { PATH: process.env.PATH!, R: r, GETENT: "false", VISUDO: "true", SYSTEMCTL: "true", NFT: "true", ...env },
   });
 
+  /** A fake nft whose `list table inet bots_mac_guard` prints the rendered guard file (what nft would list). */
+  const listing = (r: string) => `f() { case "$*" in *"list table inet bots_mac_guard"*|*"list chain inet bots_mac_guard bots"*) cat '${r}/etc/bots/mac-guard.nft' ;; esac; }; f`;
+  const setLan = (r: string, v: string) => { const c = path.join(r, "etc/bots/net-guard.conf"); fs.writeFileSync(c, fs.readFileSync(c, "utf8").replace(/^LAN_BLOCK=.*$/m, `LAN_BLOCK=${v}`)); };
+
   it("check passes only when both tables are loaded", () => {
     const r = root();
-    expect(run(r, ["check"]).status).toBe(0);
+    expect(run(r, ["load"]).status).toBe(0);
+    expect(run(r, ["check"], { NFT: listing(r) }).status).toBe(0);
     expect(run(r, ["check"], { NFT: `f() { [ "$3 $4" != "inet bots_mac_guard" ]; }; f` }).status).not.toBe(0);
-    expect(run(r, ["check"], { NFT: `f() { [ "$3 $4" != "inet bots_auth_proxy" ]; }; f` }).status).not.toBe(0);
+    expect(run(r, ["check"], { NFT: `f() { [ "$3 $4" != "inet bots_auth_proxy" ] && cat '${r}/etc/bots/mac-guard.nft'; }; f` }).status).not.toBe(0);
+  });
+
+  // 0.1.4 Local network: check verifies whichever state net-guard.conf sets, not just that a table exists.
+  it("check fails when the loaded guard doesn't enforce the configured state (fail closed)", () => {
+    const r = root();
+    run(r, ["load"]);
+    const blocked = fs.readFileSync(path.join(r, "etc/bots/mac-guard.nft"), "utf8");
+    // An empty table with the right name is not a guard.
+    fs.writeFileSync(path.join(r, "etc/bots/mac-guard.nft"), "table inet bots_mac_guard {\n}\n");
+    expect(run(r, ["check"], { NFT: listing(r) }).status).not.toBe(0);
+    fs.writeFileSync(path.join(r, "etc/bots/mac-guard.nft"), blocked);
+    // Configured blocked, but the loaded guard opens the LAN (a failed reload after turning it off): refused.
+    setLan(r, "off");
+    run(r, ["load"]);
+    setLan(r, "on");
+    expect(run(r, ["check"], { NFT: listing(r) }).status).not.toBe(0);
+    // Configured open, loaded open: fine; the Mac's denies must still be there.
+    setLan(r, "off");
+    expect(run(r, ["check"], { NFT: listing(r) }).status).toBe(0);
+    fs.writeFileSync(path.join(r, "etc/bots/mac-guard.nft"), fs.readFileSync(path.join(r, "etc/bots/mac-guard.nft"), "utf8").replace(/\n.*ip daddr @macnet4 goto deny/, ""));
+    expect(run(r, ["check"], { NFT: listing(r) }).status).not.toBe(0);
+    // Configured open, loaded blocked (safe): fine.
+    fs.writeFileSync(path.join(r, "etc/bots/mac-guard.nft"), blocked);
+    expect(run(r, ["check"], { NFT: listing(r) }).status).toBe(0);
+  });
+
+  it("local-network on/off rewrites the config and reloads; status reads the loaded guard", () => {
+    const r = root();
+    run(r, ["load"]);
+    expect(run(r, ["local-network"], { NFT: listing(r) }).stdout.trim()).toBe("off");
+    const on = run(r, ["local-network", "on"], { NFT: listing(r) });
+    expect(on.status, on.stderr).toBe(0);
+    expect(on.stdout.trim()).toBe("on");
+    expect(fs.readFileSync(path.join(r, "etc/bots/net-guard.conf"), "utf8")).toMatch(/^LAN_BLOCK=off$/m);
+    expect(run(r, ["local-network", "status"], { NFT: listing(r) }).stdout.trim()).toBe("on");
+    const off = run(r, ["local-network", "off"], { NFT: listing(r) });
+    expect(off.status).toBe(0);
+    expect(off.stdout.trim()).toBe("off");
+    expect(fs.readFileSync(path.join(r, "etc/bots/net-guard.conf"), "utf8")).toMatch(/^LAN_BLOCK=on$/m);
+    expect(run(r, ["local-network", "maybe"]).status).toBe(2);
+    // The app's tamper check reads both: what is loaded, then what the config says.
+    expect(run(r, ["local-network", "state"], { NFT: listing(r) }).stdout.trim()).toBe("off off");
+    setLan(r, "off");
+    expect(run(r, ["local-network", "state"], { NFT: listing(r) }).stdout.trim()).toBe("off on");
+    run(r, ["load"]);
+    expect(run(r, ["local-network", "state"], { NFT: listing(r) }).stdout.trim()).toBe("on on");
+  });
+
+  it("local-network on that fails to load goes back to blocking and reads back off", () => {
+    const r = root();
+    run(r, ["load"]);
+    // nft -f fails; listing shows whatever was last loaded (the blocked guard).
+    const blocked = path.join(r, "blocked.nft");
+    fs.copyFileSync(path.join(r, "etc/bots/mac-guard.nft"), blocked);
+    const res = run(r, ["local-network", "on"], { NFT: `f() { case "$*" in *list*) cat '${blocked}' ;; *) false ;; esac; }; f` });
+    expect(res.status).not.toBe(0);
+    expect(res.stdout.trim()).toBe("off");
+    expect(fs.readFileSync(path.join(r, "etc/bots/net-guard.conf"), "utf8")).toMatch(/^LAN_BLOCK=on$/m);
+    expect(fs.readFileSync(path.join(r, "etc/bots/mac-guard.nft"), "utf8")).not.toContain("@open4 accept");
+  });
+
+  it("OrbStack's machine network (the box's own link) stays denied to box and the Bots in both states, merged into BOX_NETS", () => {
+    const r = root();
+    const ip = path.join(r, "fake-ip");
+    fs.writeFileSync(ip, `#!/bin/sh
+case "$*" in
+  "-o -4 route show default") echo "default via 192.168.139.1 dev eth0 proto dhcp src 192.168.139.56 metric 1024" ;;
+  "-o -6 route show default") echo "default via fe80::1 dev eth0 proto ra metric 1024" ;;
+  "-o addr show dev eth0 scope global") echo "2: eth0    inet 192.168.139.56/24 metric 1024 brd 192.168.139.255 scope global eth0"; echo "2: eth0    inet6 fd07:b51a:cc66:0:60cc:c4ff:febf:6270/64 scope global" ;;
+esac
+`, { mode: 0o755 });
+    const env = { IP: ip };
+    expect(run(r, ["load"], env).status).toBe(0);
+    const conf = fs.readFileSync(path.join(r, "etc/bots/net-guard.conf"), "utf8");
+    expect(conf).toMatch(/^BOX_NETS=192\.168\.139\.0\/24 fd07:b51a:cc66::\/48 fd07:b51a:cc66::\/64$/m);
+    for (const lan of ["on", "off"]) {
+      setLan(r, lan);
+      run(r, ["load"], { IP: "false" }); // a boot before the network is up keeps what was found
+      const g = fs.readFileSync(path.join(r, "etc/bots/mac-guard.nft"), "utf8");
+      expect(g).toContain("set boxnet4 { type ipv4_addr; flags interval; auto-merge; elements = { 192.168.139.0/24 } }");
+      expect(g).toContain("set boxnet6 { type ipv6_addr; flags interval; auto-merge; elements = { fd07:b51a:cc66::/48, fd07:b51a:cc66::/64 } }");
+      const bots = g.slice(g.indexOf("chain bots"), g.indexOf("chain deny"));
+      expect(bots.indexOf("ip daddr @boxnet4 goto deny")).toBeGreaterThan(-1);
+      if (lan === "off") expect(bots.indexOf("ip daddr @boxnet4 goto deny")).toBeLessThan(bots.indexOf("ip daddr @open4 accept"));
+    }
+  });
+
+  it("only the app flips it: the host's sudoers line allows check and nothing else", () => {
+    const r = root();
+    run(r, ["load"]);
+    const sudo = fs.readFileSync(path.join(r, "etc/sudoers.d/bots-ports-check"), "utf8");
+    expect(sudo).not.toMatch(/local-network|\*/);
   });
 
   it("apply and load install the one sudoers line the host's check needs, validated first", () => {
@@ -301,8 +400,8 @@ describe("box/files/bots-ports: the Mac's own networks (bug 365)", () => {
     expect(res.status, res.stderr).toBe(0);
     expect(conf(r)).toMatch(/^MAC_NETS=203\.0\.113\.0\/24 2601:646:8f00:1a0::\/64$/m);
     const g = guard(r);
-    expect(g).toContain("set macnet4 { type ipv4_addr; flags interval; elements = { 203.0.113.0/24 } }");
-    expect(g).toContain("set macnet6 { type ipv6_addr; flags interval; elements = { 2601:646:8f00:1a0::/64 } }");
+    expect(g).toContain("set macnet4 { type ipv4_addr; flags interval; auto-merge; elements = { 203.0.113.0/24 } }");
+    expect(g).toContain("set macnet6 { type ipv6_addr; flags interval; auto-merge; elements = { 2601:646:8f00:1a0::/64 } }");
     const out = g.slice(g.indexOf("chain output"), g.indexOf("chain bots"));
     expect(out.indexOf('meta skuid { "root", "bothost" } accept')).toBeLessThan(out.indexOf("ip daddr @macnet4 goto deny"));
     expect(out.indexOf("ip6 daddr @macnet6 goto deny")).toBeLessThan(out.indexOf('meta skuid "box" goto bots'));
@@ -321,7 +420,7 @@ describe("box/files/bots-ports: the Mac's own networks (bug 365)", () => {
     expect(guard(r)).toContain("elements = { 198.51.100.0/24 }");
     run(r, ["apply", "47900", "47901", "47902", ""]);
     expect(conf(r)).toMatch(/^MAC_NETS=$/m);
-    expect(guard(r)).toContain("set macnet6 { type ipv6_addr; flags interval; }");
+    expect(guard(r)).toContain("set macnet6 { type ipv6_addr; flags interval; auto-merge; }");
   });
 
   it("the host's guarded fetch reads the same line", () => {
@@ -405,14 +504,19 @@ describe("box/files/bots-ports: the LAN block comes from net-guard.conf (bug 367
     expect(bots(r)).toContain("ip6 daddr @lan6 goto deny");
   });
 
-  it("an owner's edit is kept; LAN_BLOCK=off (the future opt-in) lifts only the LAN, never the Mac", () => {
+  it("an owner's edit is kept; LAN_BLOCK=off (Local network) opens only RFC 1918 and ULA, never the Mac", () => {
     const r = root();
     load(r);
     fs.writeFileSync(conf(r), fs.readFileSync(conf(r), "utf8").replace(/^LAN_BLOCK=on$/m, "LAN_BLOCK=off").replace(/^LAN4=.*$/m, "LAN4=10.0.0.0/8 bogus"));
     expect(load(r).status).toBe(0);
     expect(fs.readFileSync(conf(r), "utf8")).toMatch(/^LAN_BLOCK=off$/m);
     expect(guard(r)).toContain("set lan4 { type ipv4_addr; flags interval; elements = { 10.0.0.0/8 } }");
-    expect(bots(r)).not.toMatch(/goto deny/);
+    expect(guard(r)).toContain("set open4 { type ipv4_addr; flags interval; elements = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } }");
+    expect(guard(r)).toContain("set open6 { type ipv6_addr; flags interval; elements = { fc00::/7 } }");
+    // The opened ranges first, then the rest of the list still denied (link-local, OrbStack's machines, CGNAT …).
+    expect(bots(r).indexOf("ip daddr @open4 accept")).toBeGreaterThan(-1);
+    expect(bots(r).indexOf("ip daddr @open4 accept")).toBeLessThan(bots(r).indexOf("ip daddr @lan4 goto deny"));
+    expect(bots(r).indexOf("ip6 daddr @open6 accept")).toBeLessThan(bots(r).indexOf("ip6 daddr @lan6 goto deny"));
     const out = guard(r).slice(guard(r).indexOf("chain output"), guard(r).indexOf("chain bots"));
     expect(out).toContain("ip daddr @mac4 goto deny");
     expect(out).toContain("ip daddr @orb4 goto deny");

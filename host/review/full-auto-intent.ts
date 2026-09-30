@@ -40,10 +40,10 @@ export function fullAutoIntentEligible(target: RiskTarget, fa: FullAutoResult | 
  * Wakes that carry the owner's own words in the chat. Everything else (routines, webhooks, email and other
  * listeners, broadcasts, other Bots, group members, revivals, kickstart) is not the owner asking for this action.
  */
-const OWNER_SOURCES = new Set<WakeSource>(["user", "reply-nudge", "closing-nudge", "ack-redrive", "widget-answer", "form-answer", "voice-delegate"]);
+export const OWNER_SOURCES: ReadonlySet<WakeSource> = new Set<WakeSource>(["user", "reply-nudge", "closing-nudge", "ack-redrive", "widget-answer", "form-answer", "voice-delegate"]);
 
-const BULK_VALUE = /^(all|everyone|everybody|@channel|@everyone|@here|\*)$/i;
-const RECIPIENT_KEY = /^(to|cc|bcc|recipients?|recipient_emails?|extra_recipients|attendees|guests|invitees|members|users|user_ids|emails|channels|participants|people)$/i;
+export const BULK_VALUE = /^(all|everyone|everybody|@channel|@everyone|@here|\*)$/i;
+export const RECIPIENT_KEY = /^(to|cc|bcc|recipients?|recipient_emails?|extra_recipients|attendees|guests|invitees|members|users|user_ids|emails|channels|participants|people)$/i;
 /** Argument keys whose text is the message, not who gets it. */
 const BODY_KEY = /^(body|message_body|text|markdown_text|subject|description|summary|content|html)$/i;
 /** Bug 412: a destructive flag riding on a send (a TRASH/SPAM label, delete-after-send …). */
@@ -119,6 +119,44 @@ export function nameMatches(email: string, userText: string): string[] {
   return nameTokens(email).filter((t) => words.has(t));
 }
 
+/** Bug 412: a destructive flag riding on a send (a TRASH/SPAM label, delete-after-send, a cancelled event). */
+export function hasDestructiveFlag(target: RiskTarget): boolean {
+  const args = argsOf(target);
+  let destructive = /"status":"cancel+ed"/i.test(JSON.stringify(args));
+  walk(args, (k, v) => {
+    if (k && DESTRUCTIVE_KEY.test(k) && v !== false && v !== null && v !== "" && !(Array.isArray(v) && !v.length)) destructive = true;
+    if (typeof v === "string" && DESTRUCTIVE_VALUE.test(v.trim())) destructive = true;
+  });
+  return destructive;
+}
+
+/** A bulk value on a recipient field (@channel, everyone, *) or an @channel mention anywhere. */
+export function hasBulkValue(target: RiskTarget): boolean {
+  let bulk = false;
+  walk(argsOf(target), (k, v) => {
+    if (typeof v === "string" && k && RECIPIENT_KEY.test(k) && BULK_VALUE.test(v.trim())) bulk = true;
+    if (typeof v === "string" && /(^|\s)@(channel|everyone|here|all)\b/i.test(v)) bulk = true;
+  });
+  return bulk;
+}
+
+/**
+ * Smarter approvals (follow-up 2): trust covers who a send goes to, not what outside content may carry. True when
+ * the send's text copies what the Bot read (two or more 8-word shingles the owner didn't write themselves), or
+ * carries a link or site only outside content named. No "forward" exemption here: a plan or a trusted recipient
+ * never lets copied outside text through without a card.
+ */
+export function carriesOutside(target: RiskTarget, request: string, outside: OutsideView, self: string | null): boolean {
+  if (!outside.any && !outside.links.size) return false;
+  const lower = request.toLowerCase();
+  const mine = shingles(request);
+  let hits = 0;
+  for (const h of shingles(bodyOf(target))) if (outside.shingles.has(h) && !mine.has(h) && ++hits >= 2) return true;
+  const recipients = recipientsOf(target);
+  const links = [...new Set(linksIn(JSON.stringify(argsOf(target))))].filter((u) => !recipients.some((r) => r.endsWith(u) || r.includes(`@${u}`)));
+  return links.some((u) => outside.links.has(u) && !lower.includes(u) && u !== self?.toLowerCase());
+}
+
 export interface IntentFloorInput {
   target: RiskTarget;
   /** What woke the Bot (the turn's source, or the parent turn's for a subagent). */
@@ -139,6 +177,47 @@ export interface IntentFloorInput {
   known?: ReadonlySet<string>;
 }
 
+/** Bug 440: argument keys that name who a send reaches (an address, a person, a channel). */
+const WHO_KEY = /^(to|cc|bcc|recipients?|recipient_emails?|extra_recipients|to_emails?|to_address(es)?|email_address(es)?|attendees|guests|invitees|members|users|user_ids|emails|participants|people|channels)$/i;
+/** Message sends: they always reach somebody, so a send the host can place nowhere is one it couldn't check. */
+const MESSAGE_SEND = /(^|_)(gmail_send|send_email|reply_to_thread|send_message|post_message)$/;
+export const UNRESOLVED_REASON = "Who this goes to couldn't be checked, so it needs your OK.";
+
+/**
+ * Bug 440: a recipient field holding something the host can't resolve: not an address (a name, a user id, a list the
+ * host didn't look up), and not a channel the host found. Quoted display names ("Smith, John" <j@x>) are fine.
+ */
+export function unresolvedWho(target: RiskTarget, resolved: { channels: { name: string }[] }): boolean {
+  const channels = new Set(resolved.channels.map((c) => c.name.toLowerCase().replace(/^#/, "")));
+  let unresolved = false;
+  walk(argsOf(target), (k, v) => {
+    if (!k || !WHO_KEY.test(k) || unresolved) return;
+    if (typeof v === "number") { unresolved = true; return; }
+    if (typeof v !== "string") return;
+    for (const part of v.replace(/"[^"]*"/g, '""').split(/[,;\n]/)) {
+      const p = part.trim();
+      if (!p || BULK_VALUE.test(p)) continue; // bulk values are their own card
+      if (emailsIn(p).length) continue;
+      if (/^channels$/i.test(k) && channels.has(p.toLowerCase().replace(/^#/, ""))) continue;
+      unresolved = true;
+    }
+  });
+  return unresolved;
+}
+
+/**
+ * Bug 440: the host couldn't check who this send reaches: the lookup failed, a recipient field holds something it
+ * can't resolve, or a message send it can place nowhere at all (no address, no channel). A calendar event with no
+ * guests reaches nobody and is fine.
+ */
+export function unresolvedRecipient(target: RiskTarget, resolved: { recipients: string[]; channels: { name: string }[] } | null): boolean {
+  if (!resolved || unresolvedWho(target, resolved)) return true;
+  // A bulk value (@channel, everyone) is its own card, with its own line.
+  if (!MESSAGE_SEND.test(snake(String(target.arguments.tool ?? ""))) || hasBulkValue(target)) return false;
+  const recipients = new Set([...recipientsOf(target), ...resolved.recipients.map((r) => r.toLowerCase())]);
+  return recipients.size === 0 && resolved.channels.length === 0;
+}
+
 /** Not the owner's own request (a routine, an app, another Bot, no message at all): the card keeps the classifier's line. */
 export const NOT_ASKED = "";
 
@@ -150,19 +229,15 @@ export function fullAutoIntentFloor(i: IntentFloorInput): string | null {
   if (i.origin !== "user" || !i.source || !OWNER_SOURCES.has(i.source)) return NOT_ASKED;
   const request = i.userMessages.join("\n").trim();
   if (!request) return NOT_ASKED;
-  if (!i.resolved) return "Who this goes to couldn't be checked, so it needs your OK.";
+  // Bug 440: a recipient the host couldn't resolve (or a message send it can place nowhere) never reaches the reviewer.
+  if (!i.resolved || unresolvedRecipient(i.target, i.resolved)) return UNRESOLVED_REASON;
   const lower = request.toLowerCase();
   const self = i.self?.toLowerCase() ?? null;
   const tool = snake(String(i.target.arguments.tool ?? ""));
   const args = argsOf(i.target);
 
   // Bug 412: a destructive flag on an allow-listed send (a TRASH/SPAM label, delete-after-send, a cancelled event).
-  let destructive = /"status":"cancel+ed"/i.test(JSON.stringify(args));
-  walk(args, (k, v) => {
-    if (k && DESTRUCTIVE_KEY.test(k) && v !== false && v !== null && v !== "" && !(Array.isArray(v) && !v.length)) destructive = true;
-    if (typeof v === "string" && DESTRUCTIVE_VALUE.test(v.trim())) destructive = true;
-  });
-  if (destructive) return "This also deletes, trashes or cancels something, so it needs your OK.";
+  if (hasDestructiveFlag(i.target)) return "This also deletes, trashes or cancels something, so it needs your OK.";
 
   if (i.sentForRequest >= FULL_AUTO_SENDS_PER_MESSAGE) return `This would be send number ${i.sentForRequest + 1} for one message from you, so it needs your OK.`;
 

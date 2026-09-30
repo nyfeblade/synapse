@@ -1,4 +1,5 @@
 import { WRONG_HOST_MESSAGE } from "@synapse/shared";
+import { ORB_TIMEOUT_TEXT } from "../orb-exec";
 /**
  * Portable install: "Set up the Bots' computer" — create the OrbStack machine, start it, provision it,
  * deploy the host, connect. Every step first asks whether it is already done, so running this again
@@ -52,6 +53,8 @@ export function plainError(raw: string, step: BoxStepId): string {
   if (/^A machine called /.test(raw)) return raw.split("\n")[0]!;
   // Two accounts on one Mac: another account's host answered on this account's port (check-gateway.sh, connect).
   if (raw.includes(WRONG_HOST_MESSAGE)) return WRONG_HOST_MESSAGE;
+  // Bug 435: an orb call ran out of time (OrbStack left it hanging); said as it is, with the step.
+  if (raw.includes(ORB_TIMEOUT_TEXT)) return `OrbStack stopped answering while ${STEP_NAMES[step]}. Retry; if it keeps happening, restart OrbStack.`;
   const t = raw.toLowerCase();
   if (/could not resolve|temporary failure resolving|network is unreachable|failed to connect to|connection timed out|name or service not known|no route to host|failed to fetch/.test(t)) {
     return "No internet connection reached the Bots' computer. Check your connection and retry.";

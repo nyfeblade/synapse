@@ -7,9 +7,26 @@ M="$BOX_MACHINE"
 # The Claude CLI version provision.sh installs (it used to be written here too, and went stale).
 CLAUDE_VERSION="$(sed -n 's/^CLAUDE_VERSION=//p' "$(dirname "$0")/provision.sh")"
 fail=0
+# Bug 435: each orb call is bounded (60 s here; orb.sh). A call that ran out of time marks ORB_TIMEOUT_MARK, so a check
+# (even a negated one, `! orb ...`) never passes on a hang: it is tried once more, then fails as timed out.
+export ORB_TIMEOUT="${ORB_TIMEOUT:-60}"
+ORB_TIMEOUT_MARK="$(mktemp "${TMPDIR:-/tmp}/synapse-verify-orb.XXXXXX")"; export ORB_TIMEOUT_MARK
+trap 'rm -f "$ORB_TIMEOUT_MARK"' EXIT
+trap 'exit 143' TERM INT HUP
 check() {
   local name="$1"; shift
-  if "$@" >/dev/null 2>&1; then echo "PASS $name"; else echo "FAIL $name"; fail=1; fi
+  local ok try
+  for try in 1 2; do
+    : > "$ORB_TIMEOUT_MARK"
+    if "$@" >/dev/null 2>&1; then ok=1; else ok=0; fi
+    [ -s "$ORB_TIMEOUT_MARK" ] || break
+    ok=timeout
+  done
+  case "$ok" in
+    1) echo "PASS $name" ;;
+    timeout) echo "FAIL $name (OrbStack didn't answer)"; fail=1 ;;
+    *) echo "FAIL $name"; fail=1 ;;
+  esac
 }
 check "machine running"           bash -c "orb list | grep -Eq '^$M +running'"
 check "node v24.20.0"             bash -c "orb -m $M -u root /usr/local/bin/node -v | grep -qx v24.20.0"
@@ -30,7 +47,9 @@ check "bothost can write skills"    orb -m $M -u root runuser -u bothost -- sh -
 check "agent-data readable by box" orb -m $M -u box ls /home/box/agent-data
 # Bug #61 (Bot walls): Bot folders and transcript mirrors are host-private; shared user memory stays readable.
 check "Bot folders walled from box" bash -c "! orb -m $M -u box ls /home/box/agent-data/agents >/dev/null 2>&1 && ! orb -m $M -u box ls /home/box/agent-data/agent-transcripts >/dev/null 2>&1"
-check "user memory readable by box" orb -m $M -u box ls /home/box/agent-data/user-memory
+# 0.1.4 first-run: user-memory/ appears with the first fact a Bot learns, so a new box has none yet (that isn't a failure).
+check "user memory readable by box" orb -m $M -u box sh -c 'test ! -e /home/box/agent-data/user-memory || ls /home/box/agent-data/user-memory'
+
 # Final secfix round 2 (ruling B): the managed plugins/skills tree is bothost:bots 2750; box reads, never writes.
 CM=/var/lib/bots/cc-managed
 check "cc-managed is bothost:bots 2750" orb -m $M -u root sh -c "for d in $CM $CM/skills $CM/plugins; do test \"\$(stat -c %U:%G:%a \$d)\" = bothost:bots:2750 || exit 1; done"
@@ -48,7 +67,7 @@ check "delete-session helper installed" orb -m $M -u root test -x /usr/local/lib
 check "delete-session sudoers grant + directory allowlist" bash -c "orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-claude-delete-session /etc/passwd 2>&1 | grep -q 'bot-claude-delete-session: directory must be'"
 check "delete-session rejects traversal" bash -c "orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-claude-delete-session '$VD/../../../../etc/$VU.jsonl' 2>&1 | grep -q 'bot-claude-delete-session: directory must be'"
 check "delete-session rejects a non-uuid name" bash -c "orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-claude-delete-session '$VD/memory' 2>&1 | grep -q 'bot-claude-delete-session: not a session file name'"
-check "delete-session deletes the session file and its <uuid>/ dir" orb -m $M -u root sh -c "rm -rf $VD/$VU $VD/$VU.jsonl && install -d -o box -g bots $VD/$VU && touch $VD/$VU/x && runuser -u bothost -- sh -c 'echo {} | sudo -n /usr/local/libexec/bot-claude-write-session $VD/$VU.jsonl' && test -e $VD/$VU.jsonl && runuser -u bothost -- sudo -n /usr/local/libexec/bot-claude-delete-session $VD/$VU.jsonl && test ! -e $VD/$VU.jsonl && test ! -e $VD/$VU"
+check "delete-session deletes the session file and its <uuid>/ dir" orb -m $M -u root sh -c "rm -rf $VD/$VU $VD/$VU.jsonl && runuser -u box -g bots -- mkdir -p $VD/$VU && runuser -u box -g bots -- touch $VD/$VU/x && runuser -u bothost -- sh -c 'echo {} | sudo -n /usr/local/libexec/bot-claude-write-session $VD/$VU.jsonl' && test -e $VD/$VU.jsonl && runuser -u bothost -- sudo -n /usr/local/libexec/bot-claude-delete-session $VD/$VU.jsonl && test ! -e $VD/$VU.jsonl && test ! -e $VD/$VU"
 check "delete-session is idempotent on a missing file" orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-claude-delete-session $VD/$VU.jsonl
 check "reap helper allowed"       orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-reap --dry-run
 check "read-session helper installed" orb -m $M -u root test -x /usr/local/libexec/bot-claude-read-session

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { whisperRoot } from "../../src/main/native/stt-whisper";
+import { realHomeForTest } from "../../../scripts/test-home";
 
 /**
  * Bug 165: whisper.cpp re-transcribes the finished utterance. These run the REAL helper, because
@@ -19,7 +20,7 @@ const events = (out: string) => out.split("\n").filter(Boolean).flatMap((l) => {
 
 /** The weights install.sh put in place, if this machine has them. */
 function installedModel(): string | null {
-  const dir = path.join(whisperRoot(path.join(os.homedir(), "Library", "Application Support", "Synapse")), "models");
+  const dir = path.join(whisperRoot(path.join(realHomeForTest("reads the whisper weights install.sh put on this Mac (opt-in RUN_NATIVE run)"), "Library", "Application Support", "Synapse")), "models");
   try {
     const f = fs.readdirSync(dir).filter((x) => x.startsWith("ggml-") && x.endsWith(".bin")).sort();
     return f.length ? path.join(dir, f[0]!) : null;

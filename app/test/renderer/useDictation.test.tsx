@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STR5 } from "@synapse/shared";
 import { useDictation } from "../../src/renderer/voice/useDictation";
 import { PrivacySettingsButton } from "../../src/renderer/voice/PrivacySettingsButton";
+import { ServerSpeechAllow } from "../../src/renderer/voice/ServerSpeechAllow";
 
 const subs = new Map<string, (p: unknown) => void>();
 const invoked: [string, unknown][] = [];
@@ -34,6 +35,7 @@ function Harness() {
       {d.error ? <span role="alert">{d.error}</span> : null}
       <span data-testid="pane">{String(d.privacyPane)}</span>
       {d.privacyPane ? <PrivacySettingsButton pane={d.privacyPane} /> : null}
+      {d.error && d.serverOptIn ? <ServerSpeechAllow onAllowed={() => d.start()} /> : null}
     </>
   );
 }
@@ -107,5 +109,27 @@ describe("useDictation silence handling (voice mode bug)", () => {
     act(() => subs.get("dictation")!({ type: "error", message: "not-authorized" }));
     expect(screen.getByRole("alert").textContent).toBe(STR5.micDenied);
     expect(screen.getByTestId("listening").textContent).toBe("false");
+  });
+});
+
+describe("0.1.4 first-run: no on-device recognition asks before speech goes to Apple's servers", () => {
+  it("shows the notice with Allow; Allow saves the opt-in and starts again; starting again clears it", async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByText("go"));
+    act(() => subs.get("dictation")!({ type: "error", code: "server-speech", message: "This Mac can't recognise en-US speech on its own." }));
+    expect(screen.getByRole("alert").textContent).toBe(STR5.speechServerNeeded);
+    const starts = () => invoked.filter(([n]) => n === "dictation.start").length;
+    expect(starts()).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: STR5.speechServerAllow }));
+    await vi.waitFor(() => expect(invoked).toContainEqual(["speech.server.set", { on: true }]));
+    await vi.waitFor(() => expect(starts()).toBe(2));
+    expect(screen.queryByRole("button", { name: STR5.speechServerAllow })).toBeNull();
+  });
+
+  it("another fault never offers the opt-in", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByText("go"));
+    act(() => subs.get("dictation")!({ type: "error", code: "recognizer-unavailable", message: "Speech recognition isn't available right now." }));
+    expect(screen.queryByRole("button", { name: STR5.speechServerAllow })).toBeNull();
   });
 });

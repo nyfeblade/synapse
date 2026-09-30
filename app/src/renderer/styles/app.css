@@ -449,6 +449,7 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 .card-subtitle { font-size: var(--type-ui); color: var(--ink-muted); }
 .card-body { font-size: var(--type-ui); line-height: 20px; color: var(--ink-2); overflow-wrap: anywhere; white-space: pre-wrap; }
 .card-items { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius-control); background: var(--fill-inset); font-size: var(--type-ui); }
+.card-items.plan-steps { margin: 0; padding-left: 30px; gap: 4px; }
 .card-loc { display: flex; align-items: center; gap: 6px; font-size: var(--type-small); color: var(--ink-muted); }
 .card-details { border-radius: var(--radius-control); border: var(--hairline) solid var(--line-row); background: var(--fill-inset); padding: 8px 12px; font-size: var(--type-small); }
 .card-details summary { color: var(--ink-icon); }
@@ -936,6 +937,12 @@ select.field-input {
    UI-controls pass (2026-09-29): at 12px it sat ON the chat header and covered the Bot's name; it floats
    just under the 56px header bar (--bar-h) now. */
 .key-prompts { position: fixed; top: 64px; left: 0; right: 0; width: fit-content; max-width: calc(100vw - 32px); margin: 0 auto; z-index: 45; display: flex; flex-direction: column; gap: 6px; }
+/* 0.1.4: an app asking to use the Bots over MCP (McpApprovals), and Settings → System → MCP. */
+.mcp-approval-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.mcp-exe { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 360px; }
+.mcp-snippet-row { align-items: flex-start; }
+.mcp-snippet { flex: 1 1 auto; min-width: 0; margin: 0; padding: 8px 10px; border-radius: var(--radius-card); background: var(--fill-inset); color: var(--ink); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--type-ui); white-space: pre-wrap; word-break: break-all; user-select: text; }
+.mcp-activity { max-height: 280px; overflow-y: auto; }
 .key-prompts .disk-banner { margin: 0; background: var(--surface-raised); border: var(--hairline) solid var(--line-modal); box-shadow: var(--shadow-pop); }
 .surface-announce .key-prompts { position: static; margin: 0; }
 .key-prompts > .error { margin: 0 4px; }

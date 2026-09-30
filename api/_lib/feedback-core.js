@@ -9,6 +9,7 @@ export const LIMITS = { message: 5000, logsBytes: 64 * 1024, screenshotChars: 1_
   // Checked on the raw request, before any cleaning runs: a browser body (message and type only) and a raw message.
   webBody: 32 * 1024, rawMessage: 6000 };
 export const CAPS = { perDay: 50, screenshotsPerDay: 15, followUpsPerThread: 20 };
+/** The old shared screenshots branch (before 0.1.4). New screenshots each get their own `shots/<id>` branch. */
 export const ATTACHMENTS_BRANCH = "feedback-attachments";
 export const DEFAULT_ORIGINS = ["https://synapse-site-virid.vercel.app"];
 /** Every issue and every follow-up starts with this line, which no sender controls. */
@@ -137,7 +138,10 @@ export function issueBody(v, shot, footer = []) {
     fenced(v.message),
   ];
   if (shot === false) lines.push("", "_A screenshot was sent but not attached._");
-  else if (shot) lines.push("", `**Screenshot:** [${shot.split("/").pop()}](${shot}) (private branch ${code(ATTACHMENTS_BRANCH)})`);
+  else if (shot) {
+    const branch = (/\/blob\/(shots\/[\w-]+)\//.exec(shot) || [])[1] || ATTACHMENTS_BRANCH;
+    lines.push("", `**Screenshot:** [${shot.split("/").pop()}](${shot}) (private branch ${code(branch)})`);
+  }
   const tail = `\n\n<sub>${[`feedback-hash: ${v.hash}`, ...footer].join(" · ")}</sub>`;
   let body = lines.join("\n");
   if (v.logs) {
@@ -307,31 +311,64 @@ export function tally(issues, comments, now = Date.now) {
   };
 }
 
+/** Each screenshot lives alone on its own orphan branch, `shots/<id>`: deleting that branch leaves the PNG unreachable. */
+export const SHOT_REF_PREFIX = "shots/";
+export const SHOT_ID_RE = /^\d{4}-\d{2}-\d{2}-[0-9a-f]{12}$/;
+export const shotRef = (id) => `${SHOT_REF_PREFIX}${id}`;
+export const shotLink = (repo, id) => `https://github.com/${repo}/blob/${shotRef(id)}/feedback/${id}.png`;
+
 /**
- * Commits the PNG to the private repo's `feedback-attachments` branch. The first time, the branch is
- * made as an orphan (a new tree and a commit with no parent), so it never shares history with the code.
- * Returns the link, or false.
+ * Stores the PNG on a new orphan branch `shots/<id>` holding only that file: a blob, a tree with no base,
+ * a commit with no parent, then the ref. Nothing touches the default branch or any shared branch, so
+ * deleting the ref is all it takes to make the file unreachable. Returns the link, or false (fail closed:
+ * the text still goes, marked "not attached").
  */
 export async function attachScreenshot(gh, repo, b64, id) {
+  if (!SHOT_ID_RE.test(String(id))) return false;
   const file = `feedback/${id}.png`;
-  const link = `https://github.com/${repo}/blob/${ATTACHMENTS_BRANCH}/${file}`;
-  const put = () => gh("PUT", `/repos/${repo}/contents/${file}`, { message: `feedback screenshot ${id}`, content: b64, branch: ATTACHMENTS_BRANCH });
   try {
-    let r = await put();
-    if (r.ok) return link;
-    if (r.status !== 404 && r.status !== 422) return false;
     const blob = await gh("POST", `/repos/${repo}/git/blobs`, { content: b64, encoding: "base64" });
     if (!blob.ok) return false;
     const tree = await gh("POST", `/repos/${repo}/git/trees`, { tree: [{ path: file, mode: "100644", type: "blob", sha: (await blob.json()).sha }] });
     if (!tree.ok) return false;
     const commit = await gh("POST", `/repos/${repo}/git/commits`, { message: `feedback screenshot ${id}`, tree: (await tree.json()).sha, parents: [] });
     if (!commit.ok) return false;
-    const ref = await gh("POST", `/repos/${repo}/git/refs`, { ref: `refs/heads/${ATTACHMENTS_BRANCH}`, sha: (await commit.json()).sha });
-    if (ref.ok) return link;
-    if (ref.status !== 422) return false;
-    r = await put(); // another request made the branch first
-    return r.ok ? link : false;
+    const ref = await gh("POST", `/repos/${repo}/git/refs`, { ref: `refs/heads/${shotRef(id)}`, sha: (await commit.json()).sha });
+    return ref.ok ? shotLink(repo, id) : false;
   } catch { return false; }
+}
+
+/* ---- deleted threads: the owner's admin app records "<issue> <thread hash>" before deleting an issue ---- */
+export const DELETED_BRANCH = "feedback-deleted";
+export const DELETED_FILE = "deleted-threads.txt";
+const DELETED_LINE = /^([1-9]\d{0,9}) (ft[0-9a-f]{64})$/;
+/** "12 ft…\n13 ft…" → Set of "12 ft…". Anything else on a line is ignored. */
+export function parseDeleted(text) {
+  return new Set(String(text || "").split("\n").map((l) => l.trim()).filter((l) => DELETED_LINE.test(l)));
+}
+/** Is this code's thread on the deleted list? Only someone holding the secret can match a line. */
+export const isDeleted = (set, code) => set.has(`${code.number} ${threadHash(code.secret)}`);
+
+/**
+ * The deleted-threads list, read from its own branch and cached (`maxAge`, default 60 s). No branch or no
+ * file yet means nothing was deleted. Any other failure throws: callers fail closed.
+ */
+export function makeDeletedList(now = Date.now) {
+  let hit = null;
+  return async (gh, repo, maxAge = 60_000) => {
+    if (hit && now() - hit.at < maxAge) return hit.set;
+    const r = await gh("GET", `/repos/${repo}/contents/${DELETED_FILE}?ref=${DELETED_BRANCH}`);
+    let set;
+    if (r.status === 404) set = new Set();
+    else if (!r.ok) throw new Error(`deleted list ${r.status}`);
+    else {
+      const j = await r.json();
+      if (!j || typeof j.content !== "string") throw new Error("deleted list shape");
+      set = parseDeleted(Buffer.from(j.content, "base64").toString("utf8"));
+    }
+    hit = { set, at: now() };
+    return set;
+  };
 }
 
 /* ---- reply threads: the sender holds <issue>.<secret>; the issue holds only the secret's hash ---- */

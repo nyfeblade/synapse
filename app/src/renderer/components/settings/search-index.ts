@@ -1,4 +1,4 @@
-import { STR, STR5, STRB, STRG, STRMA, STRO, STRS, STRV, STR_AUTH, STR_COST, STR_PHONE } from "@synapse/shared";
+import { STR, STR5, STRB, STRG, STRMA, STRO, STRS, STRV, STR_AUTH, STR_COST, STR_MCP, STR_PHONE } from "@synapse/shared";
 import { slugRow } from "../../deep-links";
 import type { SettingsSectionId } from "./sections";
 
@@ -19,7 +19,7 @@ export function settingEntries(): SettingEntry[] {
   return [
     // General
     e("general", STR.timezone, ["time zone", "clock"]),
-    e("auto-review", STR.autoReview, ["approval", "rules", "ask first", "allow", "permissions"]),
+    e("auto-review", STR.autoReview, ["approval", "rules", "ask first", "allow", "permissions", "trusted people", "trusted recipients"]),
     e("general", STR.theme, ["appearance", "dark", "light", "mode"]),
     e("general", STRG.connectedAccounts, ["google", "gmail", "calendar", "drive"]),
     e("general", STR5.memory, ["remember", "recall"]),
@@ -51,6 +51,7 @@ export function settingEntries(): SettingEntry[] {
     e("computer", STRB.signinSection, ["browser", "sign in", "cookies"]),
     e("computer", STRMA.appsSection, ["mac apps", "permissions", "accessibility", "screen recording"]),
     e("computer", STR5.routeTraffic, ["network", "proxy", "vpn"]),
+    e("computer", STR5.localNetwork, ["lan", "local network", "home network", "firewall"]),
     // Schedules
     e("schedules", STRS.standup, ["briefing", "daily", "morning"]),
     e("schedules", STRS.standupTime, ["time", "briefing"]),
@@ -61,6 +62,7 @@ export function settingEntries(): SettingEntry[] {
     e("system", STRO.keepLast, ["backups", "archives"]),
     e("system", STRO.diagnostics, ["logs", "crash", "report", "problems"]),
     e("system", STRO.storage, ["disk", "space"]),
+    e("system", STR_MCP.access, ["mcp", "claude desktop", "claude code", "cursor", "other apps", "connect"]),
   ];
 }
 

@@ -49,6 +49,16 @@ function draw(j) {
   form.hidden = false;
 }
 
+// The owner deleted it: no messages, no reply box, nothing kept in this browser.
+function gone() {
+  forget();
+  msgs.replaceChildren();
+  empty.hidden = true;
+  form.hidden = true;
+  err.hidden = true;
+  $("[data-deleted]").hidden = false;
+}
+
 async function load() {
   if (!valid) return fail("This link isn't complete. Check you copied all of it.");
   try {
@@ -58,6 +68,7 @@ async function load() {
     // With no record here, a 404 is a wrong or mistyped link.
     if (r.status === 404) return fail(local ? "Couldn't load replies yet. Try again later." : "This conversation wasn't found. Check you copied the whole link.");
     if (!r.ok || !j.ok) return fail(j.error || "Couldn't load it. Try again later.");
+    if (j.status === "deleted") return gone();
     err.hidden = true;
     forget();
     draw(j);
@@ -78,6 +89,7 @@ form.addEventListener("submit", async (e) => {
   try {
     const r = await fetch("/api/feedback/thread", { method: "POST", headers: { "content-type": "application/json", accept: "application/json", "x-feedback-code": code }, body: JSON.stringify({ message: cleanMessage(box.value).text }), referrerPolicy: "no-referrer" });
     const j = await r.json().catch(() => ({}));
+    if (r.status === 410 && j.status === "deleted") return gone();
     if (!r.ok || !j.ok) throw new Error(j.error || "It didn't send. Try again in a moment.");
     box.value = ""; hide.hidden = true;
     await load();

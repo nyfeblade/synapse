@@ -105,7 +105,10 @@ export class BoxStatus {
 
   async runDoctor(): Promise<{ ranAt: number; failed: string[] }> {
     const r = await this.o.exec("/usr/local/bin/box-doctor", [], { timeoutMs: 30_000 });
-    const failed = r.stdout.toString("utf8").split("\n").filter((l) => l.startsWith("FAIL ")).map((l) => l.slice(5).trim());
+    const lines = r.stdout.toString("utf8").split("\n");
+    const failed = lines.filter((l) => l.startsWith("FAIL ")).map((l) => l.slice(5).trim());
+    // 0.1.4 first-run: a doctor that reported nothing (it died, or couldn't start) is a failure, never a clean pass.
+    if (!lines.some((l) => l.startsWith("PASS ") || l.startsWith("FAIL "))) failed.push("box-doctor");
     this.doctor = { ranAt: this.now(), failed };
     return { ranAt: this.doctor.ranAt as number, failed };
   }

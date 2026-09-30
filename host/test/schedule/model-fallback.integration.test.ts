@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { SdkOneShot } from "../../helper-model/one-shot";
 import { normalizeSchedule } from "../../schedule/normalize";
 import { nextRuns, parseSchedule } from "../../schedule/schedule";
+import { realHomeForTest } from "../../../scripts/test-home";
 
 const NY = "America/New_York";
 const NOW = Date.UTC(2026, 8, 19, 16, 0);
@@ -17,7 +18,7 @@ const cases = fs
 // ORIG-03 §03.7: the 40 model-fallback phrases of the golden corpus. Real Haiku calls; spends a little quota.
 describe.skipIf(!process.env.RUN_CLAUDE)("schedule parser model fallback (40 cases)", () => {
   it("every case produces the same next 10 runs as its expected schedule", async () => {
-    const model = new SdkOneShot({ env: { HOME: process.env.HOME as string, PATH: process.env.PATH as string }, cwd: fs.mkdtempSync(path.join(os.tmpdir(), "sched-eval-")) });
+    const model = new SdkOneShot({ env: { HOME: realHomeForTest("the Mac's logged-in Claude Code (opt-in RUN_CLAUDE run)"), PATH: process.env.PATH as string }, cwd: fs.mkdtempSync(path.join(os.tmpdir(), "sched-eval-")) });
     const failures: string[] = [];
     for (const c of cases) {
       try {

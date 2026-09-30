@@ -6,6 +6,7 @@ import { DEFAULT_BOT_MODEL } from "@synapse/shared";
 import { fillTemplate, loadPrompt } from "../../prompts/index";
 import { SPEAKABLE } from "../../voice/front";
 import { SdkFrontSession, type FrontTurn } from "../../voice/front-session";
+import { realHomeForTest } from "../../../scripts/test-home";
 
 /**
  * call-behaviour (plan items 13, 20, 27): the voice prompt BEFORE (a file you pass in) against the one in the repo,
@@ -67,7 +68,7 @@ const pct = (v: number[], p: number) => { const s = [...v].sort((a, b) => a - b)
 describe.skipIf(process.env.RUN_PROMPT_AB !== "1")("the voice prompt, before and after (REAL model)", () => {
   it("scores both prompts on the same call-style turns", async () => {
     const env: Record<string, string> = {
-      HOME: os.homedir(), PATH: process.env.PATH ?? "/usr/bin:/bin", USER: process.env.USER ?? "user", LANG: "en_US.UTF-8",
+      HOME: realHomeForTest("the real claude CLI login lives there (opt-in live run)"), PATH: process.env.PATH ?? "/usr/bin:/bin", USER: process.env.USER ?? "user", LANG: "en_US.UTF-8",
       SHELL: "/bin/zsh", TMPDIR: os.tmpdir(), ENABLE_TOOL_SEARCH: "false",
     };
     const vars = { BOT_NAME: "Nova", USER_NAME: "Alex", PERSONA: "Chief of Staff. Warm, quick, a little dry; keeps things moving." };

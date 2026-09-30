@@ -13,6 +13,7 @@ import { pickableModels, startModelAccessSync, useModelAccess } from "../model-a
 import { Menu, type MenuItem } from "./Menus";
 import { extractMentions, mentionQuery, MentionPicker, useMentionNames } from "./MentionPicker";
 import { PrivacySettingsButton } from "../voice/PrivacySettingsButton";
+import { ServerSpeechAllow } from "../voice/ServerSpeechAllow";
 import { ReplyChip } from "./ReplyChip";
 import { SkillChips, SkillPicker } from "./SkillPicker";
 
@@ -216,6 +217,7 @@ export function Composer({ botId, name, running }: { botId: string; name: string
       {dict.error && <span className="error" role="alert">{dict.error}</span>}
       {dict.notice && <span className="muted small dictation-notice" role="status">{dict.notice}</span>}
       {dict.error && dict.privacyPane && <PrivacySettingsButton pane={dict.privacyPane} />}
+      {dict.error && dict.serverOptIn && <ServerSpeechAllow onAllowed={() => startDictation()} />}
     </div>
   );
 }

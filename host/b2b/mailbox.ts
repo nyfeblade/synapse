@@ -9,7 +9,7 @@ import type { PromptDecorator, TurnRunner } from "../runner/turn-runner";
 import type { ChainStore } from "./chains";
 import type { RequestStore } from "./requests";
 import type { ThreadStore } from "./threads";
-import { renderAgentWake } from "./wake-prompt";
+import { agentWakeFits, renderAgentWake } from "./wake-prompt";
 
 export { renderAgentWake } from "./wake-prompt";
 
@@ -202,7 +202,8 @@ export class Mailbox {
     box.taskId = id;
   }
 
-  /** Picks this turn's batch once: ordered blocker > question > request > handoff > result, ≤ 5 messages, ≤ 20,000 chars. */
+  /** Picks this turn's batch once: ordered blocker > question > request > handoff > result, ≤ 5 messages, ≤ 20,000 chars,
+   *  and (bug 432) a wake Auto-review can read whole. */
   private batchOf(to: string): Delivery[] {
     const box = this.box(to);
     if (box.batch) return box.batch;
@@ -212,6 +213,8 @@ export class Mailbox {
     for (const m of sorted) {
       if (batch.length >= LIMITS.coalesceMaxMessages) break;
       if (batch.length && chars + m.message.length > LIMITS.coalesceMaxChars) break;
+      // Bug 432: the batch's wake stays within what Auto-review reads (the first message always fits: b2b/gate.ts).
+      if (batch.length && !agentWakeFits([...batch, m])) break;
       batch.push(m);
       chars += m.message.length;
     }
@@ -318,7 +321,9 @@ export function installChainTracking(runner: TurnRunner, chains: ChainStore): vo
   runner.addObserver({
     onTurnStart: (botId, slot) => {
       if (slot.context.chainId) return;
-      const kind: ChainRootKind = slot.source === "routine" ? "routine" : USER_ROOTS.has(slot.source) ? "user" : "system";
+      // 0.1.4: a follow-up nudge roots as the turn that caused it (a routine's or an app's nudge is not a user chain).
+      const src = slot.reviewSource ?? slot.source;
+      const kind: ChainRootKind = src === "routine" ? "routine" : USER_ROOTS.has(src) ? "user" : "system";
       slot.context.chainId = chains.start(kind, botId).chainId;
     },
   });
