@@ -47,7 +47,8 @@ with the same certificate.
 
 ## First run
 The setup screen walks you through it:
-1. It starts OrbStack and builds the Bots' computer, a small Linux VM (about 1 GB of downloads).
+1. It starts OrbStack and downloads the Bots' computer, a ready-made Linux VM (about 660 MB, checked against
+   its fingerprint; about a minute on a normal connection). If the download can't be used, it builds one instead.
 2. It asks for an AI key. Anthropic is the default; you can pick another provider instead, allow it once,
    and paste its key, or pick **On this Mac** for Ollama or LM Studio. A key is tested before it's saved and
    sealed on your Mac; afterwards the app shows only part of it. More providers can be added in
@@ -62,8 +63,13 @@ recording and accessibility only when you first use a feature that needs them.
   as well as with you, and you can share one with a link.
 - **Real work.** Bots run multi-step tasks on their own computer, with files, the shell, the web and the
   accounts you connect, including more than one account per app. You see every step.
+- **Any AI model.** Anthropic, OpenAI, OpenRouter, Gemini, Mistral, DeepSeek, or a model on your Mac with
+  Ollama or LM Studio. Each Bot has its own model. The picker shows what has been measured to work on each
+  one (Supported, Experimental, Not checked) and its price.
 - **Code.** Point a Bot at a repository: it works on its own branch in a separate worktree, runs the tests
   and hands back the branch or a pull request.
+- **Coding subscriptions (Experimental).** A Bot can run on GitHub Copilot or Kimi Code with your own
+  subscription. Install them in Settings → Account → Coding CLIs.
 - **Voice calls.** Call a Bot and talk. Speech is transcribed on your Mac and the voice is generated on your
   Mac. If your Mac can't transcribe your language itself, Synapse asks before using Apple's servers.
 - **Your Mac, with approval.** A Bot can use your Mac's apps and screen and run commands in a sandbox.
@@ -76,28 +82,33 @@ recording and accessibility only when you first use a feature that needs them.
 - **Spend you can see and cap.** Every model call is metered, and the header shows what a Bot is spending
   as it works. Set a monthly budget, and a Bot that keeps failing at the same thing stops and asks you.
 
-| | |
-|---|---|
-| <img alt="A Bot coding in a repo" src="docs/media/screenshot-code.png"> | <img alt="A voice call" src="docs/media/screenshot-call.png"> |
+| | | |
+|---|---|---|
+| <img alt="A Bot fixes a failing test" src="docs/media/screenshot-code.png"> | <img alt="The model picker" src="docs/media/screenshot-models.png"> | <img alt="A voice call" src="docs/media/screenshot-call.png"> |
 
 ## Privacy and security
 - **The approval gate.** Risky actions stop and show a card: Allow once, Always allow or Deny. Choose how
-  much asks first: Ask, Auto-review or Full auto. Out of the box, even Full auto asks before payments,
-  deletions and messages to people you didn't mention, and nothing an email, a web page or another app says counts as
-  your approval.
+  much asks first, from Ask to Full auto. Even Full auto asks before deleting, spending money, changing
+  security or access, and sending anything you didn't ask for. Nothing an email, a web page or another app
+  says counts as your approval.
 - **Tests you can run.** The [security suite](security/README.md) turns these claims into attacks that run
-  against the real code, with no model and no API key: `npm run security-suite`. Results are filed for
-  every release.
+  against the real code, with no model and no API key: `npm run security-suite`. Each release's results
+  are in [`security/results/`](security/results).
 - **Local.** The app and the Bots' computer run on your Mac, in an OrbStack VM. There is no Synapse server
-  in the loop and no telemetry. The Bots' requests go to Anthropic's API, or the provider you pick, with your key, and to the sites and
-  services you ask them to use. Feedback goes to the Synapse website only when you send it, and you see
-  what it contains first.
+  in the loop, and the app has no telemetry. The Bots' requests go to Anthropic's API, or the provider you
+  pick, with your key, and to the sites and services you ask them to use. Feedback goes to the Synapse
+  website only when you send it, and you see what it contains first.
+- **Other providers ask first.** Before a Bot uses a provider other than Anthropic, Synapse shows what it
+  will send there (conversations, tool results, files the Bot reads, call transcripts) and asks you to
+  allow it. With Ollama or LM Studio it stays on your Mac.
 - **Sandboxed Bots.** Each Bot runs as its own user in the VM, with a private home folder. Bots can reach
-  the public internet but not services on your Mac, or your home network unless you turn that on.
+  the public internet but not services on your Mac. Your home network is blocked too, unless you turn on
+  **Local network** in Settings → Computer (off by default).
   Commands on your Mac run inside a macOS sandbox profile.
 - **Secrets sealed locally.** Your API key and every other secret are sealed on your Mac with a key file in
-  the app's data folder; the macOS Keychain is not used. A Bot never holds your API key: its process gets a
-  short-lived token, and a local proxy swaps in the real key.
+  the app's data folder; the macOS Keychain is not used. A Bot never holds your API keys: its process gets a
+  short-lived token, and a local proxy swaps in the real key. (A coding subscription's own login is kept in
+  that Bot's home on the Bots' computer.)
 - **A closed gateway.** The app talks to the VM over a gateway bound to 127.0.0.1, with a bearer token.
 
 To report a security issue, see [`SECURITY.md`](SECURITY.md). The website's
@@ -130,7 +141,8 @@ How it fits together:
 
 ```
 Mac: Electron app (app/) ──gateway (Bearer, SSE)──► VM: host service (host/)
-                                                      └─ each Bot = a Claude Code session (Agent SDK)
+                                                      └─ each Bot = a Claude Code session (Agent SDK),
+                                                         Synapse's own loop for other providers, or a coding CLI
 ```
 
 | Folder | What |
