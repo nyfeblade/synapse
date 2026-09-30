@@ -231,7 +231,7 @@ describe("the header credential does reach the one place it belongs: the outboun
     await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
     const port = (srv.address() as import("node:net").AddressInfo).port;
     try {
-      const connector = httpConnector(() => undefined);
+      const connector = httpConnector(() => undefined, () => undefined);
       // `headers` on the record is {} since the vault fix: if the connector read it, nothing is sent.
       await connector({ id: "composio", url: `http://127.0.0.1:${port}/mcp`, headers: {} } as never, { [HEADER]: SECRET }).catch(() => {});
       expect(seen.length, "the transport made no request — this proves nothing").toBeGreaterThan(0);

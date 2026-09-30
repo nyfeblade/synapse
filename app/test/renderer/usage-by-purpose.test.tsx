@@ -8,7 +8,7 @@ import { useUsage } from "../../src/renderer/usage/store";
 /** Background model calls (memory extraction, episodes, dreaming, …) are recorded now; the view splits the week
  *  by kind of work and says plainly when older figures were rebuilt from the running totals stored before the fix. */
 const view: UsageView = {
-  source: "metering", budgetUsd: null, budgetPct: null, level: "L0", limitedUntil: null, weekStart: 0,
+  source: "metering", budgetPct: null, level: "L0", limitedUntil: null, weekStart: 0,
   rows: [{ botId: "a", name: "Chief of Staff", model: "claude-sonnet-5", turns: 8, tokens: 5_000_000, costUsd: 3.74 }],
   efficiency: { dropped: 0, wakesAvoided: 0, burstsCoalesced: 0, loopsEnded: 0 },
   byPurpose: [

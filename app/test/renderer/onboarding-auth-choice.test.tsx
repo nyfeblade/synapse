@@ -39,8 +39,8 @@ describe("first run: the Anthropic API key is the only sign-in", () => {
     expect(calls.some(([c]) => c === "setAuthMode")).toBe(false);
   });
 
-  // "Input API Key →" is the first button in the app: a refusal or a host that never answers must say so and free it.
-  it("Input API Key refused by another account's host shows that plainly and the button works again", async () => {
+  // "Add API key" is the first button in the app: a refusal or a host that never answers must say so and free it.
+  it("Add API key refused by another account's host shows that plainly and the button works again", async () => {
     (window as unknown as { synapse: { call: unknown } }).synapse.call = async () => ({ ok: false, error: { code: "NOT_CONNECTED", message: WRONG_HOST_MESSAGE } });
     render(<Onboarding onDone={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: STR5.signIn }));
@@ -48,7 +48,7 @@ describe("first run: the Anthropic API key is the only sign-in", () => {
     expect((screen.getByRole("button", { name: STR5.signIn }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("Input API Key that is slow shows a plain line, and the button comes back when the ask settles", async () => {
+  it("Add API key that is slow shows a plain line, and the button comes back when the ask settles", async () => {
     let answer!: (v: unknown) => void;
     (window as unknown as { synapse: { call: unknown } }).synapse.call = () => new Promise((r) => { answer = r; });
     render(<Onboarding onDone={() => {}} timeoutMs={40} />);

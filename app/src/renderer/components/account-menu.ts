@@ -16,7 +16,8 @@ export function registerAccountItem(id: string, order: number, item: () => MenuI
 // repeated the "38% this week" line on the account row directly beneath the menu.
 // The quiet sidebar (the smooth pass, Task 2): Home, Schedules, Usage and Marketplace no longer sit
 // as their own sidebar rows/foot — they live here, in the account menu, ahead of Settings.
-registerAccountItem("home", 21, () => ({ label: STRL.home, onSelect: () => useUi.getState().openNewChat() }));
+// New-user walk, finding 15: each label names where it goes ("Home" opened New chat; Usage now has its own section).
+registerAccountItem("home", 21, () => ({ label: STR.newChat, onSelect: () => useUi.getState().openNewChat() }));
 registerAccountItem("schedules", 22, () => ({ label: STRL.schedules, onSelect: () => useUi.getState().openSettings("schedules") }));
 registerAccountItem("usage", 23, () => ({ label: STRL.usage, onSelect: () => useUi.getState().openSettings("usage") }));
 registerAccountItem("marketplace", 24, () => ({ label: STR.marketplace, onSelect: () => useMarketplace.getState().openMarketplace() }));

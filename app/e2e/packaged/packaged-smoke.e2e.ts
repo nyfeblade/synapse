@@ -101,7 +101,7 @@ test("the bundled host launched from the bundled path", async () => {
 });
 
 test("onboarding → first Bot → a message → a fake-brain reply", async () => {
-  await win.getByRole("button", { name: "Input API Key →" }).click({ timeout: 40_000 });
+  await win.getByRole("button", { name: "Add API key" }).click({ timeout: 40_000 });
   // synapse-public: the Anthropic API key is the only sign-in (a stand-in key; the fake brain never calls out).
   await win.getByLabel("Anthropic API key").fill(E2E_TEST_API_KEY);
   await win.getByRole("button", { name: "Save key" }).click();

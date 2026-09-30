@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { STR, STR5, normalizeMcpHeaderValue, type McpServerView, type PluginMarketplaceView, type SkillView } from "@synapse/shared";
+import { STR, STR5, STRX, normalizeMcpHeaderValue, type McpServerView, type PluginMarketplaceView, type SkillView } from "@synapse/shared";
 import { useAsync } from "../async-resource";
 import { call, callQuiet } from "../bridge";
 import { Async } from "../components/Async";
@@ -10,6 +10,7 @@ import { authorize, useMarketplace } from "./store";
 import { useOverlays } from "../overlays";
 import { askConfirm } from "../components/ConfirmDialog";
 import { GITHUB_HEADER, SLACK_HEADER, applyCustomMcpPreset, isComposioCustomServer, isGithubCustomServer, isSlackCustomServer } from "./custom-mcp-preset";
+import { useComposio } from "../composio/store";
 
 function isSlackServer(s: McpServerView): boolean {
   return s.catalogId === "curated:slack" || isSlackCustomServer(s.name, "");
@@ -26,9 +27,10 @@ function headerAuthPreset(s: McpServerView): string | null {
 }
 
 function headerHintFor(name: string, url = "", server?: McpServerView): string {
+  // An existing (pre-retirement) Composio server keeps its hint on its own card.
   if (server && isGithubServer(server)) return STR5.githubHeaderHint;
   if (server && isSlackServer(server)) return STR5.slackHeaderHint;
-  if (isComposioCustomServer(name, url)) return STR5.composioHeaderHint;
+  if (server && isComposioCustomServer(name, url)) return STR5.composioHeaderHint;
   if (isSlackCustomServer(name, url)) return STR5.slackHeaderHint;
   if (isGithubCustomServer(name, url)) return STR5.githubHeaderHint;
   return STR5.headerHint;
@@ -85,8 +87,8 @@ function HeaderRows({ s }: { s: McpServerView }) {
           )}
           <label htmlFor={`hdr-value-${s.id}`}>{STR5.headerValue}</label>
           <input id={`hdr-value-${s.id}`} type="password" autoComplete="off" className="text-input" value={value} onChange={(e) => setValue(e.target.value)} />
+          <button type="button" className="btn-secondary" onClick={close}>{STR.cancel}</button>
           <button type="button" className="btn-primary" disabled={!name.trim() || !value} onClick={() => send(name.trim(), value)}>{STR5.saveHeader}</button>
-          <button type="button" className="btn-outline small" onClick={close}>{STR.cancel}</button>
         </div>
       )}
       <span className="muted small">{headerHintFor(s.name, "", s)}</span>
@@ -174,6 +176,7 @@ function AddServer({ onDone }: { onDone(): void }) {
   const [headerValue, setHeaderValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const halfHeader = !headerName.trim() !== !headerValue;
+  const composio = isComposioCustomServer(name, url);
   const applyPreset = (nextName: string, nextUrl: string, nextHeader: string) => {
     const next = applyCustomMcpPreset(nextName, nextUrl, nextHeader);
     if (next.url !== nextUrl) setUrl(next.url);
@@ -188,15 +191,20 @@ function AddServer({ onDone }: { onDone(): void }) {
     } catch (e) { setError((e as Error).message); }
   };
   return (
-    <div className="settings-card">
+    <div className="settings-card mcp-form">
       <label htmlFor="srv-name">{STR5.serverName}</label><input id="srv-name" className="text-input" value={name} onChange={(e) => { const v = e.target.value; setName(v); applyPreset(v, url, headerName); }} />
       <label htmlFor="srv-url">{STR5.serverUrl}</label><input id="srv-url" className="text-input" placeholder="https://" value={url} onChange={(e) => { const v = e.target.value; setUrl(v); applyPreset(name, v, headerName); }} />
       <label htmlFor="srv-hdr-name">{STR5.headerName}</label><input id="srv-hdr-name" className="text-input" value={headerName} onChange={(e) => setHeaderName(e.target.value)} />
       <label htmlFor="srv-hdr-value">{STR5.headerValue}</label><input id="srv-hdr-value" type="password" autoComplete="off" className="text-input" value={headerValue} onChange={(e) => setHeaderValue(e.target.value)} />
-      <span className="muted small">{headerHintFor(name, url)}</span>
+      {composio ? (
+        <div className="settings-row" role="note" aria-label={STRX.presetRetired}>
+          <span className="grow">{STRX.presetRetired}</span>
+          <button type="button" className="btn-outline small" onClick={() => useComposio.getState().openSheet()}>{STRX.setUpComposio}</button>
+        </div>
+      ) : <span className="muted small">{headerHintFor(name, url)}</span>}
       <label htmlFor="srv-cmd">{STR5.serverCommand}</label><input id="srv-cmd" className="text-input" value={command} onChange={(e) => setCommand(e.target.value)} />
       {error && <span className="error" role="alert">{error}</span>}
-      <button type="button" className="btn-primary" disabled={!name.trim() || (!url.trim() && !command.trim()) || halfHeader} onClick={() => void submit()}>{STR5.add}</button>
+      <button type="button" className="btn-primary" disabled={composio || !name.trim() || (!url.trim() && !command.trim()) || halfHeader} onClick={() => void submit()}>{STR5.add}</button>
     </div>
   );
 }

@@ -22,7 +22,7 @@ const KEEP = 50;
 const LOG_LINES = 200;
 const DEDUPE_MS = 60_000;
 
-function tail(files: string[], n: number): string[] {
+export function tail(files: string[], n: number): string[] {
   const lines: string[] = [];
   for (const f of files) {
     try {

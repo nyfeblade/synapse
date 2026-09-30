@@ -1,4 +1,5 @@
-import { STRO } from "@synapse/shared";
+import { STRF, STRO } from "@synapse/shared";
+import { openFeedback } from "./feedback/store";
 import { nativeCall, onNative } from "./native";
 
 /** How long the "recovered" toast stays: long enough to click View, short enough not to nag. */
@@ -21,6 +22,13 @@ export function showRecoveredToast(openDiagnostics: () => void): void {
   view.textContent = STRO.view;
   view.addEventListener("click", () => { el.remove(); live = null; openDiagnostics(); });
   el.append(view);
+  // After a crash: send it to us, with its report as the logs (previewed first, like any feedback).
+  const report = document.createElement("button");
+  report.type = "button";
+  report.className = "crash-toast-view";
+  report.textContent = STRF.sendReport;
+  report.addEventListener("click", () => { el.remove(); live = null; void openFeedback({ type: "bug", crash: "latest" }); });
+  el.append(document.createTextNode(" · "), report);
   document.body.appendChild(el);
   live = el;
   window.setTimeout(() => { if (live === el) { el.remove(); live = null; } }, VISIBLE_MS);

@@ -47,11 +47,27 @@ describe("computer view (CMP-09, CMP-18)", () => {
     useComputer.setState({ open: { botId: "b" }, displays: { b: { botId: "b", index: 2, display: ":2", cdpPort: 9224, running: true, generation: 1 } } });
   });
 
+  it("new-user walk finding 14: with no run and nobody driving it says Idle, and one screen has no ':2' button", () => {
+    useUi.setState({ transcripts: { b: [] } as never });
+    render(<ComputerView />);
+    expect(screen.getByText(STRC.idle)).toBeTruthy();
+    expect(screen.queryByText(/in use/)).toBeNull();
+    expect(screen.queryByRole("button", { name: ":2" })).toBeNull();
+  });
+
+  it("new-user walk finding 14: several screens are named by their Bots", () => {
+    useUi.setState({ transcripts: { b: [] } as never, bots: { b: { id: "b", profile: { name: "Scout", avatarShape: "pebble", avatarColor: "#3472d9" } }, c: { id: "c", profile: { name: "Ledger", avatarShape: "pebble", avatarColor: "#3472d9" } } } as never });
+    useComputer.setState({ displays: { b: { botId: "b", index: 2, display: ":2", cdpPort: 9224, running: true, generation: 1 }, c: { botId: "c", index: 3, display: ":3", cdpPort: 9225, running: true, generation: 1 } } });
+    render(<ComputerView />);
+    expect(screen.getByRole("button", { name: "Ledger" })).toBeTruthy();
+    expect(screen.queryByText(":3")).toBeNull();
+  });
+
   it("shows the title bar, the in-control status bar, and hands back with I'm done", async () => {
     render(<ComputerView />);
-    expect(screen.getByRole("dialog", { name: "Bots' Computer" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Bots' computer" })).toBeTruthy();
     expect(screen.getByText("Scout")).toBeTruthy();
-    expect(screen.getByText("Bots' Computer, in use")).toBeTruthy();
+    expect(screen.getByText("Bots' computer, in use")).toBeTruthy();
     // Phase 4 (integration): the title-bar pill is the real TeachPill now, enabled for a one-to-one Bot.
     expect((screen.getByRole("button", { name: "Teach a task" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText("You're in control")).toBeTruthy();

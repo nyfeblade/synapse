@@ -8,11 +8,12 @@ import { CloseIcon, SearchIcon } from "./Icons";
 import { EmptyView } from "./EmptyView";
 import { openDeepLink, settingLink } from "../deep-links";
 import { rowOf, searchSettings, type SettingEntry } from "./settings/search-index";
-import { GeneralSection } from "./settings/GeneralSection";
+import { AutoReviewSection, GeneralSection } from "./settings/GeneralSection";
 import { registerGeneralBlock, registerSettingsSection, sectionOf, settingsSections, type SettingsSectionId } from "./settings/sections";
 import { SettingLinksLayer } from "./settings/SettingLinksLayer";
 
 registerSettingsSection("general", STR.general, GeneralSection);
+registerSettingsSection("auto-review", STR.autoReview, AutoReviewSection);
 // The Anthropic API key (the only sign-in).
 registerSettingsSection("account", STR_AUTH.sectionTitle, AccountSection);
 

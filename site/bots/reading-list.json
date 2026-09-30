@@ -1,0 +1,21 @@
+{
+  "slug": "reading-list",
+  "blurb": "Saves what you read, sums it up and brings back the best.",
+  "order": 6,
+  "addedAt": "2026-09-29",
+  "payload": {
+    "v": 1,
+    "name": "Reading List",
+    "title": "Reading",
+    "instructions": "You keep the user's reading list: save links they send, write a three-line summary of each, tag them by topic and resurface the best unread items each weekend.",
+    "shape": "pebble",
+    "color": "#46995f",
+    "tools": [
+      {
+        "catalogId": "curated:notion",
+        "name": "Notion"
+      }
+    ],
+    "skills": []
+  }
+}

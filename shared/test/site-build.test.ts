@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error plain ESM build script, no types
-import { inline, parseChangelog, renderReleases, seoHead, sitemap, robots, SITE_URL, PAGES, build, botSvg, botDefs, expandBots, header, footer, EYE_INK, themeBoot } from "../../site/build.mjs";
+import { inline, parseChangelog, renderReleases, seoHead, sitemap, robots, SITE_URL, PAGES, NO_ANALYTICS, build, botSvg, botDefs, expandBots, header, footer, EYE_INK, themeBoot } from "../../site/build.mjs";
 import crypto from "node:crypto";
 
 const md = `# Changelog\n\nintro\n\n## 0.2.0 — Unreleased\n\n- **New.** A thing.\n\n## 0.1.0 — 2026-09-28 — beta\n\nFirst.\n\n### Bots\n\n- One\n- Two\n`;
@@ -256,7 +256,9 @@ describe("site /feedback/thread (private replies)", () => {
 
 describe("website analytics", () => {
   it("every page loads Vercel Web Analytics, and the docs say what it is", () => {
-    for (const key of Object.keys(PAGES)) expect(seoHead(key, "0.1.3")).toContain('<script defer src="/_vercel/insights/script.js"></script>');
+    // Bot sharing: /bot and /bots show someone's Bot from a link's fragment, so they load no analytics.
+    for (const key of Object.keys(PAGES).filter((k) => !NO_ANALYTICS.has(k))) expect(seoHead(key, "0.1.3")).toContain('<script defer src="/_vercel/insights/script.js"></script>');
+    expect(seoHead("bots", "0.1.3")).not.toContain("/_vercel/insights");
     expect(fs.readFileSync(path.join(__dirname, "../../site/docs.html"), "utf8")).toMatch(/Vercel Web Analytics: no cookies/);
   });
 });
@@ -302,7 +304,7 @@ describe("security headers", () => {
     const dist = build("2026-09-29");
     for (const f of fs.readdirSync(dist).filter((x) => x.endsWith(".html"))) {
       const html = fs.readFileSync(path.join(dist, f), "utf8");
-      const inlines = [...html.matchAll(/<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/application\/ld\+json/.test(m[1]!)).map((m) => m[0]);
+      const inlines = [...html.matchAll(/<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/application\/(?:ld\+)?json/.test(m[1]!)).map((m) => m[0]); // data blocks never run (/bots embeds its list as JSON)
       expect(inlines.every((x) => x === themeBoot), f).toBe(true);
       expect(html, f).not.toMatch(/\son[a-z]+="/);
     }
@@ -392,5 +394,45 @@ describe("small things", () => {
     const ld = JSON.parse(fs.readFileSync(path.join(dist, "index.html"), "utf8").match(/<script type="application\/ld\+json">(.*?)<\/script>/)![1]!);
     expect(ld.softwareVersion).toBe(latest);
     expect(fs.readFileSync(path.join(__dirname, "../../site/index.html"), "utf8")).not.toContain("softwareVersion");
+  });
+});
+
+// Privacy Policy and Terms of Use (legal, 2026-09-29).
+describe("site /privacy and /terms", () => {
+  const dist = build("2026-09-29");
+  const page = (f: string) => fs.readFileSync(path.join(dist, f), "utf8");
+  it("are built with the shared pieces and their own SEO tags, indexed and in the sitemap", () => {
+    for (const [key, f] of [["privacy", "privacy.html"], ["terms", "terms.html"]] as const) {
+      const html = page(f);
+      expect(html).not.toMatch(/<!--(SEO|HEADER|FOOTER|THEME)/);
+      for (const t of ['class="site-header"', 'class="site-footer"', `<link rel="canonical" href="${SITE_URL}/${key}">`, '<main id="main"', 'class="summary"', "Effective <time"]) expect(html, f).toContain(t);
+      expect(html, f).not.toContain("noindex");
+      expect(sitemap("2026-09-29")).toContain(`<loc>${SITE_URL}/${key}</loc>`);
+    }
+  });
+  it("every page's footer links Privacy, Terms, the Apache-2.0 licence and the trademark policy", () => {
+    for (const t of ['href="/privacy">Privacy</a>', 'href="/terms">Terms</a>', ">Apache-2.0 licence</a>", "TRADEMARKS.md"]) expect(footer()).toContain(t);
+    expect(footer()).not.toMatch(/\bMIT\b/);
+    for (const f of fs.readdirSync(dist).filter((x) => x.endsWith(".html") && x !== "stats.html")) expect(page(f), f).toContain('href="/terms"');
+  });
+  it("the feedback page links both next to Send, and the docs link the policy", () => {
+    expect(page("feedback.html")).toMatch(/type="submit">Send<\/button>\s*<p class="fb-legal">[^<]*<a href="\/privacy#feedback">Privacy<\/a> · <a href="\/terms">Terms<\/a>/);
+    expect(page("docs.html")).toContain('<a href="/privacy">Privacy Policy</a>');
+  });
+  it("the home page says Apache-2.0 and its JSON-LD points at the licence", () => {
+    const home = page("index.html");
+    expect(home).not.toMatch(/\bMIT\b/);
+    expect(home).toContain("<b>Apache-2.0</b>");
+    const ld = JSON.parse(home.match(/<script type="application\/ld\+json">(.*?)<\/script>/)![1]!);
+    expect(ld.license).toBe("https://www.apache.org/licenses/LICENSE-2.0");
+  });
+  it("say what the code does: no email, the thread code in the fragment, Vercel, GitHub, no selling", () => {
+    const privacy = page("privacy.html"), terms = page("terms.html");
+    for (const t of ["no telemetry", "Vercel Web Analytics", "GitHub Releases", "private GitHub repository", "one-way hash", "We don't sell or share personal information", "Legitimate interests", "Standard Contractual Clauses", "under 13", "Do Not Track"]) expect(privacy).toContain(t);
+    for (const t of ['"AS IS"', "Apache License 2.0", "To the maximum extent permitted by law", "Indemnity", "Severability", "without regard to conflict-of-law rules"]) expect(terms).toContain(t);
+    for (const html of [privacy, terms]) {
+      expect(html).not.toMatch(/mailto:|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}/);
+      expect(html).not.toMatch(/lawyer|draft/i);
+    }
   });
 });

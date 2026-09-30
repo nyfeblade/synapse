@@ -2,11 +2,10 @@
  * Known custom-MCP presets. The add form stays generic (PLG-08); a name or URL we already
  * recognize fills the fields the user would otherwise have to copy from that server's docs.
  *
- * Composio's pair is from their Connect docs: URL https://connect.composio.dev/mcp and header
- * x-consumer-api-key.
+ * Bug 403: Composio is no longer a preset here. It has its own built-in setup (Settings → Connected accounts →
+ * Composio), where every send or change asks; the add form points there instead of filling a consumer-key header.
+ * Servers added this way before keep working, and every tool on a Composio host is classified as Composio.
  */
-export const COMPOSIO_MCP_URL = "https://connect.composio.dev/mcp";
-export const COMPOSIO_HEADER = "x-consumer-api-key";
 export const SLACK_MCP_URL = "https://mcp.slack.com/mcp";
 export const SLACK_HEADER = "Authorization";
 export const GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/";
@@ -29,12 +28,6 @@ export function applyCustomMcpPreset(
   url: string,
   headerName: string,
 ): { url: string; headerName: string } {
-  if (isComposioCustomServer(name, url)) {
-    return {
-      url: url.trim() ? url : COMPOSIO_MCP_URL,
-      headerName: headerName.trim() ? headerName : COMPOSIO_HEADER,
-    };
-  }
   if (isSlackCustomServer(name, url)) {
     return {
       url: url.trim() ? url : SLACK_MCP_URL,

@@ -8,6 +8,7 @@ import { readJson, writeJsonAtomic } from "../util/atomic-json";
 import { writeTextAtomic } from "../util/atomic-text";
 import { deleteSkillDir, SKILL_REL_RE, writeSkillFile, writeSkillHelperFile } from "./skill-box-ops";
 import { parseSkill, serializeSkill, slugify, validateSkill, type SkillFile } from "./skill-file";
+import { othersThirdPartySkills } from "./third-party";
 
 const FILE_MODE = 0o664; // box:bots 2775 folder (Task 3): the CLI (user box) reads and edits these
 
@@ -89,6 +90,12 @@ export class SkillLibrary {
     if (this.ids().includes(want)) return want;
     return this.ids().find((id) => this.read(id)!.file.name.toLowerCase() === want.toLowerCase()) ?? null;
   }
+  /** Every skill whose id is `nameOrId` or whose name matches it (case-insensitive). */
+  findAllByName(nameOrId: string): string[] {
+    const want = nameOrId.trim().toLowerCase();
+    if (!want) return [];
+    return this.ids().filter((id) => id === nameOrId.trim() || this.read(id)?.file.name.toLowerCase() === want);
+  }
   findBySource(url: string): string | null {
     return this.ids().find((id) => this.read(id)!.file.metadata.source === url) ?? null;
   }
@@ -136,15 +143,22 @@ export class SkillLibrary {
   private optFile(botId: string): string {
     return path.join(botDir(this.d.cfg, botId), "enabled-workflows.json");
   }
+  /** Off for this Bot: its own opt-outs, plus every third-party skill that came with another Bot (Bot sharing). */
   disabledFor(botId: string): string[] {
+    const own = this.optedOut(botId);
+    return [...new Set([...own, ...othersThirdPartySkills(this.d.cfg, botId)])];
+  }
+  private optedOut(botId: string): string[] {
     return readJson<{ disabled: string[] }>(this.optFile(botId), { disabled: [] }).disabled;
   }
   setEnabled(botId: string, id: string, enabled: boolean): string[] {
-    const cur = this.disabledFor(botId).filter((x) => x !== id);
+    // A skill that came with another Bot (Bot sharing) can't be turned on here; say so rather than flip back.
+    if (enabled && othersThirdPartySkills(this.d.cfg, botId).includes(id)) throw new GatewayError("SKILL_STAYS", "Shared skills stay with the Bot they came with.", 409);
+    const cur = this.optedOut(botId).filter((x) => x !== id);
     const next = enabled ? cur : [...cur, id];
     writeJsonAtomic(this.optFile(botId), { disabled: next }, 0o640);
     this.d.onChange?.();
-    return next;
+    return this.disabledFor(botId);
   }
 
   view(id: string, botIds: string[]): SkillView {

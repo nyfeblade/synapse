@@ -67,7 +67,7 @@ export function ExportSheet() {
             <button type="button" className="btn-outline small" onClick={() => void navigator.clipboard.writeText(saved)}>{STR5.copyFilePath}</button></div>
         )}
         <div className="sheet-actions">
-          <button type="button" className="btn-outline" onClick={close}>{saved ? STR.close : STR.cancel}</button>
+          <button type="button" className="btn-secondary" onClick={close}>{saved ? STR.close : STR.cancel}</button>
           {!saved && <button type="button" className="btn-primary" disabled={!d || saving} onClick={() => void save()}>{STR5.saveTemplate}</button>}
         </div>
       </>

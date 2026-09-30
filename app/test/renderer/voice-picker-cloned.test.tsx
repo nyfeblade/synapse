@@ -87,6 +87,7 @@ describe("the voice picker with cloned voices", () => {
   });
 
   it("states what a cloned voice costs, in one plain line", async () => {
+    useUi.setState({ settings: { ...(useUi.getState().settings ?? {}), advancedEnabled: true } as never }); // new-user walk finding 8: advanced controls
     installBridge(CLONED);
     render(<VoiceSettings botId="b1" />);
     // UI polish pass (brief 2): the cost is a value in the "Memory while loaded" group.

@@ -1,7 +1,10 @@
-import { useEffect } from "react";
-import { STRG, type GoogleStatusView } from "@synapse/shared";
+import { useEffect, useState } from "react";
+import { STRG, STRGS, STRX, type GoogleReconnectCheckView, type GoogleStatusView } from "@synapse/shared";
+import { callQuiet } from "../bridge";
+import { SavedSwitch } from "../components/SavedSwitch";
 import { registerGeneralBlock } from "../components/settings/sections";
 import { useGoogle, useGoogleSync } from "./store";
+import { useComposio, useComposioSync } from "../composio/store";
 
 const summary = (s: GoogleStatusView | null) =>
   !s || s.state === "not-configured" || s.state === "disconnected" ? STRG.notConnected
@@ -9,24 +12,58 @@ const summary = (s: GoogleStatusView | null) =>
   : s.state === "waiting" ? STRG.waiting
   : s.email ?? STRG.connectedAs("");
 
+/** google-setup: the weekly sign-in check (host-kept; the default follows Testing until the user chooses). */
+function ReconnectCheckRow() {
+  const [v, setV] = useState<GoogleReconnectCheckView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { void (callQuiet("getGoogleReconnectCheck", {}) as Promise<GoogleReconnectCheckView>).then(setV, () => setFailed(true)); }, []);
+  const toggle = () => {
+    if (!v) return;
+    setBusy(true);
+    void (callQuiet("setGoogleReconnectCheck", { enabled: !v.enabled }) as Promise<GoogleReconnectCheckView>).then(setV, () => setFailed(true)).finally(() => setBusy(false));
+  };
+  return (
+    <div className="settings-row" data-setting="google-reconnect-check">
+      <span className="grow">{STRGS.reconnectCheck}</span>
+      <SavedSwitch label={STRGS.reconnectCheck} value={v ? v.enabled : null} busy={busy} failed={failed} onToggle={toggle} />
+    </div>
+  );
+}
+
 /** Settings → General → Connected accounts: the app-level Google account (ORIG-GOOGLE). */
 export function ConnectedAccountsBlock() {
   const { status, load, openSheet } = useGoogle();
   useGoogleSync();
   useEffect(() => { void load(); }, [load]);
   const linked = status?.state === "connected" || status?.state === "needs-reconnect";
+  const verb = linked ? STRG.manage : !status?.clientId ? STRGS.setUp : STRG.connect;
+  const composio = useComposio();
+  useComposioSync();
+  useEffect(() => { void useComposio.getState().load(); }, []);
+  const cx = composio.status;
+  const cxConnected = (cx?.apps ?? []).filter((a) => a.state === "connected").map((a) => a.name);
   return (
+    <>
+    <h3>{STRG.connectedAccounts}</h3>
     <section className="settings-card" aria-label={STRG.connectedAccounts}>
-      <div className="settings-row"><span className="grow">{STRG.connectedAccounts}</span></div>
-      <div className="divider" />
       <div className="settings-row" data-setting="google">
         <span className="grow" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span>{STRG.google}</span>
           <span className={status?.state === "needs-reconnect" ? "error" : "muted"}>{summary(status)}</span>
         </span>
-        <button type="button" className="btn-outline" aria-label={`${linked ? STRG.manage : STRG.connect} ${STRG.google}`} onClick={openSheet}>{linked ? STRG.manage : STRG.connect}</button>
+        <button type="button" className="btn-outline" aria-label={`${verb} ${STRG.google}`} onClick={() => openSheet()}>{verb}</button>
+      </div>
+      {!!status?.clientId && <ReconnectCheckRow />}
+      <div className="settings-row" data-setting="composio">
+        <span className="grow" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span>{STRX.composio}</span>
+          <span className="muted">{!cx?.keySet ? STRX.notSetUp : cxConnected.length ? cxConnected.join(", ") : STRX.keySaved}</span>
+        </span>
+        <button type="button" className="btn-outline" aria-label={`${cx?.keySet ? STRX.manage : STRX.setUp} ${STRX.composio}`} onClick={composio.openSheet}>{cx?.keySet ? STRX.manage : STRX.setUp}</button>
       </div>
     </section>
+    </>
   );
 }
 

@@ -19,17 +19,17 @@ export function settingEntries(): SettingEntry[] {
   return [
     // General
     e("general", STR.timezone, ["time zone", "clock"]),
-    e("general", STR.autoReview, ["approval", "rules", "ask first", "allow", "permissions"]),
+    e("auto-review", STR.autoReview, ["approval", "rules", "ask first", "allow", "permissions"]),
     e("general", STR.theme, ["appearance", "dark", "light", "mode"]),
     e("general", STRG.connectedAccounts, ["google", "gmail", "calendar", "drive"]),
     e("general", STR5.memory, ["remember", "recall"]),
     // Account
     e("account", STR_AUTH.keyLabel, ["api", "key", "anthropic", "sign in", "login"]),
-    e("account", STR_COST.apiSpend, ["usage", "spend", "billing", "cost"]),
-    e("account", STR5.weeklyBudget, ["budget", "spend", "cost", "cap"]),
-    e("account", STR5.keepConversationsReady, ["savings", "cache", "cost", "ttl"]),
-    e("account", STR5.callReplies, ["savings", "effort", "call", "voice", "cost"]),
-    e("account", STR5.longContextModel, ["savings", "1m", "context", "cost"]),
+    e("usage", STR_COST.apiSpend, ["usage", "spend", "billing", "cost"]),
+    e("usage", STR_COST.monthlyBudget, ["budget", "spend", "cost", "cap", "limit"]),
+    e("usage", STR5.keepConversationsReady, ["savings", "cache", "cost", "ttl"]),
+    e("usage", STR5.callReplies, ["savings", "effort", "call", "voice", "cost"]),
+    e("usage", STR5.longContextModel, ["savings", "1m", "context", "cost"]),
     // Voice
     e("voice", STR5.microphone, ["input", "mic", "audio"]),
     e("voice", STR5.speaker, ["output", "audio", "sound"]),

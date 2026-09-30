@@ -114,6 +114,8 @@ export const STRV = {
   // UI polish pass: one presence vocabulary (Working, On a call, Idle) — the header already said Working.
   presenceBusy: (task: string) => (task ? `Working · ${task}` : "Working"),
   presenceIdle: "Idle",
+  /** New-user walk, finding 6: waiting on the user (an approval card), not working. */
+  presenceWaiting: "Needs you",
   callBot: (name: string) => `Call ${name}`,
   callSounds: "Call sounds",
   callShortcut: "Call shortcut",

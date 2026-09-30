@@ -1,4 +1,4 @@
-import { LIMITSC } from "@synapse/shared";
+import { GOOGLE_CLIENT_SECRET_RE, LIMITSC } from "@synapse/shared";
 import type { SecretVault } from "./vault";
 
 const b64url = (s: string) => s.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -88,7 +88,9 @@ export class SecretScanner {
   }
 
   redact(text: string): string {
-    return this.redactValues(text).replace(WEBHOOK_KEY, "[secret:WEBHOOK_KEY]");
+    // google-setup: a Google OAuth client secret is matched by shape too (a downloaded client JSON read with a Mac
+    // tool, a page the setup task didn't capture): it never reaches a model or a stored transcript.
+    return this.redactValues(text).replace(WEBHOOK_KEY, "[secret:WEBHOOK_KEY]").replace(GOOGLE_CLIENT_SECRET_RE, "[secret:GOOGLE_CLIENT_SECRET]");
   }
 
   private redactValues(text: string): string {
@@ -107,7 +109,7 @@ export class SecretScanner {
 
   firstMatch(text: string): string | null {
     const hit = this.nodes.length === 1 ? null : this.matches(text)[0]?.name ?? null;
-    return hit ?? (new RegExp(WEBHOOK_KEY.source).test(text) ? "WEBHOOK_KEY" : null);
+    return hit ?? (new RegExp(WEBHOOK_KEY.source).test(text) ? "WEBHOOK_KEY" : new RegExp(GOOGLE_CLIENT_SECRET_RE.source).test(text) ? "GOOGLE_CLIENT_SECRET" : null);
   }
 }
 

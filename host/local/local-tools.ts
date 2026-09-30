@@ -6,6 +6,7 @@ import type { TurnSlot } from "../runner/turn-slot";
 import type { LocalAsks } from "./asks";
 import type { BrowserCards } from "./browser-cards";
 import type { LocalBridge, LocalExecResult } from "./bridge";
+import { scrubGoogleClientSecrets } from "../google/setup-task";
 
 const err = (text: string): BotToolResult => ({ text, isError: true });
 const DEFAULT_BLOCK_MS = 30_000;
@@ -26,6 +27,9 @@ export function createLocalTools(d: {
   botName?(): string;
   lastUserMessage?(): string | null;
   browserCards?: BrowserCards;
+  /** google-setup: refuses a Browser action before it runs (a string), and reads each page before the Bot does
+   *  (client secrets become placeholders; the setup task captures them host-side). */
+  browserFilter?: { refuse(args: BrowserArgs): string | null; text(text: string, url: string, editable?: string[]): string };
 }): BotToolDef[] {
   /** LOC-03 second gate: the Mac's policy, then (for Ask) the first-time card. Auto-review already ran in PreToolUse.
    *  Integration ruling: local execution never runs unreviewed. With Auto-review off, "Always allow" still asks.
@@ -150,6 +154,8 @@ export function createLocalTools(d: {
     const c = d.bridge.computer();
     if (!c || !d.bridge.available()) return err(STR5.localNotConnected);
     if (c.executionPolicy === "never") return err(STR5.localNeverPolicy);
+    const refused = d.browserFilter?.refuse(args);
+    if (refused) return err(refused);
     const target = browserBindTarget(args);
     const approvalId = d.asks.takeLateApproval(d.botId, "browser", target) ?? d.asks.takeLateApproval(d.botId, "browser", `${BROWSER_PERMISSION_PREFIX}${target}`);
     // Local execution never runs unreviewed: in Ask mode with Auto-review off, a page-changing action cards first.
@@ -170,7 +176,7 @@ export function createLocalTools(d: {
     let rep: BrowserReply;
     try { rep = JSON.parse(r.result ?? "") as BrowserReply; } catch { return err("The Mac sent back an unreadable browser reply."); }
     d.browserCards?.record(d.botId, slot, rep);
-    return { text: rep.text, ...(rep.image ? { images: [{ data: rep.image, mimeType: "image/jpeg" }] } : {}) };
+    return { text: d.browserFilter ? d.browserFilter.text(rep.text, rep.url, Array.isArray(rep.editable) ? rep.editable.filter((v) => typeof v === "string") : undefined) : scrubGoogleClientSecrets(rep.text), ...(rep.image ? { images: [{ data: rep.image, mimeType: "image/jpeg" }] } : {}) };
   }
 
   /**

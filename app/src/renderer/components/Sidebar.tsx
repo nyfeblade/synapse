@@ -4,14 +4,16 @@ import { loopInView } from "../ambient-pause";
 import { STR, STR5, STRL, STRV } from "@synapse/shared";
 import { copyConversationId, duplicateBot, hideBot, setUnread } from "../bot-actions";
 import { useTemplates } from "../templates/store";
+import { useShareItems } from "../templates/share-items";
 import { useOverlays } from "../overlays";
+import { useMarketplace } from "../marketplace/store";
 import { useUi } from "../store";
 import { sortedBotIds } from "../reducer";
 import { accountMenuItems } from "./account-menu";
 import { askConfirm } from "./ConfirmDialog";
 import { Announce } from "./Announce";
 import { BotAvatar } from "../avatar/BotAvatar";
-import { CloseIcon, HeadsetIcon, PlusIcon, SearchIcon } from "./Icons";
+import { CloseIcon, GridIcon, HeadsetIcon, PlusIcon, SearchIcon } from "./Icons";
 import { useUsage } from "../usage/store";
 import { useCallPresence } from "../voice/call-presence";
 import { botPresence } from "../voice/presence-label";
@@ -62,6 +64,7 @@ export function Sidebar() {
   const usage = useUsage((s) => s.view);
   const weekLine = usage ? STRL.weekLine(usage.budgetPct) : "";
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const shareItems = useShareItems(menu && !bots[menu.id]?.group ? menu.id : null, menu !== null);
   const [account, setAccount] = useState<{ x: number; y: number } | null>(null);
   const activeId = view.kind === "chat" ? view.botId : null;
   // Bug 134 (item 12): presence from state the app already has — on the live call, working, idle.
@@ -138,6 +141,8 @@ export function Sidebar() {
           <span className="search-placeholder">{STR.search}</span>
           <kbd aria-hidden="true">{STRL.searchKey}</kbd>
         </button>
+        {/* New-user walk, finding 15: the Marketplace, reachable from the sidebar (not only the account menu or ⌘K). */}
+        <button type="button" className="icon-btn" aria-label={STR.marketplace} title={STR.marketplace} disabled={!connected} onClick={() => useMarketplace.getState().openMarketplace()}><GridIcon /></button>
         <button type="button" className="icon-btn" aria-label="New chat" disabled={!connected} onClick={openNewChat}><PlusIcon /></button>
       </div>
       <div className="side-scroll">
@@ -215,6 +220,7 @@ export function Sidebar() {
             { label: STR.editProfile, onSelect: () => { void openBot(menu.id).then(() => setPanel("settings")); } },
             { label: STR.duplicate, onSelect: () => void duplicateBot(menu.id) },
             { label: STR.copyConversationId, onSelect: () => void copyConversationId(menu.id) },
+            ...shareItems,
             { label: STR.shareAsTemplate, onSelect: () => void useTemplates.getState().openExport(menu.id) },
             { label: STR.hideFromSidebar, onSelect: () => void hideBot(menu.id) },
             { label: STR.deleteBot, danger: true, onSelect: () => confirmDelete(menu.id) },

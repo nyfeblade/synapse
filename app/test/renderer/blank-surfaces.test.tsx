@@ -158,10 +158,10 @@ describe("TemplateMenu", () => {
 });
 
 describe("Onboarding — the very first screen of the app", () => {
-  it('a failed "Input API Key" says what went wrong instead of doing nothing at all', async () => {
+  it('a failed "Add API key" says what went wrong instead of doing nothing at all', async () => {
     bridgeFailing(["getOnboarding"]);
     render(<Onboarding onDone={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: /input api key/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add api key/i }));
     expect((await screen.findByRole("alert")).textContent).toContain(FAIL);
   });
 

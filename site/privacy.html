@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--THEME-->
+<!--SEO:privacy-->
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<!--HEADER:privacy-->
+<main id="main" class="wrap">
+
+  <div class="page">
+    <aside class="toc" aria-label="On this page">
+      <a href="#who">Who we are</a>
+      <a href="#app">The app</a>
+      <a href="#website">The website</a>
+      <a href="#feedback">Feedback</a>
+      <a href="#bot-links">Shared Bots</a>
+      <a href="#third-parties">Third parties</a>
+      <a href="#legal-bases">Legal bases</a>
+      <a href="#retention">Retention</a>
+      <a href="#rights">Your rights</a>
+      <a href="#transfers">International transfers</a>
+      <a href="#security">Security</a>
+      <a href="#children">Children</a>
+      <a href="#dnt">Do Not Track</a>
+      <a href="#changes">Changes</a>
+      <a href="#contact">Contact</a>
+    </aside>
+
+    <article class="doc legal-doc">
+      <p class="crumb">Legal</p>
+      <h1>Privacy Policy</h1>
+      <p class="effective">Effective <time datetime="2026-09-29">September 29, 2026</time></p>
+
+      <section class="summary" aria-labelledby="summary">
+        <h2 id="summary">Summary</h2>
+        <ul>
+          <li>The Synapse app has no account and no telemetry. Your Bots, chats and files stay on your Mac and in the Bots' computer on your Mac.</li>
+          <li>The app talks straight to the AI provider you choose, with your own key, and to the services you connect. We don't see that traffic.</li>
+          <li>The only thing that reaches us is feedback you choose to send. Personal details in it are hidden before it's stored.</li>
+          <li>We don't sell or share personal information, show ads, or use tracking cookies.</li>
+        </ul>
+      </section>
+
+      <h2 id="who">Who we are</h2>
+      <p>Synapse is an open-source project that makes the Synapse app for Mac and this website. In this policy, "we" and "us" mean the Synapse project. The code is public at <a href="https://github.com/nyfeblade/synapse">github.com/nyfeblade/synapse</a>.</p>
+      <p>To reach us about privacy, use the <a href="/feedback">feedback page</a>. For bugs that aren't private, you can also <a href="https://github.com/nyfeblade/synapse/issues">open a GitHub issue</a>.</p>
+
+      <h2 id="app">What the app collects</h2>
+      <p>Nothing, except what you choose to send us as feedback. There is no Synapse account, no Synapse server your Bots run on, no analytics and no crash reporting to us.</p>
+      <h3>What stays on your Mac</h3>
+      <ul>
+        <li>Your Bots, their memory, chats, schedules, settings and files live in <span class="path">~/Library/Application Support/Synapse</span> and in the Bots' computer, a sandboxed Linux machine that runs on your Mac through <a href="https://orbstack.dev">OrbStack</a>.</li>
+        <li>Your API key and other secrets are encrypted on your Mac.</li>
+        <li>Logs stay in <span class="path">~/Library/Logs/Synapse</span> unless you attach them to feedback.</li>
+        <li>Voice calls are transcribed and spoken on your Mac.</li>
+        <li>👍 and 👎 ratings stay on your Mac.</li>
+      </ul>
+      <h3>What leaves your Mac, and where it goes</h3>
+      <ul>
+        <li><b>Your AI provider.</b> Your Bots send your messages, and whatever they need to do the work (such as file contents, web pages or screenshots), straight to the AI provider you choose, using your own API key. Today that's Anthropic. That use is under your agreement with the provider and its privacy policy, not ours.</li>
+        <li><b>Services you connect.</b> If you connect Google, GitHub, Slack, Composio or another service, or add a tool server, your Bots send data to that service when they use it, under its terms.</li>
+        <li><b>The web.</b> When a Bot visits a website or downloads something, that site sees the request, as with any browser.</li>
+        <li><b>Updates.</b> The app checks GitHub Releases for new versions and downloads them from GitHub, so GitHub sees your IP address.</li>
+        <li><b>Setup and downloads.</b> Setting up the Bots' computer downloads software from public sources, such as Linux package mirrors, nodejs.org, npm and GitHub. Optional voice or speech models come from Hugging Face.</li>
+        <li><b>Phone access.</b> If you turn it on, it runs over your own Tailscale network, under Tailscale's terms.</li>
+        <li><b>Replies to your feedback.</b> After you send feedback from the app, it checks this website now and then for replies to it, using the thread's secret code.</li>
+      </ul>
+
+      <h2 id="website">What the website collects</h2>
+      <ul>
+        <li><b>Server logs.</b> The site is hosted on Vercel. Like any web host, Vercel receives your IP address, browser details and the page you asked for, and keeps short-lived logs for security and to keep the site running.</li>
+        <li><b>Visit counts.</b> We use Vercel Web Analytics to count page views. It sets no cookies and shows us only totals, such as pages, countries and browsers, never who you are. Pages that show a shared Bot, and the private feedback conversation page, load no analytics.</li>
+        <li><b>Release info.</b> Your browser asks GitHub's API for the latest version, the download link and the star count, so GitHub sees your IP address for that request.</li>
+        <li><b>Fonts</b> are served from this site. No font service sees your visit.</li>
+        <li><b>Your browser's storage</b> (localStorage) holds your theme choice; a feedback message you just sent, until its conversation page has loaded it or for 7 days; and a shared Bot you're adding, with whether Synapse opened for it, for up to 7 days. It never leaves your browser and isn't used for tracking.</li>
+      </ul>
+      <p>The website sets no cookies of its own.</p>
+
+      <h2 id="feedback">Feedback</h2>
+      <p>You can send feedback from the app or from the <a href="/feedback">feedback page</a>. Only what you send is sent: its preview shows everything before it goes.</p>
+      <h3>What's sent</h3>
+      <ul>
+        <li>The type (bug, idea, something confusing, or love it) and your message.</li>
+        <li>From the app, also: the app version, the macOS version and the Mac model.</li>
+        <li>From the app, only if you choose: a screenshot of the Synapse window, and recent logs.</li>
+      </ul>
+      <p>We never ask for your name or email address, and the website form has no field for them.</p>
+      <h3>Personal details are hidden first</h3>
+      <p>Before your message is stored, these are replaced with placeholders, in the app or browser and again on our server:</p>
+      <ul>
+        <li>API keys, access tokens and passwords in auth headers;</li>
+        <li>email addresses;</li>
+        <li>card numbers;</li>
+        <li>US social security numbers;</li>
+        <li>phone numbers;</li>
+        <li>street addresses.</li>
+      </ul>
+      <p>Attached logs are cleaned on your Mac of keys, tokens, auth headers, secret web-address parameters, email addresses, your saved secrets, and your macOS user name and home folder name. Hidden and invisible characters are removed from everything.</p>
+      <p>This is automatic and can miss things, such as a person's name. Please leave out anything you don't want us to have.</p>
+      <h3>Where it's stored</h3>
+      <p>Each message becomes an issue in a private GitHub repository that only the Synapse maintainers can see, so GitHub stores and processes it for us. Screenshots are stored in the same private repository. Our server doesn't keep your IP address with your feedback. To slow down abuse, it keeps a scrambled, shortened form of it in memory for about 10 minutes.</p>
+      <h3>Replies</h3>
+      <p>When you send feedback, you get a private conversation: in the app under <b>Your feedback</b>, or at a link the website gives you. The link holds a secret code after the <span class="path">#</span>, which browsers don't send to servers. We store only a one-way hash of the code, so only you can open the conversation. Anyone you give the link to can read it too, so keep it private.</p>
+      <h3>Posting in public</h3>
+      <p>If you choose <b>Post on GitHub</b> in the app, or open a GitHub issue yourself, it's public and under your GitHub account and GitHub's terms.</p>
+
+      <h2 id="bot-links">Shared Bots</h2>
+      <p>A shared Bot link carries the whole Bot after the <span class="path">#</span> in the link. Browsers don't send that part to any server, so opening a Bot link doesn't send the Bot to us or to Vercel. The <span class="path">/bot</span> and <span class="path">/bots</span> pages load no analytics.</p>
+
+      <h2 id="third-parties">Third parties</h2>
+      <p>These services handle data when you use Synapse or this site. Each has its own privacy policy:</p>
+      <table>
+        <tr><th><a href="https://vercel.com/legal/privacy-policy">Vercel</a></th><td>Hosts this website and the feedback service, and counts visits (<a href="https://vercel.com/docs/analytics/privacy-policy">Web Analytics</a>).</td></tr>
+        <tr><th><a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub</a></th><td>Stores feedback in a private repository, serves app downloads and updates, and answers the website's release info requests.</td></tr>
+        <tr><th><a href="https://www.anthropic.com/legal/privacy">Anthropic</a></th><td>The AI provider your Bots use today, with your own key, under your agreement with Anthropic.</td></tr>
+        <tr><th>Services you connect</th><td>Such as <a href="https://policies.google.com/privacy">Google</a>, <a href="https://composio.dev/privacy">Composio</a>, <a href="https://slack.com/trust/privacy/privacy-policy">Slack</a> or GitHub, only if you connect them.</td></tr>
+        <tr><th>Other software</th><td><a href="https://orbstack.dev/privacy">OrbStack</a>, which runs the Bots' computer; <a href="https://huggingface.co/privacy">Hugging Face</a>, for optional voice and speech models; <a href="https://tailscale.com/privacy-policy">Tailscale</a>, if you turn on phone access.</td></tr>
+      </table>
+
+      <h2 id="legal-bases">Legal bases</h2>
+      <p>Where the EU or UK GDPR applies, we rely on:</p>
+      <ul>
+        <li><b>Consent</b> for feedback. You choose to send it, and you can ask us to delete it at any time.</li>
+        <li><b>Legitimate interests</b> for the website's server logs, to keep the site secure and working, and for its aggregated visit counts, to understand which pages help people.</li>
+      </ul>
+
+      <h2 id="retention">Retention</h2>
+      <ul>
+        <li><b>Feedback</b> is kept until it's no longer needed to improve Synapse or answer you, then deleted. You can ask us to delete yours sooner at any time: see <a href="#rights">Your rights</a>.</li>
+        <li><b>Server logs</b> are kept by Vercel for a short time under its own policy.</li>
+        <li><b>Visit counts</b> are aggregated and hold nothing that identifies you.</li>
+        <li><b>Data on your Mac</b> is yours: delete it any time, as the <a href="/docs#uninstall">docs</a> explain.</li>
+      </ul>
+
+      <h2 id="rights">Your rights</h2>
+      <p>Depending on where you live, including under the EU and UK GDPR and California's CCPA/CPRA, you can ask us to:</p>
+      <ul>
+        <li>tell you what we hold about you and give you a copy;</li>
+        <li>delete it;</li>
+        <li>correct it;</li>
+        <li>stop or limit using it, or object to how we use it.</li>
+      </ul>
+      <p>We don't sell or share personal information, and we don't use it for targeted advertising. We won't treat you differently for using these rights.</p>
+      <p><b>How to ask:</b> send a message through the <a href="/feedback">feedback page</a> and include your conversation link, or reply in the conversation itself (in the app under <b>Your feedback</b>, or at your link). The link is how we know the feedback is yours, since we don't know your name or email. You can also complain to your local data protection authority.</p>
+
+      <h2 id="transfers">International transfers</h2>
+      <p>Vercel, GitHub and Anthropic are based in the United States, so your data may be processed there and in other countries where they operate. They use safeguards such as the European Commission's Standard Contractual Clauses and, where they take part, the EU-U.S. Data Privacy Framework.</p>
+
+      <h2 id="security">Security</h2>
+      <p>The website is served over HTTPS with strict security headers. Feedback is stored in a private repository, reached with a key that only has access to it, and every message is checked and cleaned before it's stored. In the app, secrets are encrypted on your Mac, and your Bots work in a sandbox. No system is perfect: to report a security issue, see <a href="https://github.com/nyfeblade/synapse/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+
+      <h2 id="children">Children</h2>
+      <p>Synapse and this website aren't directed at children under 13, or under 16 in the EU and UK. We don't knowingly collect their personal information. If you think a child has sent us some, tell us through the <a href="/feedback">feedback page</a> and we'll delete it.</p>
+
+      <h2 id="dnt">Do Not Track</h2>
+      <p>We don't track you across sites, so "Do Not Track" and Global Privacy Control signals don't change anything here. You're treated the same either way.</p>
+
+      <h2 id="changes">Changes to this policy</h2>
+      <p>If we change this policy, we'll update it here with a new effective date. The history of every change is public on <a href="https://github.com/nyfeblade/synapse/commits/main/site/privacy.html">GitHub</a>. If a change matters, we'll say so in the <a href="/changelog">changelog</a>.</p>
+
+      <h2 id="contact">Contact</h2>
+      <p>Questions or requests about privacy: use the <a href="/feedback">feedback page</a>. For bugs that aren't private: <a href="https://github.com/nyfeblade/synapse/issues">GitHub issues</a>. See also the <a href="/terms">Terms of Use</a>.</p>
+    </article>
+  </div>
+
+</main>
+<!--FOOTER-->
+<script src="/assets/site.js"></script>
+<script src="/assets/latest.js"></script>
+</body>
+</html>

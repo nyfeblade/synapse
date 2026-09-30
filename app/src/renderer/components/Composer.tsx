@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { DEFAULT_BOT_MODEL, STR, STR5, STRL, modelLabel } from "@synapse/shared";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { DEFAULT_BOT_MODEL, STR, STR5, STRL, modelLabel, type ModelId } from "@synapse/shared";
 import { call, GatewayCallError } from "../bridge";
 import { BudgetAskCard } from "./BudgetAskCard";
 import { composerState, useComposer, type PendingAttachment } from "../composer-store";
@@ -8,24 +8,50 @@ import { useDictation } from "../voice/useDictation";
 import { ComposerAttachments } from "./ComposerAttachments";
 import { ComposerPlusMenu } from "./ComposerPlusMenu";
 import { MicIcon, SendIcon, StopIcon } from "./Icons";
-import { useUi } from "../store";
+import { acceptAgent, useUi } from "../store";
+import { pickableModels, startModelAccessSync, useModelAccess } from "../model-access";
+import { Menu, type MenuItem } from "./Menus";
 import { extractMentions, mentionQuery, MentionPicker, useMentionNames } from "./MentionPicker";
 import { PrivacySettingsButton } from "../voice/PrivacySettingsButton";
 import { ReplyChip } from "./ReplyChip";
 import { SkillChips, SkillPicker } from "./SkillPicker";
 
-/** What this message will be answered with: the Bot's model and its permission mode, each opening the
- *  Bot's settings where it is changed. Data, not decoration — the look study's composer pills. */
-function ModelModePills({ botId }: { botId: string }) {
+/** What this message will be answered with: the Bot's model and its permission mode. New-user walk, finding 13: each
+ *  opens a small picker at the chip (No limits, which needs its confirm, stays in Bot settings). */
+/**
+ * UI-controls pass (2026-09-29): a long Bot name wrapped the one-line placeholder onto a second line
+ * and put a scrollbar in the empty composer at the 1024 floor. The placeholder is a hint, not the
+ * record of who this is — the header carries the full name — so it ends in an ellipsis past 28
+ * characters. The field's accessible name keeps the whole name.
+ */
+export const placeholderName = (name: string): string => (name.length > 28 ? `${name.slice(0, 27).trimEnd()}…` : name);
+
+export function ModelModePills({ botId }: { botId: string }) {
   const bot = useUi((s) => s.bots[botId]);
-  const setPanel = useUi((s) => s.setPanel);
+  const access = useModelAccess((s) => s.view);
+  const [open, setOpen] = useState<null | { kind: "model" | "mode"; x: number; y: number }>(null);
+  useEffect(() => { startModelAccessSync(); }, []);
   if (!bot || bot.group) return null;
-  const model = modelLabel(bot.profile.model ?? DEFAULT_BOT_MODEL);
-  const mode = { ask: STR5.permModeAsk, "accept-edits": STR5.permModeAcceptEdits, "full-auto": STR5.permModeFullAuto }[bot.settings.permMode ?? "ask"];
+  const current = (bot.profile.model ?? DEFAULT_BOT_MODEL) as ModelId;
+  const permMode = bot.settings.permMode ?? "ask";
+  const noLimits = permMode === "full-auto" && bot.settings.noLimits === true;
+  const mode = noLimits ? STR5.permModeNoLimits : { ask: STR5.permModeAsk, "accept-edits": STR5.permModeAcceptEdits, "full-auto": STR5.permModeFullAuto }[permMode];
+  const fail = (e: unknown) => useUi.setState({ actionError: e instanceof Error ? e.message : String(e) });
+  const at = (kind: "model" | "mode") => (e: ReactMouseEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setOpen(open?.kind === kind ? null : { kind, x: r.left, y: r.top - 6 });
+  };
+  const items: MenuItem[] = open?.kind === "model"
+    ? pickableModels(access, current).map((m) => ({ label: modelLabel(m), checked: m === current, onSelect: () => { if (m !== current) call("updateAgent", { id: botId, model: m }).then((r) => acceptAgent(r.agent)).catch(fail); } }))
+    : (["ask", "accept-edits", "full-auto"] as const).map((m) => ({
+      label: { ask: STR5.permModeAsk, "accept-edits": STR5.permModeAcceptEdits, "full-auto": STR5.permModeFullAuto }[m], checked: !noLimits && m === permMode,
+      onSelect: () => { if (noLimits || m !== permMode) call("setAgentPermMode", { id: botId, mode: m }).then((r) => acceptAgent(r.agent)).catch(fail); },
+    }));
   return (
     <>
-      <button type="button" className="composer-pill" onClick={() => setPanel("settings")}>{model}</button>
-      <button type="button" className="composer-pill" onClick={() => setPanel("settings")}>{mode}</button>
+      <button type="button" className="composer-pill" aria-haspopup="menu" aria-expanded={open?.kind === "model"} onClick={at("model")}>{modelLabel(current)}</button>
+      <button type="button" className="composer-pill" aria-haspopup="menu" aria-expanded={open?.kind === "mode"} onClick={at("mode")}>{mode}</button>
+      {open && <Menu label={open.kind === "model" ? STR.model : STR5.permMode} x={open.x} y={open.y} anchor="bottom" items={items} onClose={() => setOpen(null)} />}
     </>
   );
 }
@@ -163,7 +189,7 @@ export function Composer({ botId, name, running }: { botId: string; name: string
         <MentionPicker query={mentionHit} names={names} onPick={pickMention} onClose={() => setDismissed("mentions")} />
       )}
       <div className="composer">
-        <textarea className="composer-input" rows={1} value={text} placeholder={STR.messagePlaceholder(name)} aria-label={STR.messagePlaceholder(name)}
+        <textarea className="composer-input" rows={1} value={text} placeholder={STR.messagePlaceholder(placeholderName(name))} aria-label={STR.messagePlaceholder(name)}
           onChange={(e) => { save(e.target.value); setCaret(e.target.selectionStart); }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
           onKeyDown={(e) => {

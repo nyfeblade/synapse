@@ -41,6 +41,9 @@ export interface ReviewRequest {
   staticResult: StaticResult;
   fingerprint: string;
   paths: string[];
+  /** Bug 410: Full auto's intent check — the host already ruled out deletion, money, bulk, outside content and
+   *  non-owner wakes; the reviewer allows a send only when it clearly matches the owner's latest message. */
+  fullAutoIntent?: boolean;
 }
 
 export type ReviewOutcome =

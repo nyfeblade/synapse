@@ -111,3 +111,20 @@ describe("TemplatePackager (TPL-01 packaging rules)", () => {
     }
   });
 });
+
+describe("new-user walk findings 10 and 12: exports", () => {
+  it("built-in playbooks (the app's own skills) are left out of an export", async () => {
+    const w = (p: string, s: string) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, s); };
+    w(path.join(root, "claude", "skills", "learn-from-demonstration", "SKILL.md"), "---\nname: learn-from-demonstration\ndescription: built in\n---\n");
+    const { input } = packager.gather("b1");
+    expect(input.skills.map((s) => s.id)).toEqual(["weekly-report"]);
+  });
+
+  it("the file this Mac exported is recognised as its own (by content, not by the author it claims)", async () => {
+    const draft = await packager.draft("b1");
+    const { bytes } = packager.export("b1", draft);
+    expect(packager.exportedHere(bytes)).toBe(true);
+    const other = new Uint8Array(bytes); other[other.length - 1] ^= 1;
+    expect(packager.exportedHere(other)).toBe(false);
+  });
+});

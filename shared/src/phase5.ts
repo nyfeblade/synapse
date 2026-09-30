@@ -118,7 +118,7 @@ export function purposeGroup(purpose: string): UsagePurposeGroup {
 export interface UsageCostHistory { repaired: number; estimated: number; before: number }
 export interface UsageView {
   source: "rate_limit_event" | "metering";
-  budgetUsd: number | null;         // Weekly budget (soft); null = None
+  /** The share of the account's monthly budget spent; null when none is set. */
   budgetPct: number | null;
   level: LadderLevel;
   limitedUntil: number | null;
@@ -207,7 +207,7 @@ export interface TemplateManifest {
   routines: { name: string; prompt: string; schedule: string | null }[];
   plugins: { catalogId: string; name: string }[];
 }
-export interface TemplateRecord { id: string; name: string; author?: CatalogAuthor; sourceBotId: string | null; visibility: "local"; createdAt: number; updatedAt: number; manifest: TemplateManifest }
+export interface TemplateRecord { id: string; name: string; author?: CatalogAuthor; sourceBotId: string | null; visibility: "local"; createdAt: number; updatedAt: number; manifest: TemplateManifest; /** Bot sharing: saved from someone else's file, so adding it again is a third-party add. */ thirdParty?: boolean }
 export interface StarterView { id: string; name: string; title: string; blurb: string; avatarShape: AvatarShape; avatarColor: string; tools: string[] }
 export interface TemplatePreview {
   token: string;
@@ -221,6 +221,33 @@ export interface TemplatePreview {
   thirdParty: boolean;
   /** P5 review I10: playbooks install into the shared skills folder, so every Bot can use them (disclosed). */
   playbooksShared?: boolean;
+  /** Bot sharing: a Bot from a share link or the website (always third-party; its skills stay with it). */
+  share?: boolean;
+  /** Bot sharing: the full instructions, shown as plain text. */
+  instructions?: string;
+  /** Bot sharing: each skill, and whether it can run code. */
+  skills?: { name: string; runsCode: boolean }[];
+  /** Bot sharing: fields that read like instructions to an AI ("Instructions", "Skill: notes"), and hidden characters removed. */
+  flags?: string[];
+  /** Bot sharing: a Bot with the same content is already here ("Add a copy"). */
+  alreadyAdded?: boolean;
+  face?: { shape: AvatarShape; color: string };
+}
+/** Bot sharing: which of a Bot's skills and tools go into its share link (ids and catalog ids). Absent = all. */
+export interface ShareSelection { skills: string[]; tools: string[] }
+/** Bot sharing: what the Share sheet shows and copies. */
+export interface SharePreview {
+  name: string; title: string; instructions: string; face: { shape: AvatarShape; color: string };
+  skills: { id: string; name: string; description: string; runsCode: boolean; included: boolean }[];
+  tools: { catalogId: string; name: string; included: boolean }[];
+  /** The "b1.…" fragment, or null when the Bot is too big for a link (Save .botpack instead). */
+  fragment: string | null;
+  length: number;
+  /** Personal details hidden from the link ("1 key"), or "". */
+  hidden: string;
+  /** This exact link was copied before and the Bot hasn't changed since (the menu's one-click Copy link). */
+  sameAsLastShare: boolean;
+  selection: ShareSelection;
 }
 
 // ---------- Voice (BOT-24, ORIG-15) ----------
@@ -260,7 +287,6 @@ declare module "./gateway" {
   interface GatewayCommands {
     // Usage (USE-*)
     getUsage: { args: None; result: UsageView };
-    setWeeklyBudget: { args: { usd: number | null }; result: UsageView };
     // Marketplace, plugins, MCP (§4.5 MCP/plugins + PLG-*)
     getMarketplace: { args: None; result: MarketplaceView };
     searchCatalog: { args: { query: string; limit?: number }; result: CatalogSearchResult };
@@ -293,6 +319,10 @@ declare module "./gateway" {
     deleteTemplate: { args: { templateId: string }; result: None };
     previewTemplateImport: { args: { bytesBase64?: string; starterId?: string; templateId?: string }; result: TemplatePreview };
     importTemplate: { args: { token: string }; result: { id: string } };
+    /** Bot sharing: a share link's "b1.…" fragment, decoded, checked and scanned by the host. Saves nothing. */
+    previewShareImport: { args: { payload: string }; result: TemplatePreview };
+    /** Bot sharing: the Bot's share link for a selection; `remember` marks it copied (the menu's Copy link). */
+    sharePayload: { args: { id: string; selection?: ShareSelection; remember?: boolean }; result: SharePreview };
     listStarterTemplates: { args: None; result: { starters: StarterView[] } };
     // Local execution (LOC-*)
     // Served by the Electron coordinator (LOC-05: the Mac keeps its own policy); never forwarded to the host.

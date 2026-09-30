@@ -18,7 +18,7 @@ test("Phase 5 journey: onboarding → Marketplace connect → local command → 
   watchPageErrors(app, page, "phase5 journey", { console: true });
 
   // Onboarding (ONB-01…05): a stand-in API key
-  await page.getByRole("button", { name: "Input API Key →" }).click();
+  await page.getByRole("button", { name: "Add API key" }).click();
   // synapse-public: the Anthropic API key is the only sign-in (a stand-in key; the fake brain never calls out).
   await page.getByLabel("Anthropic API key").fill(E2E_TEST_API_KEY);
   await page.getByRole("button", { name: "Save key" }).click();
@@ -59,7 +59,7 @@ test("Phase 5 journey: onboarding → Marketplace connect → local command → 
 
   // Template (TPL-01): Share as Template → Save → file written; then add a starter from the Marketplace (TPL-02)
   await page.getByRole("button", { name: "Template actions" }).click();
-  await page.getByRole("menuitem", { name: "Share as Template" }).click();
+  await page.getByRole("menuitem", { name: "Export Bot…" }).click();
   await page.getByRole("button", { name: "Save template" }).click();
   await expect(page.getByText(/Saved to .*scout\.botpack/)).toBeVisible();
   expect(fs.existsSync(path.join(saveDir, "scout.botpack"))).toBe(true);

@@ -85,9 +85,9 @@ describe("Phase 5 app seams: native bridge, settings sections, transcript cards 
   });
 
   describe("settings sections", () => {
-    it("maps focus strings to sections (Phase 1's 'auto-review' stays General; usage folded into Account)", () => {
-      expect(sectionOf("auto-review")).toBe("general");
-      expect(sectionOf("usage")).toBe("account");
+    it("maps focus strings to sections ('auto-review' and usage are their own sections)", () => {
+      expect(sectionOf("auto-review")).toBe("auto-review");
+      expect(sectionOf("usage")).toBe("usage");
       expect(sectionOf("computer/execution")).toBe("computer");
       expect(sectionOf(null)).toBe("general");
     });

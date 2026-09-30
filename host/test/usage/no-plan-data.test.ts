@@ -65,10 +65,10 @@ describe("no Claude plan data", () => {
     s.close();
   });
 
-  it("the ladder follows the dollar budgets only (no plan window, no planCounts switch)", () => {
+  it("the ladder follows the monthly dollar budget only (no plan window, no weekly budget)", () => {
     const usage = { budgetUsd: () => 10, weekCostUsd: () => 9, ladderState: () => ({ dismissed: {}, resumedWeek: null }), setLadderState: () => {}, weekStart: () => 0 } as never;
     const trays = { add: () => {}, dismiss: () => {}, list: () => [], get: () => undefined } as never;
     const l = new UsageLadder({ usage, trays, now: () => NOW, monthBudgetPct: () => 20 });
-    expect(l.usagePct()).toBe(90);
+    expect(l.usagePct()).toBe(20);
   });
 });

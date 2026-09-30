@@ -10,8 +10,8 @@ export const STRL = {
   /** The search field's shortcut hint (⌘K opens the command palette from anywhere). */
   searchKey: "⌘K",
   /** The account row's second line: the share of the weekly budget spent, when one is set (API spend, never a plan). */
-  weekLine: (budgetPct: number | null) => (budgetPct === null ? "" : `${Math.round(budgetPct)}% of weekly budget`),
-  usageRing: (pct: number) => `${Math.round(pct)}% of this week's budget`,
+  weekLine: (budgetPct: number | null) => (budgetPct === null ? "" : `${Math.round(budgetPct)}% of monthly budget`),
+  usageRing: (pct: number) => `${Math.round(pct)}% of this month's budget`,
   send: "Send message",
   tabs: { now: "Now", memory: "Memory", files: "Files" },
   detailsTabs: "Details",

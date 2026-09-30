@@ -1,6 +1,8 @@
-import { STR, STR5, type BotSummary, type SearchResult, type ThemePreference } from "@synapse/shared";
+import { STR, STR5, STRF, type BotSummary, type SearchResult, type ThemePreference } from "@synapse/shared";
 import type { MarketplacePaletteRow } from "./marketplace/palette-rows";
 import { parseGroupCall } from "./voice/call-commands";
+import { openFeedback } from "./feedback/store";
+import { openThreads } from "./feedback/FeedbackThreads";
 
 export type PaletteIcon = "bot" | "gear" | "monitor" | "chart" | "sun" | "store" | "plus" | "eye" | "message" | "file" | "link" | "call";
 /** `keywords` are matched by a typed query alongside the title and subtitle: a row whose title is
@@ -12,6 +14,8 @@ export interface PaletteActions {
   newBot(): void; showHidden(): void; jumpTo(botId: string, entryId: string): void;
   /** Phase 2 (bug 213): one call with these Bots (the first is the call's anchor). */
   startCall(botIds: string[]): void;
+  /** New-user walk, finding 10: the .botpack round trip, from ⌘K. */
+  exportBot(botId: string): void; importBot(): void;
 }
 export interface PaletteCtx { bots: Record<string, BotSummary>; pinned: string[]; currentBotId: string | null; theme: ThemePreference; actions: PaletteActions }
 
@@ -23,12 +27,13 @@ function botRows(ctx: PaletteCtx, includeHidden: boolean): PaletteRow[] {
   const all = Object.values(ctx.bots).filter((b) => includeHidden || !b.settings.hiddenFromSidebar);
   const pinned = ctx.pinned.map((id) => ctx.bots[id]).filter((b): b is BotSummary => Boolean(b) && all.includes(b!));
   const rest = all.filter((b) => !ctx.pinned.includes(b.id)).sort((a, b) => b.updatedAt - a.updatedAt);
-  return [...pinned, ...rest].map((b) => ({ key: `bot:${b.id}`, title: b.profile.name, subtitle: b.profile.description.replace(/\s+/g, " "), icon: "bot", botId: b.id, run: () => ctx.actions.openBot(b.id) }));
+  // New-user walk, nit 28: no subtitle (it previewed the Bot's raw instructions); they still match a typed query.
+  return [...pinned, ...rest].map((b) => ({ key: `bot:${b.id}`, title: b.profile.name, subtitle: "", keywords: [b.profile.description.replace(/\s+/g, " ")], icon: "bot", botId: b.id, run: () => ctx.actions.openBot(b.id) }));
 }
 
 function fixedRows(ctx: PaletteCtx): PaletteRow[] {
   return [
-    ...(ctx.currentBotId ? [{ key: "chat-settings", title: STR.chatSettings, subtitle: "", icon: "gear" as const, keywords: [STR.currentChat, STR.settings], run: () => ctx.actions.openChatSettings() }] : []),
+    ...(ctx.currentBotId ? [{ key: "chat-settings", title: STR.botSettingsRow, subtitle: "", icon: "gear" as const, keywords: [STR.currentChat, STR.settings], run: () => ctx.actions.openChatSettings() }] : []),
     { key: "settings-general", title: STR.settingsGeneral, subtitle: "", icon: "gear", keywords: [STR.settingsSubtitle], run: () => ctx.actions.openSettings("general") },
     { key: "settings-computer", title: STR.settingsComputer, subtitle: "", icon: "monitor", keywords: [STR.settingsSubtitle], run: () => ctx.actions.openSettings("computer") },
     { key: "settings-usage", title: STR.settingsUsage, subtitle: "", icon: "chart", keywords: [STR.settingsSubtitle, "Account", "billing"], run: () => ctx.actions.openSettings("usage") },
@@ -61,6 +66,10 @@ export function typedRows(ctx: PaletteCtx, query: string, results: SearchResult[
     { key: "new-group", title: STR.newGroupChat, subtitle: "", icon: "plus", ...later },
     { key: "teach", title: STR.teachATask, subtitle: "", icon: "eye", ...later },
     { key: "show-hidden", title: STR.showHiddenBots, subtitle: "", icon: "eye", run: () => ctx.actions.showHidden() },
+    ...(ctx.currentBotId ? [{ key: "export-bot", title: STR5.exportBot, subtitle: "", icon: "file" as const, keywords: ["export", "share", "template", "botpack", "save"], run: () => ctx.actions.exportBot(ctx.currentBotId!) }] : []),
+    { key: "import-bot", title: STR5.importBot, subtitle: "", icon: "file", keywords: ["import", "botpack", "template", "open"], run: () => ctx.actions.importBot() },
+    { key: "feedback", title: STRF.sendFeedback, subtitle: "", icon: "message", keywords: ["feedback", "bug", "report", "idea", "help"], run: () => void openFeedback() },
+    { key: "feedback-threads", title: STRF.yourFeedback, subtitle: "", icon: "message", keywords: ["feedback", "replies", "reply"], run: () => openThreads() },
   ];
   const name = (id: string) => ctx.bots[id]?.profile.name ?? "Bot";
   // Phase 2 (bug 213): "call nova and scout" / "call nova scout" is a row of its own, first, so Enter

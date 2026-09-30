@@ -14,14 +14,23 @@ const SHAPES: [RegExp, string][] = [
   [/\b(Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]{6,}/gi, "$1 [redacted]"],
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const KEY_VALUE = /("?)([A-Za-z0-9_.-]{1,40})\1(\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&}\]]+)/g;
+// A key and its value, the key in plain, "quoted" or JSON-escaped \"quoted\" form (a log line holding JSON inside a string).
+const KEY_VALUE = /(\\*["']?)([A-Za-z0-9_.-]{1,40})\1(\s*[:=]\s*)(\\*"(?:[^"\\]|\\(?!"))*\\*"|\\*'(?:[^'\\]|\\(?!'))*\\*'|[^\s,;&}\]\\]+)/g;
+const QUOTED = /^(\\*["'])[\s\S]*?(\\*["'])$/;
 
 export function redactText(text: string, knownValues: string[] = []): string {
   let out = knownValues.length ? new SecretScanner(knownValues.map((value) => ({ name: "SECRET", value }))).redact(text) : text;
   for (const [re, to] of SHAPES) out = out.replace(re, to);
-  out = out.replace(KEY_VALUE, (m, q: string, key: string, sep: string, value: string) => (SECRET_PARAM.test(key) && !/^\[(redacted|secret:)/.test(value.replace(/^["']/, "")) ? `${q}${key}${q}${sep}${value.startsWith('"') ? '"[redacted]"' : "[redacted]"}` : m));
-  return out.split(/(\s+)/).map((w) => {
-    const bare = w.replace(/^[("'[{<]+|[)"'\]}>.,;:]+$/g, "");
+  out = out.replace(KEY_VALUE, (m, q: string, key: string, sep: string, value: string) => {
+    if (!SECRET_PARAM.test(key) || /^\[(redacted|secret:)/.test(value.replace(/^\\*["']/, ""))) return m;
+    const quoted = value.match(QUOTED);
+    return `${q}${key}${q}${sep}${quoted ? `${quoted[1]}[redacted]${quoted[2]}` : "[redacted]"}`;
+  });
+  // Long opaque tokens, wherever they sit: words are also split at quotes, backslashes and separators,
+  // so a token inside JSON-escaped text (\"abc…\") or after key= is still seen whole.
+  return out.split(/([\s"'`\\=:,;&(){}<>|]+)/).map((w, i) => {
+    if (i % 2) return w;
+    const bare = w.replace(/^[[]+|[\].]+$/g, "");
     return bare && !UUID.test(bare) && looksSecret(bare) && !bare.includes("[") ? w.replace(bare, "[redacted]") : w;
   }).join("");
 }

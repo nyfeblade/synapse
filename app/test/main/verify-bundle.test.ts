@@ -37,6 +37,8 @@ function goodBundle() {
       "/out/Synapse.app/Contents/Resources/kokoro/model/kokoro-v1_0.safetensors",
       "/out/Synapse.app/Contents/Resources/kokoro/manifest.json",
       "/out/Synapse.app/Contents/Resources/THIRD-PARTY-NOTICES.txt",
+      "/out/Synapse.app/Contents/Resources/LICENSE",
+      "/out/Synapse.app/Contents/Resources/NOTICE",
       "/out/Synapse.app/Contents/Resources/app.asar.unpacked/dist/native/qwen-requirements.lock",
       "/out/Synapse.app/Contents/Resources/app.asar.unpacked/dist/native/f5-requirements.lock",
       "/out/Synapse.app/Contents/Resources/app.asar.unpacked/dist/native/f5-requirements-sdist.lock",

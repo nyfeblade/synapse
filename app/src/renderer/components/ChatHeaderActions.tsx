@@ -1,7 +1,10 @@
 import { useState, type MouseEvent } from "react";
 import { STR, STR5 } from "@synapse/shared";
 import { useVoice } from "../voice/VoiceOverlay";
+import { callQuiet } from "../bridge";
 import { useTemplateActions } from "../templates/TemplateMenu";
+import { useTemplates } from "../templates/store";
+import { useShareItems } from "../templates/share-items";
 import { openUsageFor } from "../usage/dashboard-store";
 import { useUi } from "../store";
 import { Menu } from "./Menus";
@@ -43,9 +46,14 @@ export function ChatHeaderActions({ botId }: { botId: string }) {
   const isGroup = useUi((s) => Boolean(s.bots[botId]?.group));
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const templates = useTemplateActions(botId);
+  const shareItems = useShareItems(isGroup ? null : botId, at !== null);
+  // New-user walk, finding 10: the saved-template actions (details, update, delete) are listed only when this Bot has
+  // one; Export and Import are always right here.
+  const [hasTemplate, setHasTemplate] = useState(false);
   const openMenu = (e: MouseEvent<HTMLButtonElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     setAt({ x: r.right - 200, y: r.bottom + 6 });
+    void callQuiet("getTemplate", { id: botId }).then((t) => setHasTemplate(!!t?.template)).catch(() => setHasTemplate(false));
   };
   const settingsLabel = isGroup ? STR.groupSettings : BOT_SETTINGS;
   const settingsOpen = isGroup ? panel !== "closed" : panel === "settings";
@@ -63,9 +71,11 @@ export function ChatHeaderActions({ botId }: { botId: string }) {
       {at && (
         <Menu label={MORE_ACTIONS} x={at.x} y={at.y} onClose={() => setAt(null)} items={[
           { label: USAGE, onSelect: () => openUsageFor(botId) },
-          // The template actions need their own round trip before they can be listed, so they open
-          // as a second menu at the same point rather than making this one wait on the host.
-          { label: STR5.templateActions, onSelect: () => void templates.openAt(at.x, at.y) },
+          ...shareItems,
+          { label: STR5.exportBot, onSelect: () => void useTemplates.getState().openExport(botId) },
+          { label: STR5.importBot, onSelect: () => void useTemplates.getState().importFromFile() },
+          // The saved template's own actions open as a second menu at the same point.
+          ...(hasTemplate ? [{ label: STR5.templateActions, onSelect: () => void templates.openAt(at.x, at.y) }] : []),
         ]} />
       )}
       {templates.node}

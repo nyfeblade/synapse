@@ -50,11 +50,9 @@ export class UsageLadder implements LadderLike, TurnObserver {
     monthBudgetPct?(): number | null;
   }) {}
 
-  /** The weekly budget and the account's monthly budget: near either, background work slows. */
+  /** Review of new-user walk finding 7: one budget, the account's monthly one; near it, background work slows. */
   private budgetPct(): number | null {
-    const b = this.d.usage.budgetUsd();
-    const vals = [b ? (this.d.usage.weekCostUsd() / b) * 100 : null, this.d.monthBudgetPct?.() ?? null].filter((x): x is number => x !== null);
-    return vals.length ? Math.max(...vals) : null;
+    return this.d.monthBudgetPct?.() ?? null;
   }
 
   usagePct(): number | null {

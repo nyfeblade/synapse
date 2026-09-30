@@ -5,6 +5,11 @@ import type { BrowserCards } from "./browser-cards";
 import type { LocalBridge } from "./bridge";
 import type { EgressCounter } from "./egress";
 import { createLocalTools } from "./local-tools";
+import { scrubGoogleClientSecrets } from "../google/setup-task";
+import type { BrowserArgs } from "@synapse/shared";
+
+/** google-setup: the host's look at each Browser action and page (see GoogleSetupTasks). */
+export interface BrowserFilter { refuse(botId: string, args: BrowserArgs): string | null; text(botId: string, text: string, url: string, editable?: string[]): string }
 
 /** The user's latest message to this Bot (a password/card value may be typed only if it is in there, this turn). */
 function lastUserMessage(ctx: ModuleContext, botId: string): string | null {
@@ -16,7 +21,7 @@ function lastUserMessage(ctx: ModuleContext, botId: string): string | null {
   return null;
 }
 
-export function createLocalModule(ctx: ModuleContext, o: { bridge: LocalBridge; asks: LocalAsks; egress: EgressCounter; browserCards?: BrowserCards }): HostModule {
+export function createLocalModule(ctx: ModuleContext, o: { bridge: LocalBridge; asks: LocalAsks; egress: EgressCounter; browserCards?: BrowserCards; browserFilter?: BrowserFilter }): HostModule {
   let timer: ReturnType<typeof setInterval> | null = null;
   return {
     name: "local",
@@ -31,7 +36,8 @@ export function createLocalModule(ctx: ModuleContext, o: { bridge: LocalBridge; 
     botTools: (botId, slot, base) => [
       ...(base ?? []),
       ...(o.bridge.computer() ? createLocalTools({ botId, slot, bridge: o.bridge, asks: o.asks, now: ctx.now, autoReviewOn: () => ctx.settings.get().autoReviewEnabled, permMode: () => (ctx.bots.has(botId) ? ctx.bots.summary(botId).settings.permMode ?? "ask" : "ask"), noLimits: () => ctx.bots.has(botId) && ctx.bots.summary(botId).settings.noLimits === true, workspace: ctx.cfg.workspace,
-        botName: () => (ctx.bots.has(botId) ? ctx.bots.summary(botId).profile.name : "This Bot"), lastUserMessage: () => lastUserMessage(ctx, botId), browserCards: o.browserCards }) : []),
+        botName: () => (ctx.bots.has(botId) ? ctx.bots.summary(botId).profile.name : "This Bot"), lastUserMessage: () => lastUserMessage(ctx, botId), browserCards: o.browserCards,
+        browserFilter: { refuse: (a) => o.browserFilter?.refuse(botId, a) ?? null, text: (t, url, editable) => (o.browserFilter ? o.browserFilter.text(botId, t, url, editable) : scrubGoogleClientSecrets(t)) } }) : []),
     ],
     start: () => { void o.egress.sample(); timer = setInterval(() => void o.egress.sample(), 10_000); timer.unref?.(); },
     stop: () => { if (timer) clearInterval(timer); },

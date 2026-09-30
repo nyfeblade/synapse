@@ -17,6 +17,6 @@ export function installAppMenu(emit: (channel: string) => void, calls?: { items:
     { label: "View", submenu: [{ label: "Command Palette", accelerator: "CmdOrCtrl+K", click: () => emit("palette") }, { type: "separator" }, { role: "reload", visible: !app.isPackaged }, { role: "toggleDevTools", visible: !app.isPackaged }] },
   ];
   if (calls?.items.length) template.push({ label: "Call", submenu: calls.items });
-  template.push({ role: "windowMenu" }, { role: "help", submenu: [{ label: `${APP_NAME} Help`, click: () => emit("help") }] });
+  template.push({ role: "windowMenu" }, { role: "help", submenu: [{ label: `${APP_NAME} Help`, click: () => emit("help") }, { label: "Send Feedback…", click: () => emit("feedback") }] });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

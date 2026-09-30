@@ -27,7 +27,7 @@ test("Phase 3 journey in FUZZ mode: Computer card → take over → I'm done; Se
   await expect(win.getByText("Needs your attention")).toBeVisible();
   await card.getByRole("button", { name: "Take over" }).click();
 
-  const view = win.getByRole("dialog", { name: "Bots' Computer" });
+  const view = win.getByRole("dialog", { name: "Bots' computer" });
   await expect(view.getByRole("status")).toContainText("You're in control");
   await expect(view.getByRole("status")).toContainText("Scout is paused until you hand it back");
   await view.getByRole("button", { name: "I'm done" }).click();
@@ -48,6 +48,6 @@ test("Phase 3 journey in FUZZ mode: Computer card → take over → I'm done; Se
 
   await win.keyboard.press("Meta+,");
   await win.getByRole("button", { name: "Updates" }).click();
-  await expect(win.getByRole("heading", { name: "Update Bots' Computer" })).toBeVisible();
+  await expect(win.getByRole("heading", { name: "Update Bots' computer" })).toBeVisible();
   await app.close();
 });

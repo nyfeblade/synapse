@@ -31,10 +31,11 @@ describe("Composer: Send, and the model / mode pills", () => {
     await waitFor(() => expect(calls.some(([cmd, a]) => cmd === "sendPrompt" && (a as { text: string }).text === "hello")).toBe(true));
   });
 
-  it("the pills say what will answer — the Bot's model and permission mode — and open its settings", () => {
+  it("the pills say what will answer — the Bot's model and permission mode — and open a picker at the chip", () => {
     render(<Composer botId="b" name="Piper" running={false} />);
     fireEvent.click(screen.getByRole("button", { name: "Opus 5" }));
-    expect(useUi.getState().panel).toBe("settings");
+    expect(screen.getByRole("menu")).toBeTruthy(); // new-user walk finding 13: not the whole settings panel
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     expect(screen.getByRole("button", { name: "Full auto" })).toBeTruthy();
   });
 });

@@ -39,7 +39,7 @@ export function ComposerPlusMenu({ botId }: { botId: string }) {
         <Menu label={STR.attachFile} x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[
           { label: STR.attachFiles, onSelect: () => input.current?.click() },
           { label: STR.photoFromClipboard, onSelect: () => void pastePhoto() },
-          { label: `${STR.useASkill} ▸`, onSelect: () => void call("getWorkflows", {}).then((r) => setSkills({ ...menu, list: r.workflows.filter((w) => !w.disabledFor.includes(botId)), error: null })).catch((e) => setSkills({ ...menu, list: [], error: errorMessage(e) })) },
+          { label: STR.useASkill, submenu: true, onSelect: () => void call("getWorkflows", {}).then((r) => setSkills({ ...menu, list: r.workflows.filter((w) => !w.disabledFor.includes(botId)), error: null })).catch((e) => setSkills({ ...menu, list: [], error: errorMessage(e) })) },
           { label: STR.teachATask, disabled: teach.disabled, ...(teach.why ? { title: teach.why } : {}), onSelect: () => useUi.setState({ teachSetupFor: botId }) },
         ]} />
       )}

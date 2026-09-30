@@ -11,7 +11,7 @@ import { generalExtraBlocks } from "./sections";
 
 type Behavior = "allow" | "ask";
 
-export function GeneralSection() {
+export function AutoReviewSection() {
   const { settings, settingsFocus, bootstrap, loadAll } = useUi();
   const [text, setText] = useState("");
   const [behavior, setBehavior] = useState<Behavior>("allow");
@@ -32,7 +32,7 @@ export function GeneralSection() {
   if (!settings) {
     return (
       <>
-        <h2>{STR.general}</h2>
+        <h2>{STR.autoReview}</h2>
         <Async resource={asResource(bootstrap, () => void loadAll())}>{() => null}</Async>
       </>
     );
@@ -75,17 +75,8 @@ export function GeneralSection() {
 
   return (
     <>
-      <h2>{STR.general}</h2>
-      <h3>{STR.bot}</h3>
+      <h2>{STR.autoReview}</h2>
       <div className="settings-card">
-        <div className="settings-row">
-          <span style={{ flexGrow: 1 }}>{STR.timezone}</span>
-          <select className="dropdown" aria-label={STR.timezone} value={settings.userTimeZoneOverride ?? ""} onChange={(e) => void setTimeZone(e.target.value)}>
-            <option value="">{STR.timezoneAuto(Intl.DateTimeFormat().resolvedOptions().timeZone)}</option>
-            {Intl.supportedValuesOf("timeZone").map((z) => <option key={z} value={z}>{z}</option>)}
-          </select>
-        </div>
-        <div className="divider" />
         <div ref={focusRef} className={flash ? "settings-block flash" : "settings-block"}>
           <div className="settings-row">
             <span style={{ flexGrow: 1 }}>{STR.autoReview}</span>
@@ -112,7 +103,7 @@ export function GeneralSection() {
                 <option value="ask">{STR.askFirst}</option>
               </select>
               <span style={{ flexGrow: 1 }} />
-              {editing && <button type="button" className="btn-outline" onClick={cancelEdit}>{STR.cancel}</button>}
+              {editing && <button type="button" className="btn-secondary" onClick={cancelEdit}>{STR.cancel}</button>}
               <button type="button" className="btn-primary" disabled={!text.trim()} onClick={() => void addRule()}>{editing ? STR.saveRule : STR.addRule}</button>
             </div>
             {error && <span className="error" role="alert">{error}</span>}
@@ -133,8 +124,41 @@ export function GeneralSection() {
           </div>
         </div>
       </div>
+    </>
+  );
+}
+
+/**
+ * New-user walk, finding 22: General is the Bot's basics, then Appearance, Connected accounts and Advanced, each under
+ * its own heading (accounts and memory used to sit under "Appearance"); Auto-review is a section of its own.
+ */
+export function GeneralSection() {
+  const { settings, bootstrap, loadAll } = useUi();
+  if (!settings) {
+    return (
+      <>
+        <h2>{STR.general}</h2>
+        <Async resource={asResource(bootstrap, () => void loadAll())}>{() => null}</Async>
+      </>
+    );
+  }
+  const blocks = generalExtraBlocks();
+  return (
+    <>
+      <h2>{STR.general}</h2>
+      <h3>{STR.bot}</h3>
+      <div className="settings-card">
+        <div className="settings-row">
+          <span style={{ flexGrow: 1 }}>{STR.timezone}</span>
+          <select className="dropdown" aria-label={STR.timezone} value={settings.userTimeZoneOverride ?? ""} onChange={(e) => void setTimeZone(e.target.value)}>
+            <option value="">{STR.timezoneAuto(Intl.DateTimeFormat().resolvedOptions().timeZone)}</option>
+            {Intl.supportedValuesOf("timeZone").map((z) => <option key={z} value={z}>{z}</option>)}
+          </select>
+        </div>
+      </div>
+      {blocks.map(({ id, Component }) => <Component key={id} />)}
+      <h3>{STR.advanced}</h3>
       <AdvancedSettingsCard />
-      {generalExtraBlocks().map(({ id, Component }) => <Component key={id} />)}
     </>
   );
 }

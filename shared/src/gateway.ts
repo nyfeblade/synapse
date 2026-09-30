@@ -13,6 +13,7 @@ import type { TeachStatus } from "./teach";
 import type { HistoryArchiveStatsView, MemoryFactView, MemoryListView, MemoryScopeRef, MemoryTierChoice } from "./memory";
 import type { Phase5SseEvent } from "./phase5";
 import type { GoogleSseEvent } from "./google";
+import type { ComposioSseEvent } from "./composio";
 import type { GitHubSseEvent } from "./github";
 import type { VoiceCallsSseEvent } from "./voice-calls";
 import type { ApprovalStatus, Reaction, TranscriptEntry, WidgetStatus } from "./transcript";
@@ -79,7 +80,7 @@ export interface HostSettingsView {
   epoch?: string;
 }
 
-export interface TrayButton { label: string; action: "retry" | "dismiss" | "resume-routines" | "reconnect-google" }
+export interface TrayButton { label: string; action: "retry" | "dismiss" | "resume-routines" | "reconnect-google" | "reconnect-google-bot" }
 export interface Tray {
   id: string;
   botId: string | null;
@@ -235,6 +236,8 @@ export type SseEvent =
   | Phase5SseEvent
   // Built-in Google connector status (Connect Google sheet, Settings → Connected accounts).
   | GoogleSseEvent
+  // Apps through Composio (Settings → Connected accounts → Composio, Marketplace).
+  | ComposioSseEvent
   // Per-Bot GitHub sign-in (Bot settings → GitHub).
   | GitHubSseEvent
   // Voice wave 3: Bots calling the user, and a Bot asking to see a shared screen.

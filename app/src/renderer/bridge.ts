@@ -31,6 +31,10 @@ export interface SynapseBridge {
     removeKey(): Promise<unknown>;
     /** This Mac holds its own copy of the key (for the Bots' claude here). */
     hasMacKey(): Promise<boolean>;
+    /** New-user walk, finding 2: the Bots' computer's key differs from the one this Mac paired with. */
+    pinChanged(): Promise<boolean>;
+    /** Pin the Bots' computer's current key ("Trust this computer"). */
+    trustComputer(): Promise<{ trusted: boolean }>;
   };
   box: {
     update(force: boolean): Promise<{ status: "done" | "busy"; busyBotIds?: string[] }>;

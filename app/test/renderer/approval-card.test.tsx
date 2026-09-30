@@ -22,23 +22,29 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("ApprovalCard (APR-09, APR-19, APR-20)", () => {
-  it("pending: title, reason, location, open details and the three buttons", async () => {
+  it("pending: the Bot's name in the title, location, the command, and the three buttons (no subtitle, no box in a box)", async () => {
     render(<ApprovalCard botId="a" approval={base} />);
     const card = screen.getByRole("region", { name: "Approval needed" });
-    expect(card.textContent).toContain("Your Bot would like to use a connected service");
+    // New-user walk, finding 20: "Planner would like…", not "Your Bot would like…".
+    expect(card.textContent).toContain("Planner would like to use a connected service");
+    expect(card.textContent).not.toContain("Your Bot");
+    expect(card.textContent).not.toContain(base.reason);
+    expect(card.querySelector("details")).toBeNull();
+    expect(card.textContent).toContain("google_calendar.delete_events");
     expect(card.textContent).toContain("Runs on Bots' computer");
-    expect(card.querySelector("details")?.hasAttribute("open")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Always allow" }));
     await vi.waitFor(() => expect(calls[0]).toEqual(["resolveAutoReviewApproval", { id: "a", approvalId: "ap1", choice: "always" }]));
   });
 
-  it("settled: header by outcome, status pill, rule text, full request sheet and Settings link", () => {
+  it("settled: one compact row — outcome chip, what it was, rule text and the full request; no title and no Settings footer", () => {
     render(<ApprovalCard botId="a" approval={{ ...base, status: "always", ruleAddedText: "Added to your Auto-review rules as always allowed: “Use the …”", settledAt: 2 }} />);
     const card = screen.getByRole("region", { name: "Approved action" });
-    expect(card.textContent).toContain("Action approved");
+    expect(card.textContent).not.toContain("Action approved");
+    expect(card.textContent).not.toContain("You can manage Auto-review in");
     expect(card.textContent).toContain("Always allowed");
+    expect(card.textContent).toContain(base.summary);
     expect(card.textContent).toContain("Added to your Auto-review rules as always allowed");
-    fireEvent.click(screen.getByRole("button", { name: "View the full request ›" }));
+    fireEvent.click(screen.getByRole("button", { name: "View the full request" }));
     const sheet = screen.getByRole("dialog", { name: "Full request" });
     expect(sheet.textContent).toContain("F4");
     expect(sheet.textContent).toContain("req_1");
@@ -47,13 +53,11 @@ describe("ApprovalCard (APR-09, APR-19, APR-20)", () => {
     expect(sheet.querySelector(".sheet-command .code-card")).not.toBeNull();
     expect(sheet.querySelector(".code-card-pre")?.textContent).toContain("google_calendar.delete_events");
     expect(sheet.querySelector("pre.mono.sheet-command")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(useUi.getState()).toMatchObject({ settingsOpen: true, settingsFocus: "auto-review" });
   });
 
   it("expired and batched variants", () => {
     const { rerender } = render(<ApprovalCard botId="a" approval={{ ...base, status: "expired", cause: "ttl" }} />);
-    expect(screen.getByRole("region", { name: "Expired approval" }).textContent).toContain("Approval expired");
+    expect(screen.getByRole("region", { name: "Expired approval" }).textContent).toContain("Expired");
     rerender(<ApprovalCard botId="a" approval={{ ...base, title: "Planner wants to send 5 emails", items: [1, 2, 3, 4, 5].map((i) => ({ toolUseId: `t${i}`, summary: `Re: thread ${i}`, status: "pending" as const })) }} />);
     const card = screen.getByRole("region", { name: "Approval needed" });
     expect(card.textContent).toContain("Planner wants to send 5 emails");

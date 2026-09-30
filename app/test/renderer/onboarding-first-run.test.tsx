@@ -71,11 +71,12 @@ describe("contract — defect 1: the suggestion carousel can never set the width
     expect(declFor(read("app.css"), ".onb", "min-width")).toBe("0");
   });
 
-  it("app.css keeps `.carousel` a scroller and stops it demanding its max-content width", () => {
+  it("new-user walk finding 19: the suggestions are a grid that fits its column, with no sideways scroller", () => {
     const src = read("app.css");
-    expect(declFor(src, ".carousel", "min-width"), ".carousel must be able to shrink below its 4300px content").toBe("0");
-    expect(declFor(src, ".carousel", "align-self"), ".carousel must span .onb's content box, not fit-content it").toBe("stretch");
-    expect(declFor(src, ".carousel", "overflow-x"), "the cards are reached by scrolling the row").toBe("auto");
+    expect(declFor(src, ".starter-grid", "display")).toBe("grid");
+    expect(declFor(src, ".starter-grid", "min-width")).toBe("0");
+    expect(declFor(src, ".starter-grid", "overflow-x")).toBeUndefined();
+    expect(hasRule(src, /^\.carousel\b/), "the horizontal carousel is gone").toBe(false);
   });
 
   // At the 1024x680 floor the new-bot step's column (carousel 173 + heading + 120px avatar + swatches
@@ -178,7 +179,7 @@ describe("contract — the onboarding surfaces take every colour from a token", 
   // Exactly the selectors this branch owns. Deliberately NOT the splash's own family (.onb.splash,
   // .onb-logo, .onb-foot, .wordmark, .pill-light): the splash is a full-bleed near-black brand moment
   // in BOTH themes, so its literals are the one place here where a theme token would be wrong.
-  const OWNED = [".onb", ".onb-shape", ".onb-swatch", ".onb-suggest", ".carousel", ".starter-card", ".shapes", ".tool-cell", ".terminal"];
+  const OWNED = [".onb", ".onb-shape", ".onb-swatch", ".onb-suggest", ".starter-grid", ".starter-card", ".shapes", ".tool-cell", ".terminal"];
   const owns = (sel: string) => OWNED.some((o) => sel === o || sel.startsWith(o + ":") || sel.startsWith(o + "[") || sel.startsWith(o + " ") || sel.startsWith(o + "."));
 
   it("app.css uses no literal colour in any onboarding rule this branch owns", () => {
@@ -217,8 +218,7 @@ describe("markup — first run renders reachable controls (real DOM, not contrac
   it('"Meet a future teammate" is a heading above the row, not an item inside it', async () => {
     render(<Onboarding onDone={vi.fn()} initialStep="new-bot" />);
     const h2 = await screen.findByRole("heading", { level: 2 });
-    expect(h2.parentElement?.classList.contains("carousel"), "the heading must not be a flex item of the scrolling row").toBe(false);
-    expect(h2.closest(".carousel"), "the heading must not sit inside the scroller at all").toBeNull();
+    expect(h2.closest(".starter-grid"), "the heading must not sit inside the grid").toBeNull();
   });
 
   // The region keeps its accessible name so the Async failure state still reports inside it
@@ -227,7 +227,7 @@ describe("markup — first run renders reachable controls (real DOM, not contrac
     render(<Onboarding onDone={vi.fn()} initialStep="new-bot" />);
     const region = await screen.findByRole("region", { name: /suggestion/i });
     expect(region.querySelector("h2")).not.toBeNull();
-    expect(region.querySelector(".carousel")).not.toBeNull();
+    expect(region.querySelector(".starter-grid")).not.toBeNull();
   });
 
   it("every shape radio carries the class the stylesheet draws, so none is left as an OS button", async () => {

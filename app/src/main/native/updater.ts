@@ -557,7 +557,11 @@ export function launchHealth(mark: () => { rolledBack: boolean; version?: string
   };
 }
 
-export const defaultReleaseDir = () => path.join(os.homedir(), "Library", "Application Support", APP_DATA_NAME, "releases");
+/** New-user walk, nit 32: under SYNAPSE_APP_DATA (e2e, FUZZ walks) the folder is inside it, never the real one. */
+export const defaultReleaseDir = (env: NodeJS.ProcessEnv = process.env) => {
+  const o = env.SYNAPSE_APP_DATA;
+  return path.join(o && path.isAbsolute(o) ? o : path.join(os.homedir(), "Library", "Application Support"), APP_DATA_NAME, "releases");
+};
 
 export function registerUpdater(o: { app: Electron.App; feed(): string | null; folder?(): string | null; setFolder?(dir: string | null): void; chooseFolder?(): Promise<string | null>; auto(): boolean; setAuto(on: boolean): void; token?(): string | null; setFeed?(feed: string): void; setToken?(token: string): void; hasToken?(): boolean }, reg: (name: string, fn: (a: any) => unknown) => void, emit: (ch: string, p: unknown) => void): UpdateService {
   const svc = new UpdateService({

@@ -35,6 +35,8 @@ export interface AxRead {
   vh: number;
   nodes: AxNode[];
   truncated?: boolean;
+  /** google-setup re-review 2: the window holds an AXWebArea (a browser, or an app's embedded web view). */
+  web?: boolean;
 }
 
 /** Trust nothing off the wire: a node is shaped here or it is dropped. */
@@ -67,6 +69,7 @@ export function toRead(r: Record<string, unknown>): AxRead | null {
     vh: Math.max(1, num(r.vh, 800)),
     nodes,
     ...(r.truncated === true ? { truncated: true } : {}),
+    ...(r.web === true || nodes.some((n) => n.role === "webarea") ? { web: true } : {}),
   };
 }
 

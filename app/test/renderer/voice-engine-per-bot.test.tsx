@@ -139,6 +139,7 @@ describe("Settings → Voice: the per-Bot engine choice (bug 157)", () => {
 
   it("says what each engine costs, and links to macOS's own voice downloads", async () => {
     setBots({ a: bot("a", "Planner", { voice: null, speechRate: 1, spokenLanguage: null }) });
+    useUi.setState({ settings: { advancedEnabled: true } as never }); // new-user walk finding 8: advanced controls
     render(<VoiceSettings botId="a" />);
     await picker();
     // UI polish pass (brief 2): a labelled group of label + value rows, not a paragraph.

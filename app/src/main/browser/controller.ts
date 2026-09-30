@@ -8,7 +8,7 @@
  * for the site; password/card fields take typing only when the user gave the value this turn; a Stop or the user's
  * own input on the window holds the Bot until the user resumes it or sends a new message.
  */
-import { STRB, browserBindTarget, fullAutoAsk, type BrowserArgs, type BrowserReply, type BrowserSessionStatus, type PermMode } from "@synapse/shared";
+import { GOOGLE_CLIENT_ID_RE, GOOGLE_CLIENT_SECRET_RE, STRB, STRGS, isGoogleClientPage, probesGoogleClient, scrubGoogleClientValues, blocksGoogleConsent, browserBindTarget, fullAutoAsk, googleConsoleChange, type BrowserArgs, type BrowserReply, type BrowserSessionStatus, type PermMode } from "@synapse/shared";
 import { consequentialAction, sensitiveField, siteOf, type ElementFacts } from "./classify";
 import { OUTLINE_MAX_CHARS, diffPaged, page, renderOutline, type PageState } from "./outline";
 import { CARD_HINT_SOURCE, type BarText, type PageAgent } from "./page-agent";
@@ -203,7 +203,12 @@ export class BrowserController {
       await this.bar(s);
       const st = s.state;
       const text = typeof out === "string" ? out : out.text;
-      return { ok: true, reply: { text, title: st?.title ?? "", url: st?.url ?? "", session: s.id, steps: s.steps, status: this.status(s), ...(typeof out === "string" ? {} : { image: out.image }) } };
+      // google-setup re-review 1: on a console client page, which client values sit in editable fields (the host
+      // captures only page text a Bot can't have typed). A failed read reports nothing, and the host then captures nothing.
+      const editable = st && isGoogleClientPage(st.url)
+        ? await tab.agent<string[]>("editable", [GOOGLE_CLIENT_ID_RE.source, GOOGLE_CLIENT_SECRET_RE.source]).then((v) => (Array.isArray(v) ? v : null), () => null)
+        : undefined;
+      return { ok: true, reply: { text, title: st?.title ?? "", url: st?.url ?? "", session: s.id, steps: s.steps, status: this.status(s), ...(typeof out === "string" ? {} : { image: out.image }), ...(editable ? { editable } : {}) } };
     } catch (e) {
       return { ok: false, error: `Browser ${a.action} failed: ${(e as Error).message}` };
     } finally {
@@ -242,10 +247,25 @@ export class BrowserController {
     return f.ok ? f : STRB.staleRef(ref);
   }
 
+  /**
+   * google-setup: a Bot never approves a Google OAuth consent. Any page action on a consent page, or an "Allow"-type
+   * control anywhere in Google's OAuth flow, is refused outright: no card, no approval, no mode or rule lifts it.
+   * Judged on the page's live address and on the last outline's, so a redirect after the snapshot can't slip by.
+   */
+  private async consent(s: Session, tab: Tab, el: { action: string; role?: string; tag?: string }): Promise<ControllerResult | null> {
+    const live = await tab.agent<string>("href").catch(() => "");
+    if (![live, s.state?.url ?? ""].some((u) => u && blocksGoogleConsent(u, el))) return null;
+    this.d.log(`browser: refused ${s.botName}'s action on a Google consent page (the user approves it)`);
+    return { ok: false, error: STRGS.consentBlocked };
+  }
+
   /** The consequential gate: null = go ahead; else the refusal that becomes the card. */
   private gate(s: Session, req: ControllerRequest, f: ElementFacts, o: { submit?: boolean; key?: string } = {}): ControllerResult | null {
     const url = s.state?.url ?? "";
-    const what = consequentialAction(req.args.action === "check" ? "click" : req.args.action, f, url, o);
+    // google-setup: a change to the user's Google Cloud project always cards, in words that say what it changes.
+    const pressable = f.isSubmit || ["button", "link", "menuitem", "tab"].includes(f.role);
+    const change = (req.args.action === "click" || req.args.action === "check") && pressable ? googleConsoleChange(url, f.name) : null;
+    const what = change ?? consequentialAction(req.args.action === "check" ? "click" : req.args.action, f, url, o);
     if (!what) return null;
     // full-auto-quiet: in Full auto the shared classifier (the one the tool guard and the Mac coordinator use)
     // decides which consequential actions still card: sending or posting, money, deleting, and access changes.
@@ -261,7 +281,7 @@ export class BrowserController {
     if (req.approved && s.refusal?.bind === bind && s.refusal.what === what) { s.refusal = null; return null; }
     s.refusal = { bind, what };
     s.lastOrigin = site;
-    return { ok: false, needsApproval: true, error: STRB.consequential(what, site) };
+    return { ok: false, needsApproval: true, error: change ? STRGS.consoleCard(change) : STRB.consequential(what, site) };
   }
 
   private async click(s: Session, tab: Tab, ref: string): Promise<string | null> {
@@ -289,7 +309,9 @@ export class BrowserController {
       case "more": return s.rest.shift() ?? "Nothing more: that was the whole page.";
       case "text": {
         const t = await tab.agent<string>("text", a.ref ?? null, 200_000);
-        const st = s.state ?? await this.collect(s, tab);
+        // google-setup security fix 1: the reply's url is the page this text came from (the host captures a Google
+        // client only off the console's client pages), so it is read now, never taken from an older outline.
+        const st = await this.collect(s, tab);
         s.state = st;
         const out = page([`Page: ${st.title || "(untitled)"} — ${st.url}`], t.split("\n"), OUTLINE_MAX_CHARS);
         s.rest = out.rest;
@@ -304,6 +326,8 @@ export class BrowserController {
         }
         const f = await this.facts(tab, a.ref);
         if (typeof f === "string") return fail(f);
+        const blocked = await this.consent(s, tab, { action: a.action, role: f.role, tag: f.tag });
+        if (blocked) return blocked;
         if (a.action === "check") {
           const want = !/^(off|false|no|uncheck)$/i.test(a.value ?? "");
           const now = await tab.agent<boolean | null>("checked", a.ref);
@@ -323,6 +347,10 @@ export class BrowserController {
       case "type": {
         const f = await this.facts(tab, a.ref);
         if (typeof f === "string") return fail(f);
+        const blocked = await this.consent(s, tab, { action: "type" });
+        if (blocked) return blocked;
+        // google-setup re-review 1: typing a client ID or secret could plant one on a console page. Any Bot, always.
+        if (probesGoogleClient(String(a.text ?? ""))) return fail(STRGS.typeRefused);
         const sens = sensitiveField(f);
         // Never on the Bot's own initiative: only a value the user gave in this very turn.
         if (sens && !req.explicit) return fail(STRB.sensitive(sens));
@@ -337,6 +365,8 @@ export class BrowserController {
       case "select": {
         const f = await this.facts(tab, a.ref);
         if (typeof f === "string") return fail(f);
+        const blocked = await this.consent(s, tab, { action: "select" });
+        if (blocked) return blocked;
         const r = await tab.agent<{ ok: boolean; chosen?: string; options?: string[] }>("select", a.ref, String(a.value ?? ""));
         if (!r.ok) return fail(r.options ? `No option "${a.value}". Options: ${r.options.join(", ")}` : `${a.ref} is not a select; click it instead.`);
         return this.after(s, tab);
@@ -355,6 +385,9 @@ export class BrowserController {
       case "press": {
         const key = String(a.value ?? "");
         if (!key) return fail('press needs value, e.g. value: "Enter".');
+        // A key on a consent page can press its focused Allow (Enter, Space) just as a click can.
+        const blocked = await this.consent(s, tab, { action: "press" });
+        if (blocked) return blocked;
         if (a.ref && !(await tab.agent<boolean>("focus", a.ref))) return fail(STRB.staleRef(a.ref));
         if (/^(enter|return)$/i.test(key)) {
           const active = a.ref ?? await tab.agent<string | null>("activeRef");
@@ -367,12 +400,16 @@ export class BrowserController {
         return this.after(s, tab);
       }
       case "wait": {
+        // google-setup security fix 2: "wait for text X" answers yes/no about the page, so it could be used to guess a
+        // client secret one prefix at a time. Every Bot, always: no secret-shaped wait text, and the page is compared
+        // only after its secrets and client IDs are replaced.
+        if (a.text && probesGoogleClient(a.text)) return fail(STRGS.waitRefused);
         const until = this.d.now() + WAIT_MS;
         const before = s.state?.doc;
         for (;;) {
           if (a.value === "navigation") { const st = await this.collect(s, tab).catch(() => null); if (st && st.doc !== before) break; }
           else if (a.ref) { if (typeof (await this.facts(tab, a.ref)) !== "string") break; }
-          else if (a.text) { const t = await tab.agent<string>("text", null, 400_000).catch(() => ""); if (t.includes(a.text)) break; }
+          else if (a.text) { const t = scrubGoogleClientValues(await tab.agent<string>("text", null, 400_000).catch(() => "")); if (t.includes(a.text)) break; }
           else { await this.sleep(1000); break; }
           if (this.d.now() >= until) return fail(`Waited ${WAIT_MS / 1000} s; it didn't happen. Take a snapshot to see the page.`);
           await this.sleep(250);
@@ -406,6 +443,9 @@ export class BrowserController {
         return rows.join("\n");
       }
       case "screenshot": {
+        // google-setup security fix 5: a client page can show the secret as pixels. Any Bot, judged on the live address.
+        const here = await tab.agent<string>("href").catch(() => s.state?.url ?? "");
+        if (isGoogleClientPage(here) || isGoogleClientPage(s.state?.url ?? "")) return fail(STRGS.noScreenshots);
         const img = await tab.screenshot(this.d.maxShotWidth ?? 1280);
         s.screenshots += 1;
         this.d.log(`browser: screenshot for ${s.botName} (${Math.round((img.length * 3) / 4 / 1024)} KB, #${s.screenshots} this session)`);

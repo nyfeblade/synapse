@@ -1,8 +1,9 @@
-import { STR, type AuthTestResult, type AuthView } from "@synapse/shared";
+import { createHash } from "node:crypto";
+import { STR, STR_AUTH, type AuthTestResult, type AuthView } from "@synapse/shared";
 import type { BoxPin } from "./box-pin";
 import type { Call } from "./gateway-call";
 
-const PIN_MISMATCH = "The computer's identity changed. Confirm it in Settings → Updates before sending secrets.";
+const PIN_MISMATCH = STR_AUTH.pinMismatch;
 
 /**
  * The Mac's own copy of the key, for the Bots' claude on this Mac. Review fix 4: it is kept by the coordinator
@@ -20,7 +21,12 @@ export type SavedKeyView = AuthView & { macSaved: boolean; macError?: string };
  * (encrypted with the profile's local-policy.key, never the keychain) for a Bot's wrapped `claude` here, and removed
  * with it. Nothing here logs it, and the renderer gets back the host's view, which carries the masked key only.
  */
-export function createApiKeySender(o: { call: Call; pin: Pick<BoxPin, "check">; seal(publicKey: string, value: string): Promise<string>; mac?: MacKeyCopy; log?(s: string): void }) {
+export function createApiKeySender(o: { call: Call; pin: Pick<BoxPin, "check" | "pinned" | "repin">;
+  /**
+   * Review of new-user walk finding 2: "Trust this computer" is confirmed HERE, in the main process (a native dialog
+   * with both keys' fingerprints, Cancel the default). Nothing the renderer sends can stand in for it. Absent: refused.
+   */
+  confirmTrust?(oldFingerprint: string, newFingerprint: string): Promise<boolean>; seal(publicKey: string, value: string): Promise<string>; mac?: MacKeyCopy; log?(s: string): void }) {
   const sealed = async (value: string): Promise<string> => {
     const { boxPublicKey } = await o.call("getAuth", {});
     if (o.pin.check(boxPublicKey) === "mismatch") throw new Error(PIN_MISMATCH);
@@ -53,6 +59,21 @@ export function createApiKeySender(o: { call: Call; pin: Pick<BoxPin, "check">; 
       }
     }),
     test: (value: string): Promise<AuthTestResult> => inTurn(async () => o.call("testAuthConnection", { sealed: await sealed(value) })),
+    /** New-user walk, finding 2: the box's key no longer matches the one this Mac pinned. */
+    pinChanged: async (): Promise<boolean> => o.pin.check((await o.call("getAuth", {})).boxPublicKey) === "mismatch",
+    /**
+     * "Trust this computer": fetch the box's key first (a failure leaves the old pin), ask the user in main, and only on
+     * their yes replace the pin in one write. It never sends the API key: the user presses Save again afterwards.
+     */
+    trust: (): Promise<{ trusted: boolean }> => inTurn(async () => {
+      const { boxPublicKey } = await o.call("getAuth", {});
+      const old = o.pin.pinned();
+      if (old === boxPublicKey) return { trusted: true };
+      const yes = o.confirmTrust ? await o.confirmTrust(old ? boxKeyFingerprint(old) : "—", boxKeyFingerprint(boxPublicKey)) : false;
+      if (!yes) return { trusted: false };
+      o.pin.repin(boxPublicKey);
+      return { trusted: true };
+    }),
     /** Security review (minor 5): whether this Mac has its copy (the box never sends the key back, so it's asked for once). */
     hasMacCopy: async (): Promise<boolean> => { try { return (await o.mac?.has()) ?? false; } catch { return false; } },
     remove: (): Promise<AuthView> => inTurn(async () => {
@@ -64,6 +85,23 @@ export function createApiKeySender(o: { call: Call; pin: Pick<BoxPin, "check">; 
 }
 
 export type ApiKeySender = ReturnType<typeof createApiKeySender>;
+
+/** A box key, short enough to compare by eye: SHA-256 of the key, first 16 bytes, hex in groups of four. */
+export function boxKeyFingerprint(publicKeyB64: string): string {
+  const hex = createHash("sha256").update(Buffer.from(publicKeyB64, "base64")).digest("hex").slice(0, 32);
+  return hex.match(/.{4}/g)!.join(" ");
+}
+
+/**
+ * The main-process confirmation for "Trust this computer". Cancel is the default (Return) and the
+ * cancel (Escape) button. The buttons are listed action-first because macOS lays an alert's buttons
+ * out right to left: this puts Cancel on the left and Trust on the right, the same order as every
+ * in-app dialog and the app's other native alert (Replace / Cancel), with the risky act never the default.
+ */
+export async function confirmTrustDialog(show: (o: { type: "warning"; message: string; detail: string; buttons: string[]; defaultId: number; cancelId: number }) => Promise<{ response: number }>, oldFp: string, newFp: string): Promise<boolean> {
+  const r = await show({ type: "warning", message: STR_AUTH.trustConfirmTitle, detail: STR_AUTH.trustConfirmDetail(oldFp, newFp), buttons: [STR_AUTH.trustComputer, STR_AUTH.trustConfirmCancel], defaultId: 1, cancelId: 1 });
+  return r.response === 0;
+}
 interface IpcLike { removeHandler(channel: string): void; handle(channel: string, fn: (e: unknown, ...a: unknown[]) => unknown): void }
 
 /**
@@ -82,6 +120,9 @@ export function registerAuthIpc(ipc: IpcLike, sender: () => ApiKeySender | null,
     ["auth:test-key", async (value: string) => need().test(value)],
     ["auth:remove-key", async () => need().remove()],
     ["auth:has-mac-key", async () => (sender() ? sender()!.hasMacCopy() : false)],
+    ["auth:pin-changed", async () => (sender() ? sender()!.pinChanged().catch(() => false) : false)],
+    // Takes no arguments on purpose: whatever the renderer passes, the confirmation happens in main.
+    ["auth:trust-computer", async () => need().trust()],
   ];
   for (const [ch, fn] of routes) {
     ipc.removeHandler(ch);

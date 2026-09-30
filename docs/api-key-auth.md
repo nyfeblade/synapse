@@ -107,7 +107,7 @@ Verified with the real CLI (`host/test/auth/proxy.cli.integration.test.ts`). A B
 
 | Anthropic says | Synapse shows |
 |---|---|
-| 401 `authentication_error` | Reached Anthropic ✓ — key rejected |
+| 401 `authentication_error` | Key rejected |
 | 402 `billing_error` / "credit balance is too low" | No API credits |
 | 429 `rate_limit_error` (+ `retry-after`) | Rate limited by Anthropic: "Try again in N s" (the CLI already waited and retried) |
 | 529 `overloaded_error` | Anthropic is overloaded. The CLI retries with backoff, then the host retries the turn |

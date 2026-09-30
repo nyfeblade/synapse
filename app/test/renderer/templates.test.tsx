@@ -37,10 +37,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Template actions menu (S11, TPL-01)", () => {
-  it("offers Share as Template before a template exists, then details/update/delete", async () => {
+  it("offers Export Bot… before a template exists, then details/update/delete", async () => {
     render(<TemplateMenu botId="b1" />);
     fireEvent.click(screen.getByRole("button", { name: "Template actions" }));
-    expect(await screen.findByRole("menuitem", { name: "Share as Template" })).toBeTruthy();
+    expect(await screen.findByRole("menuitem", { name: "Export Bot…" })).toBeTruthy();
     cleanup();
     template = { id: "t1", name: "Courier", manifest: draft };
     render(<TemplateMenu botId="b1" />);
@@ -139,7 +139,8 @@ describe("import preview (TPL-02)", () => {
     const sheet = screen.getByRole("dialog", { name: "Trip Desk" });
     for (const h of ["Facts it already knows", "Playbooks it can run", "Jobs that run on their own", "Apps it can use"]) expect(within(sheet).getByText(h)).toBeTruthy();
     expect(within(sheet).getByText("Needs connecting")).toBeTruthy();
-    expect(within(sheet).getByText("This Bot was created by someone else. It may act on your behalf.")).toBeTruthy();
+    // Bot sharing (security review): a third-party add is a shared Bot that asks first.
+    expect(within(sheet).getByText("Added as a shared Bot: asks before acting.")).toBeTruthy();
     fireEvent.click(within(sheet).getByRole("button", { name: "Add Bot" }));
     await vi.waitFor(() => expect(calls).toContainEqual(["importTemplate", { token: "tok" }]));
     await vi.waitFor(() => expect(useUi.getState().openBot).toHaveBeenCalledWith("new-bot"));

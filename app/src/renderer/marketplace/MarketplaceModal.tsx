@@ -1,11 +1,13 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { STR, STR5, type CatalogEntry } from "@synapse/shared";
+import { COMPOSIO_GOOGLE_TWINS, STR, STR5, type CatalogEntry } from "@synapse/shared";
 import { Dialog } from "../components/Dialog";
 import { BackIcon, CloseIcon, SearchIcon } from "../components/Icons";
 import { EmptyView } from "../components/EmptyView";
 import { useTemplates } from "../templates/store";
 import { LogoTile } from "./LogoTile";
 import { useGoogle } from "../google/store";
+import { ComposioMarketplaceSection } from "../composio/ComposioMarketplace";
+import { GoogleTwinPill } from "../composio/GoogleTwinPill";
 import { hasTemplateAdder, useMarketplace } from "./store";
 
 /** Local label: shared/src/strings-phase5.ts belongs to another track this cycle. */
@@ -24,6 +26,7 @@ function Pill({ e }: { e: CatalogEntry }) {
   const { add, reopen, waiting } = useMarketplace();
   const manage = () => useMarketplace.setState({ page: "manage" });
   // ORIG-GOOGLE: Gmail, Calendar and Drive are the built-in connector; every state opens the Connect Google sheet.
+  if (e.source === "google" && COMPOSIO_GOOGLE_TWINS[e.id]) return <GoogleTwinPill e={e} toolkit={COMPOSIO_GOOGLE_TWINS[e.id]!} />;
   if (e.source === "google") {
     const openSheet = () => useGoogle.getState().openSheet();
     if (e.state === "connected") return <span className="mkt-action"><Status text={STR5.statusConnected} /><button type="button" className="pill" aria-label={STR5.manageAria(e.name)} onClick={openSheet}>{STR5.manage}</button></span>;
@@ -52,7 +55,7 @@ function Row({ e, sub }: { e: CatalogEntry; sub?: string }) {
     <div className="mkt-row">
       <a href="#" aria-label={STR5.openAria(e.name)} className="mkt-row-main" onClick={(ev) => { ev.preventDefault(); openDetail(e.id); }}>
         <LogoTile name={e.name} logo={e.logo} />
-        <span className="mkt-row-text"><span>{e.name}{e.kind === "bot-template" && e.source === "starter" && <span className="muted"> {STR5.byTeam}</span>}</span><span className="muted ellipsis">{sub ?? e.description}</span></span>
+        <span className="mkt-row-text"><span>{e.name}</span><span className="muted ellipsis">{sub ?? e.description}</span></span>
       </a>
       <Pill e={e} />
     </div>
@@ -179,6 +182,7 @@ export function MarketplaceModal() {
               {v.forYou && <Section title={STR5.forYou} sub={STR5.becauseYouUse(v.forYou.because)} entries={v.forYou.entries} grid />}
               <Section title={STR5.fromTeam} entries={v.fromTeam} />
               <Section title={STR5.featuredPlugins} entries={v.featuredPlugins} grid />
+              <ComposioMarketplaceSection />
               {v.categories.map((c) => <Section key={c.name} title={c.name} entries={c.entries} grid />)}
             </>
           )}

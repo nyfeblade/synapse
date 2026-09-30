@@ -1,7 +1,7 @@
 {
   "name": "synapse",
   "private": true,
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "workspaces": [
     "shared",

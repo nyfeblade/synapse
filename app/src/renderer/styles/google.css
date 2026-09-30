@@ -1,11 +1,25 @@
-/* ORIG-GOOGLE: Connect Google sheet. Tokens only (tokens.css); no new colors. */
+/* ORIG-GOOGLE + google-setup: Connect Google sheet. Tokens only (tokens.css); no new colors, no glass or glow. */
+.google-sheet { width: 600px; }
 .google-sheet h3 { margin: 6px 0 0; font-size: 14px; font-weight: 500; }
-.google-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
-.google-scopes { margin: 0; padding: 8px 10px; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 12px; border-radius: var(--radius-control); background: var(--fill-inset); font-size: 12px; color: var(--ink-3); }
+.google-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.45; color: var(--ink); }
+.google-step { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-top: var(--hairline) solid var(--line-row); }
+.google-step:first-child { border-top: 0; }
+.google-step-head { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.google-step-head input[type="checkbox"] { margin: 0; flex-shrink: 0; }
+.google-step-n { color: var(--ink-faint); font-variant-numeric: tabular-nums; width: 12px; flex-shrink: 0; }
+.google-step-title { flex-grow: 1; min-width: 0; }
+.google-step.done .google-step-title { color: var(--ink-3); }
+.google-step-body { display: flex; flex-direction: column; gap: 4px; padding-left: 42px; }
+.google-step-body .field { margin-top: 4px; }
+.google-note { margin: 2px 0 0; font-size: var(--type-small); color: var(--ink-3); }
+.google-connect-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.google-connect-row .pill-wait { margin-right: auto; }
+.google-bot { display: flex; flex-direction: column; gap: 4px; }
+.google-bot .select { max-width: 200px; }
 .google-account { display: flex; flex-direction: column; gap: 4px; }
 
 /* No interaction states live here: every control on the Connect Google sheet is an app.css class
-   (`.btn-dark`, `.btn-outline`, `.link-btn`, `.copy-field`), already covered there. */
+   (`.btn-primary`, `.btn-outline`, `.link-btn`, `.copy-field`, `.select`), already covered there. */
 
 /* The copy-field label swaps between "Copy" and "Copied"; crossfade it so the word does not hard-cut
    (docs/motion-spec.md §7.5). */

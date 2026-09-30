@@ -29,9 +29,9 @@ export const SPEC_GATEWAY_COMMANDS: readonly string[] = [
   // MCP and plugins
   "installPlugin", "uninstallPlugin", "setMcpToolEnabled", "startMcpAuth", "completeMcpOAuth",
   // Templates
-  "exportTemplate", "importTemplate", "deleteTemplate",
+  "exportTemplate", "importTemplate", "deleteTemplate", "sharePayload",
   // Phase 5 additions (usage, MCP, marketplaces, templates, local execution, avatars, voice, onboarding, memory, keys, follow-ups)
-  "setWeeklyBudget", "setBudget", "approveBudget", "clearTaskAlert", "dismissBudgetPrompt", "setMonthlyBudget", "recordMacUsage", "addMcpServer", "removeMcpServer", "renameMcpAccount", "setMcpInstructions", "restartMcpServers", "setMcpServerEnabled", "setMcpServerTrusted", "setMcpServerHeader", "setOAuthLoopbackPort",
+  "setBudget", "approveBudget", "clearTaskAlert", "dismissBudgetPrompt", "setMonthlyBudget", "recordMacUsage", "addMcpServer", "removeMcpServer", "renameMcpAccount", "setMcpInstructions", "restartMcpServers", "setMcpServerEnabled", "setMcpServerTrusted", "setMcpServerHeader", "setOAuthLoopbackPort",
   "addPluginMarketplace", "removePluginMarketplace", "draftTemplate", "setLocalComputer", "setLocalBrowserAllowed", "setLocalMacAppAllowed", "resetLocalPolicy", "restoreLocalBotModes", "dismissLocalPolicyReset", "registerLocalComputer",
   "localExecHeartbeat", "localExecOutput", "localExecDone", "localExecUpload", "clearAgentAvatar", "setAgentVoice", "noteVoiceCall", "startCall", "addToCall", "removeFromCall", "endCall", "getCallGreetings", "wrapUpCall", "voiceSpeculate", "voiceSpeculateCancel",
   "completeOnboarding", "setMemoryMode", "setAgentFollowups", "setAgentEngineeringMode", "setAgentPermMode", "setAgentNoLimits", "setAgentSaveUsage", "setAgentComputerPerception",
@@ -40,6 +40,10 @@ export const SPEC_GATEWAY_COMMANDS: readonly string[] = [
   "answerBotCall", "setBotCallPermission",
   // Built-in Google connector (ORIG-GOOGLE)
   "setGoogleClient", "startGoogleAuth", "disconnectGoogle", "setAgentGoogle",
+  // Apps through Composio
+  "setComposioKey", "clearComposioKey", "acceptComposioDisclosure", "connectComposioApp", "disconnectComposioApp", "setComposioGrant",
+  // google-setup: the guided task and the weekly sign-in check
+  "startGoogleSetupTask", "cancelGoogleSetupTask", "setGoogleReconnectCheck",
   // Per-Bot GitHub sign-in (bug-log 195)
   "startGitHubSignIn", "signOutGitHub",
 ];
@@ -51,10 +55,10 @@ export const READ_ONLY_COMMANDS: readonly string[] = [
   "getAgentAutomations", "listAllAutomations", "getStandup", "getAutomationWebhook", "getWorkflows", "getWorkflow",
   "getForeverBoxStatus", "getBoxStoreStatus", "getTeachRecordingStatus", "getHealth",
   "getTrays", "readAttachmentChunk", "readWorkspaceFile", "getHostSettings", "getBotSecretsStatus",
-  "listPlugins", "searchCatalog", "listMcpServers", "previewTemplateImport", "getUsage", "getUsageDashboard", "getBudgets", "getRuntimeStats",
+  "listPlugins", "searchCatalog", "listMcpServers", "previewTemplateImport", "previewShareImport", "getUsage", "getUsageDashboard", "getBudgets", "getRuntimeStats",
   "getDisplays", "getDiskPressure", "listSnapshots", "listBotCalls",
   "getMarketplace", "getCatalogEntry", "listPluginMarketplaces", "getTemplate", "listStarterTemplates", "getLocalComputer", "getLocalPolicyStatus", "getLocalPolicyReset", "getLocalBotMode", "getLocalBrowserAllowed", "getLocalMacAppAllowed", "getBrowserUsage",
-  "readLocalFile", "getNetworkStats", "getOnboarding", "listCodingAgents", "getPhase5Settings", "getGoogleStatus", "getGitHubStatus",
+  "readLocalFile", "getNetworkStats", "getOnboarding", "listCodingAgents", "getPhase5Settings", "getGoogleStatus", "getGoogleReconnectCheck", "getComposioStatus", "getGitHubStatus",
   "getAuth", "getModelAccess", "getBudgetPrompt", "macClaudeAuth",
 ];
 
@@ -144,8 +148,8 @@ export const PARITY: Record<string, ParityEntry> = {
   completeMcpOAuth: { userOnly: "OAuth sign-in in the browser" },
   exportTemplate: { laterPhase: 5, tool: "Template" },
   importTemplate: { laterPhase: 5, tool: "Template" },
+  sharePayload: { userOnly: "sharing a Bot" },
   deleteTemplate: { laterPhase: 5, tool: "Template" },
-  setWeeklyBudget: { userOnly: "billing" },
   setBudget: { userOnly: "billing" },
   approveBudget: { userOnly: "answering approval cards" },
   clearTaskAlert: { userOnly: "billing" },
@@ -200,6 +204,15 @@ export const PARITY: Record<string, ParityEntry> = {
   startGoogleAuth: { userOnly: "OAuth sign-in in the browser" },
   disconnectGoogle: { userOnly: "connected accounts" },
   setAgentGoogle: { userOnly: "connected accounts" },
+  setComposioKey: { userOnly: "secret values" },
+  clearComposioKey: { userOnly: "secret values" },
+  acceptComposioDisclosure: { userOnly: "connected accounts" },
+  connectComposioApp: { userOnly: "OAuth sign-in in the browser" },
+  disconnectComposioApp: { userOnly: "connected accounts" },
+  setComposioGrant: { userOnly: "connected accounts" },
+  startGoogleSetupTask: { userOnly: "connected accounts" },
+  cancelGoogleSetupTask: { userOnly: "connected accounts" },
+  setGoogleReconnectCheck: { userOnly: "connected accounts" },
   startGitHubSignIn: { userOnly: "GitHub sign-in in the browser" },
   signOutGitHub: { userOnly: "connected accounts" },
 };

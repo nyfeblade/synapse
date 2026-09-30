@@ -90,8 +90,8 @@ export function SecretsSection({ botId }: { botId: string }) {
                 ) : renaming === r.name ? (
                   <div className="secret-edit">
                     <label className="field"><span>{STRC.newSecretName}</span><input className="field-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value.toUpperCase() })} /></label>
+                    <button type="button" className="btn-secondary" onClick={reset}>{STR.cancel}</button>
                     <button type="button" className="btn-primary" disabled={!form.name} onClick={() => void rename(r.name)}>{STRC.renameSecret}</button>
-                    <button type="button" className="btn-outline small" onClick={reset}>{STR.cancel}</button>
                   </div>
                 ) : r.unusable ? (
                   // Bug 56: Replace would keep a name the Bot's env refuses, so this row offers the two actions that help.
@@ -102,8 +102,8 @@ export function SecretsSection({ botId }: { botId: string }) {
                 ) : replacing === r.name ? (
                   <div className="secret-edit">
                     {valueField}
+                    <button type="button" className="btn-secondary" onClick={reset}>{STR.cancel}</button>
                     <button type="button" className="btn-primary" disabled={form.value.length < LIMITSC.secretMinChars} onClick={() => void save(r.name, r.description)}>{STRC.replaceValue}</button>
-                    <button type="button" className="btn-outline small" onClick={reset}>{STR.cancel}</button>
                   </div>
                 ) : (
                   <span className="secret-actions">
@@ -121,8 +121,8 @@ export function SecretsSection({ botId }: { botId: string }) {
           <label className="field"><span>{STRC.secretName}</span><input className="field-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value.toUpperCase() })} /></label>
           <label className="field"><span>{STRC.secretDescription}</span><input className="field-input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
           {valueField}
+          <button type="button" className="btn-secondary" onClick={reset}>{STR.cancel}</button>
           <button type="button" className="btn-primary" disabled={!form.name || form.value.length < LIMITSC.secretMinChars} onClick={() => void save(form.name, form.description)}>{STRC.saveSecret}</button>
-          <button type="button" className="btn-outline small" onClick={reset}>{STR.cancel}</button>
         </div>
       ) : (
         <button type="button" className="btn-outline small" onClick={() => { reset(); setAdding(true); }}>{STRC.addSecret}</button>

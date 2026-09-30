@@ -6,6 +6,7 @@ import type { ForeverBoxStep, SnapshotInfo } from "@synapse/shared";
 import { boxPortEnv, STRC } from "@synapse/shared";
 import type { Exec } from "./box-provider";
 import { resolveOrb } from "./orb-path";
+import { macNetsEnv } from "./mac-nets";
 import { BoxOpsLock, boxBusyMessage } from "./setup/box-ops-lock";
 import { adoptable, CREATED_MARKER, listMachines, machineMarks, machineSize } from "./setup/orb";
 import type { Call } from "./gateway-call";
@@ -61,7 +62,7 @@ export class OrbBoxOps implements BoxOps {
   }) {}
   private orb() { return (this.o.orb ?? resolveOrb)(); }
   private m() { return this.o.machine ?? "box"; }
-  private env() { return { ORB: this.orb(), BOX_MACHINE: this.m(), ...boxPortEnv(this.o.uid ?? process.getuid?.() ?? 501) }; }
+  private env() { return { ORB: this.orb(), BOX_MACHINE: this.m(), ...boxPortEnv(this.o.uid ?? process.getuid?.() ?? 501), ...macNetsEnv() }; }
   private async run(cmd: string, args: string[], timeoutMs = 30 * 60_000, env?: Record<string, string>): Promise<void> {
     const r = await this.o.exec(cmd, args, { timeoutMs, ...(env ? { env } : {}) });
     if (r.code !== 0) throw new Error(`${cmd} ${args[0]} failed: ${r.stderr.trim().slice(0, 300)}`);

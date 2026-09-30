@@ -48,7 +48,7 @@ describe("one-time prompts once the box has an API key (the only sign-in; securi
     macHas = true;
     render(<KeyPrompts />);
     const input = await screen.findByLabelText(STR_COST.monthlyBudget);
-    expect((input as HTMLInputElement).value).toBe("95");
+    expect((input as HTMLInputElement).value, "shown as money is written everywhere else (UI-controls pass)").toBe("95.00");
     fireEvent.change(input, { target: { value: "120" } });
     fireEvent.click(screen.getByRole("button", { name: STR_COST.save }));
     await waitFor(() => expect(screen.queryByLabelText(STR_COST.monthlyBudget)).toBeNull());

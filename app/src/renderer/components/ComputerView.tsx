@@ -41,6 +41,7 @@ export function ComputerView() {
   const botId = open?.botId ?? "";
   const bot = useUi((s) => s.bots[botId]);
   const help = useUi((s) => pendingBoxHelp(s.transcripts[botId] ?? []));
+  const allBots = useUi((s) => s.bots);
   const [driving, setDriving] = useState(false);
   const inControl = Boolean(help?.inControl) || driving;
   const view = useRef<HTMLDivElement>(null);
@@ -206,14 +207,16 @@ export function ComputerView() {
         <span className="cv-title">
           <ShapeAvatar shape={bot.profile.avatarShape} color={bot.profile.avatarColor} size={18} />
           <span className="cv-name">{bot.profile.name}</span>
-          <span className="cv-sub">{hasScreen ? STRC.inUse : STRC.idle}</span>
+          {/* New-user walk, finding 14: "in use" only while a run, a takeover or the user is actually on it. */}
+          <span className="cv-sub">{hasScreen && (bot.running || inControl || !!help) ? STRC.inUse : STRC.idle}</span>
         </span>
         <span className="cv-monitors" role="group" aria-label="Screens">
-          {shown.map((d) => <button key={d.botId} type="button" className={`cv-monitor${d.botId === botId ? " current" : ""}`} aria-pressed={d.botId === botId} onClick={() => useComputer.getState().openComputer(d.botId)}>:{d.index}</button>)}
+          {/* New-user walk, finding 14: one screen needs no switcher; several are named by their Bots, not ":3". */}
+          {shown.length > 1 && shown.map((d) => <button key={d.botId} type="button" className={`cv-monitor${d.botId === botId ? " current" : ""}`} aria-pressed={d.botId === botId} onClick={() => useComputer.getState().openComputer(d.botId)}>{allBots[d.botId]?.profile.name ?? `Screen ${d.index}`}</button>)}
           {more.length > 0 && (
             <select aria-label={STRC.moreScreens} value="" onChange={(e) => e.target.value && useComputer.getState().openComputer(e.target.value)}>
               <option value="">{STRC.moreScreens}</option>
-              {more.map((d) => <option key={d.botId} value={d.botId}>:{d.index}</option>)}
+              {more.map((d) => <option key={d.botId} value={d.botId}>{allBots[d.botId]?.profile.name ?? `Screen ${d.index}`}</option>)}
             </select>
           )}
         </span>

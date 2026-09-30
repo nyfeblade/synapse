@@ -1,0 +1,15 @@
+/* Apps through Composio: the key walkthrough and the app rows. Tokens only (tokens.css); no new colors, no glass. */
+.composio-steps { margin: 0; padding-left: 20px; list-style: decimal; display: flex; flex-direction: column; gap: 14px; font-size: 13px; color: var(--ink); }
+.composio-steps > li { display: list-item; }
+.composio-steps > li > * + * { margin-top: 6px; }
+.composio-steps > li > button, .composio-steps > li > span:not(.composio-step-label) { display: flex; width: fit-content; }
+.composio-step-label { display: block; font-weight: 500; }
+.composio-substeps { margin: 0; padding-left: 16px; list-style: disc; display: flex; flex-direction: column; gap: 3px; color: var(--ink-2); line-height: 1.45; }
+.composio-apps { display: flex; flex-direction: column; }
+.composio-app + .composio-app { border-top: var(--hairline) solid var(--line-row); }
+.composio-app-name { min-width: 0; }
+.composio-grants { padding: 0 0 6px 12px; display: flex; flex-direction: column; }
+.composio-disclosure p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--ink); }
+/* Marketplace Gmail / Calendar / Drive: Connect directly (default) beside the quick Composio option. */
+.mkt-twin { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.mkt-twin-note { font-size: var(--type-small); }

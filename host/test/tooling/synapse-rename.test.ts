@@ -88,7 +88,7 @@ describe("the app is Synapse, not Bots", () => {
 
   it("the Bots' computer is still the Bots' (the assistants'), not the app's", () => {
     expect(COMPUTER_NAME).toBe("Bots' computer");
-    expect(computerTitle()).toBe("Bots' Computer");
+    expect(computerTitle()).toBe("Bots' computer");
   });
 
   it("the box keeps its names (bothost and the bots-* units and paths), whole: never half-renamed", () => {

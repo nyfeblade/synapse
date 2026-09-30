@@ -171,13 +171,19 @@ describe("the tree is safe to publish (bug 282)", () => {
     expect(hits).toEqual([]);
   });
 
-  it("ships an MIT licence, and every package says so", () => {
+  it("ships the Apache-2.0 licence with a NOTICE and a trademark policy, and every package says so", () => {
     const lic = fs.readFileSync(path.join(root, "LICENSE"), "utf8");
-    expect(lic.split("\n")[0]).toBe("MIT License");
-    expect(lic).toContain("Copyright (c) 2026 nyfeblade");
-    expect(lic).toContain("THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND");
+    expect(lic.trimStart().split("\n")[0]).toBe("Apache License");
+    expect(lic).toContain("Version 2.0, January 2004");
+    expect(lic).toContain("END OF TERMS AND CONDITIONS");
+    expect(lic).toContain('on an "AS IS" BASIS');
+    const notice = fs.readFileSync(path.join(root, "NOTICE"), "utf8");
+    expect(notice).toContain("Copyright 2026 the Synapse authors.");
+    expect(notice).toContain("app/build/THIRD-PARTY-NOTICES.txt");
+    expect(fs.readFileSync(path.join(root, "TRADEMARKS.md"), "utf8")).toMatch(/based on Synapse/i);
+    expect(fs.readFileSync(path.join(root, "README.md"), "utf8")).toContain("(TRADEMARKS.md)");
     for (const p of ["package.json", "app/package.json", "host/package.json", "shared/package.json"]) {
-      expect(JSON.parse(fs.readFileSync(path.join(root, p), "utf8")).license, p).toBe("MIT");
+      expect(JSON.parse(fs.readFileSync(path.join(root, p), "utf8")).license, p).toBe("Apache-2.0");
     }
   });
 });

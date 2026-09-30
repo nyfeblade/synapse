@@ -1,6 +1,6 @@
 import { STRV, type BotSummary } from "@synapse/shared";
 
-export type BotPresenceKind = "call" | "busy" | "idle";
+export type BotPresenceKind = "call" | "waiting" | "busy" | "idle";
 
 const short = (s: string, n: number) => {
   const one = s.replace(/\s+/g, " ").trim().replace(/[.…]+$/, "");
@@ -13,6 +13,7 @@ const short = (s: string, n: number) => {
  */
 export function botPresence(b: BotSummary, onCall: boolean): { kind: BotPresenceKind; label: string } {
   if (onCall) return { kind: "call", label: STRV.presenceOnCall };
+  if (b.awaiting) return { kind: "waiting", label: STRV.presenceWaiting };
   if (b.running || (b.presence && b.presence !== "idle")) {
     const task = short(b.activity?.detail ?? b.activity?.tool ?? "", 32);
     return { kind: "busy", label: STRV.presenceBusy(task) };

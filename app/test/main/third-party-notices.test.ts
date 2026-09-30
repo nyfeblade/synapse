@@ -77,4 +77,15 @@ describe("third-party notices (bug 283)", () => {
     const pkg = fs.readFileSync(path.join(appDir, "scripts", "package.mjs"), "utf8");
     expect(pkg).toContain('path.join(here, "build", "THIRD-PARTY-NOTICES.txt")');
   });
+
+  it("Synapse's own LICENSE and NOTICE (Apache-2.0) are copied into the bundle and checked there", async () => {
+    const pkg = fs.readFileSync(path.join(appDir, "scripts", "package.mjs"), "utf8");
+    expect(pkg).toContain('path.join(repoRoot, "LICENSE")');
+    expect(pkg).toContain('path.join(repoRoot, "NOTICE")');
+    expect(pkg).toMatch(/extraResource: \[[^\]]*stagedLicence[^\]]*stagedNotice\b/);
+    const { RUNTIME_PATHS } = await import("../../scripts/verify-bundle.mjs");
+    expect(RUNTIME_PATHS).toEqual(expect.arrayContaining(["Contents/Resources/LICENSE", "Contents/Resources/NOTICE"]));
+    expect(fs.readFileSync(path.join(repoRoot, "LICENSE"), "utf8")).toMatch(/Apache License\s+Version 2\.0/);
+    expect(fs.readFileSync(path.join(repoRoot, "NOTICE"), "utf8")).toMatch(/Synapse/);
+  });
 });

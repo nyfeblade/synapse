@@ -10,7 +10,7 @@ export async function completeOnboarding(page: Page, name = "Onboarded"): Promis
   // In `step()` so a renderer error during the five onboarding screens is reported against
   // onboarding, which every journey walks through before it reaches the surface it is about.
   await step("walk onboarding", async () => {
-    await page.getByRole("button", { name: "Input API Key →" }).click({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Add API key" }).click({ timeout: 30_000 });
     // synapse-public: the Anthropic API key is the only sign-in (a stand-in key; the fake brain never calls out).
     await page.getByLabel("Anthropic API key").fill(E2E_TEST_API_KEY);
     await page.getByRole("button", { name: "Save key" }).click();

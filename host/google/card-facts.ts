@@ -7,11 +7,11 @@ import { parseRecipients } from "./recipients";
  * before the card is raised — the real reply recipient (Reply-To, else From), the event's title and time, the upload
  * folder's name and sharing state. `resolvedTo` is pinned onto the approved call so the send goes exactly there.
  */
-export interface GoogleCardFacts { lines: string[]; summary?: string; resolvedTo?: string[] }
+export interface GoogleCardFacts { lines: string[]; summary?: string; resolvedTo?: string[]; attendees?: string[] }
 
 interface Header { name: string; value: string }
 interface Meta { payload?: { headers?: Header[] } }
-interface Event { summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }
+interface Event { attendees?: { email?: string }[]; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }
 interface DriveItem { name?: string; shared?: boolean }
 
 const s = (v: unknown) => (typeof v === "string" ? v : v === undefined || v === null ? "" : String(v));
@@ -46,6 +46,7 @@ export async function googleCardFacts(api: GoogleApi, tool: string, a: Record<st
     const range = `${when(e.start)} → ${when(e.end)}`;
     return {
       lines: [`Event: “${title.slice(0, 120)}”`, `When: ${range}`],
+      attendees: (e.attendees ?? []).map((x) => s(x.email)).filter(Boolean),
       summary: tool === "calendar_delete" ? `Delete “${title.slice(0, 120)}” (${range}) from your Google Calendar` : `Change “${title.slice(0, 120)}” (${range}) on your Google Calendar`,
     };
   }

@@ -21,7 +21,7 @@ const bot = (id: string, name: string, over: Partial<BotSummary> = {}): BotSumma
 describe("smooth sidebar", () => {
   it("moves Home, Schedules, Usage, Marketplace and Settings into the account menu", () => {
     const labels = accountMenuItems().filter((i) => "label" in i).map((i) => (i as { label: string }).label);
-    expect(labels).toEqual(["Home", "Schedules", "Usage", "Marketplace", "Settings"]);
+    expect(labels).toEqual(["New chat", "Schedules", "Usage", "Marketplace", "Settings"]); // new-user walk finding 15
   });
   // Fix round 1: the approved mockup draws a hairline between Marketplace and Settings.
   it("puts a separator between Marketplace and Settings", () => {

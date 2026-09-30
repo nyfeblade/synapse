@@ -62,11 +62,16 @@ for (const dep of ["libsodium-wrappers", "libsodium"]) {
 const stagedKokoro = stageKokoro(repoRoot, stage);
 const stagedNotices = path.join(stage, "THIRD-PARTY-NOTICES.txt");
 fs.copyFileSync(path.join(here, "build", "THIRD-PARTY-NOTICES.txt"), stagedNotices);
+// Apache-2.0 §4: every copy carries the licence and the NOTICE file (the repo root's, the only copies).
+const stagedLicence = path.join(stage, "LICENSE");
+const stagedNotice = path.join(stage, "NOTICE");
+fs.copyFileSync(path.join(repoRoot, "LICENSE"), stagedLicence);
+fs.copyFileSync(path.join(repoRoot, "NOTICE"), stagedNotice);
 const SHIPPED_TOP = new Set(["dist", "node_modules", "package.json"]);
 const [appDir] = await packager({
   dir: here, name: bundleName, platform: "darwin", arch: "arm64", out, overwrite: true, prune: true,
   icon: path.join(here, "build", "icon.icns"),
-  extraResource: [stagedBox, stagedHost, stagedKokoro, stagedNotices],
+  extraResource: [stagedBox, stagedHost, stagedKokoro, stagedNotices, stagedLicence, stagedNotice],
   // A shipped *.map carries the whole TypeScript source; test-results/ and *.config.ts are build-time
   // only. verify-bundle.mjs fails the build if any of them get in anyway.
   // ALLOWLIST, not a denylist: only these top-level entries ship. The denylist needed a new entry for

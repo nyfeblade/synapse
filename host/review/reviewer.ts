@@ -28,6 +28,10 @@ export interface ReviewerDeps {
   workspace?: string;
 }
 
+/** Bug 410: the Full-auto intent check applies only to a send on the user's accounts (what the gate asks it for). */
+const INTENT_ACTIONS = new Set(["google_write", "composio_write", "mcp"]);
+const intentCheck = (req: ReviewRequest): boolean => req.fullAutoIntent === true && req.surface === "mcp" && INTENT_ACTIONS.has(req.target.action);
+
 /** Untrusted wake text can't close its own <untrusted_wake_text> fence (or open a fake one). */
 const escapeTags = (s: string) => s.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const trimCtx = (s: string) => (s.length <= LIMITS.reviewerContextChars ? s : `${s.slice(0, 2000)}…[context shortened for Auto-review]…${s.slice(-1900)}`);
@@ -90,6 +94,7 @@ export class Reviewer {
         question_answers: req.context.question_answers.slice(-2).map(trimCtx),
         untrusted_excerpts: req.context.untrusted_excerpts.slice(0, 3).map((x) => x.slice(0, 1000)),
       },
+      ...(intentCheck(req) ? { full_auto_intent_check: true } : {}),
       surface: req.surface,
       risk_target: req.target,
       static_analysis: { tier_hint: req.staticResult.tierHint, signals: req.staticResult.signals, floor_hits: req.staticResult.floorHits },
@@ -138,8 +143,10 @@ export class Reviewer {
     // `| tail -150`) changes what the Bot reads back, never what runs. Everything else in the target stays exact.
     const cmd = exactTool ? String(req.target.arguments.command ?? "") : "";
     const shaped = cmd && commandShape(cmd) !== cmd ? fingerprint(req.surface, { ...req.target, arguments: { ...req.target.arguments, command: commandShape(cmd) } }) : req.fingerprint;
-    const key = this.d.cache.key([req.surface, shaped, cwd, rulesVersion, FLOOR_VERSION, safeVersion(), req.botId, req.origin, req.botDescription, JSON.stringify(req.wake ?? null)]);
-    const cached = this.d.cache.get(key, req.userMessageEpoch);
+    const key = this.d.cache.key([req.surface, shaped, cwd, rulesVersion, FLOOR_VERSION, safeVersion(), req.botId, req.origin, req.botDescription, JSON.stringify(req.wake ?? null), req.fullAutoIntent ? "full-auto-intent" : ""]);
+    // Bug 417: an intent check is never cached — each send is judged, and counted, on its own.
+    const noCache = intentCheck(req);
+    const cached = noCache ? null : this.d.cache.get(key, req.userMessageEpoch);
     if (cached) {
       const o = { ...cached, stage: "cache" } as ReviewOutcome;
       logIt("cache", o);
@@ -183,6 +190,10 @@ export class Reviewer {
         // E14: a cited Allow rule waives a floor only if rule-coverage.ts proves it covers this target and service.
         coverage: { rules: allow.free, surface: req.surface, target: req.target, signals: req.staticResult.signals },
         exactRules: allow.exact, target: tool ? { tool, command: String(req.target.arguments.command ?? ""), cwd } : null, workspace: ws,
+        // Bug 410: in Full auto's intent check the owner's own request stands in for an allow rule — for a message
+        // or a publish only (F1, F2), and only on the owner's own wake. Money, deletion, access, identity, F7–F9 and
+        // anything a routine, another Bot or an event woke the Bot for still need a rule or a card.
+        ...(intentCheck(req) && req.origin === "user" ? { intentFloors: ["F1", "F2"] } : {}),
       });
     } catch (e) {
       // Post-validation must never be skipped: a throw (a malformed verdict, a bug) fails closed as an error.
@@ -194,7 +205,7 @@ export class Reviewer {
     const o: ReviewOutcome = verdict.decision === "allow"
       ? { kind: "allow", stage: "model", verdict }
       : { kind: "block", stage: "model", reason: verdict.reason, proposedRule: verdict.proposed_allow_rule, verdict };
-    this.d.cache.set(key, o, verdict.risk_tier, req.userMessageEpoch);
+    if (!noCache) this.d.cache.set(key, o, verdict.risk_tier, req.userMessageEpoch);
     logIt("model", o, { rawVerdict: raw, overrides });
     return o;
   }

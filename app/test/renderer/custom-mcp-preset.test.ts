@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  COMPOSIO_HEADER,
-  COMPOSIO_MCP_URL,
   GITHUB_HEADER,
   GITHUB_MCP_URL,
   SLACK_HEADER,
@@ -13,23 +11,11 @@ import {
 } from "../../src/renderer/marketplace/custom-mcp-preset";
 
 describe("applyCustomMcpPreset", () => {
-  it("fills Composio's Connect URL and header from the name, any case", () => {
-    expect(applyCustomMcpPreset("composio", "", "")).toEqual({ url: COMPOSIO_MCP_URL, headerName: COMPOSIO_HEADER });
+  it("bug 403: no longer fills Composio (it has its own setup), but still recognises it", () => {
+    expect(applyCustomMcpPreset("composio", "", "")).toEqual({ url: "", headerName: "" });
+    expect(applyCustomMcpPreset("Work", "https://connect.composio.dev/mcp", "")).toEqual({ url: "https://connect.composio.dev/mcp", headerName: "" });
     expect(isComposioCustomServer("COMPOSIO", "")).toBe(true);
-  });
-
-  it("fills only the header when the URL already names Composio", () => {
-    expect(applyCustomMcpPreset("Work", "https://connect.composio.dev/mcp", "")).toEqual({
-      url: "https://connect.composio.dev/mcp",
-      headerName: COMPOSIO_HEADER,
-    });
-  });
-
-  it("does not overwrite a URL or header the caller already set", () => {
-    expect(applyCustomMcpPreset("Composio", "https://example.com/mcp", "Authorization")).toEqual({
-      url: "https://example.com/mcp",
-      headerName: "Authorization",
-    });
+    expect(isComposioCustomServer("Work", "https://connect.composio.dev/mcp")).toBe(true);
   });
 
   it("leaves every other server untouched", () => {

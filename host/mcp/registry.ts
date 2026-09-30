@@ -30,6 +30,12 @@ export interface RegistryServer {
   envNames?: string[];
   catalogId: string | null;
   source: "curated" | "marketplace" | "custom";
+  /**
+   * Bug 363: true only for a server the OWNER added in the app (the addMcpServer gateway command). Only such a server
+   * is fetched without the guard, so it may reach the Mac or the LAN; a Bot-added (AddMcpServer), marketplace or
+   * curated server always goes through net/guarded-fetch.ts. Never set from a tool or a repo.
+   */
+  ownerPrivateReach?: true;
   enabled: boolean;
   createdAt: number;
 }
@@ -171,7 +177,7 @@ export class McpRegistry {
     return this.servers.filter((s) => s.catalogId === catalogId);
   }
 
-  add(a: AddMcpServerArgs & { label?: string | null }, source: RegistryServer["source"], catalogId: string | null = null): RegistryServer {
+  add(a: AddMcpServerArgs & { label?: string | null }, source: RegistryServer["source"], catalogId: string | null = null, o: { ownerPrivateReach?: boolean } = {}): RegistryServer {
     const name = a.name?.trim();
     if (!name) throw new GatewayError("BAD_ARGS", "Give the server a name.");
     // Final secfix item 4: google, bot, computer, probe and claude_ai_* belong to the app itself.
@@ -196,6 +202,7 @@ export class McpRegistry {
       kind: a.url ? "remote" : "command",
       catalogId: catalogId ?? a.catalogId ?? null,
       source,
+      ...(o.ownerPrivateReach === true && a.url ? { ownerPrivateReach: true as const } : {}),
       enabled: true,
       createdAt: this.d.now(),
       ...(a.url

@@ -19,7 +19,9 @@ const reason = (e: unknown) => (e instanceof Error ? e.message : String(e)).repl
  * process (window.synapse.auth), which seals it to the box; the host only ever answers with `sk-ant-…last4`. A new key
  * applies from each Bot's next turn. Used by Settings → Account and the first-run Sign in step.
  */
-export function AccountPanel({ onReady, timeoutMs = SIGN_IN_TIMEOUT_MS }: {
+export function AccountPanel({ onReady, firstRun = false, timeoutMs = SIGN_IN_TIMEOUT_MS }: {
+  /** The first-run key step: no "No API key saved yet" line and no footnote; the card keeps one width. */
+  firstRun?: boolean;
   /** A key is saved (a first-run step moves on). */
   onReady?(): void;
   /** Tests only: how long a step may take before it fails with a plain line. */
@@ -32,6 +34,9 @@ export function AccountPanel({ onReady, timeoutMs = SIGN_IN_TIMEOUT_MS }: {
   const [checking, setChecking] = useState(false);
   const [test, setTest] = useState<AuthTestResult | "testing" | null>(null);
   const [check, setCheck] = useState<KeyCheckView | null>(null);
+  // New-user walk, finding 2: a changed Bots' computer is trusted here, where the refusal is shown.
+  const [pinChanged, setPinChanged] = useState(false);
+  useEffect(() => { void Promise.resolve(window.synapse.auth?.pinChanged?.()).then((c) => setPinChanged(!!c)).catch(() => {}); }, []);
   // callQuiet: the panel shows this failure itself, in place of the key field.
   useEffect(() => {
     void noteIfSlow(callQuiet("getAuth", {}), timeoutMs, () => setError(STR.hostTimeout))
@@ -58,11 +63,16 @@ export function AccountPanel({ onReady, timeoutMs = SIGN_IN_TIMEOUT_MS }: {
   const save = () => run(async () => {
     const k = key.trim();
     if (!API_KEY_RE.test(k)) throw new Error(STR_AUTH.badKeyFormat);
+    // New-user walk, finding 9: a key Anthropic rejects is refused here, not found at the first chat. A check that
+    // can't answer (offline, rate limited) never blocks the save.
+    const checked = (await Promise.resolve().then(() => window.synapse.auth.testKey(k)).catch(() => null)) as AuthTestResult | null;
+    if (checked?.kind === "invalid-key") throw new Error(`${STR_AUTH.keyRejected}. ${STR_AUTH.keyRejectedDetail}`);
     const saved = (await window.synapse.auth.saveKey(k)) as (AuthView & { macSaved?: boolean; macError?: string }) | null;
     // An answer without a saved key is never a silent no-op (the typed key stays, for Save again).
     if (!saved?.apiKey) throw new Error(STR_AUTH.keyNotSaved);
     setKey("");
     setTest(null);
+    setTrustedNote(false);
     setView(saved);
     changed();
     // Review fix 4: the box has the key, but this Mac couldn't keep its copy (the Bots' claude here can't run yet).
@@ -97,12 +107,22 @@ export function AccountPanel({ onReady, timeoutMs = SIGN_IN_TIMEOUT_MS }: {
     } catch (e) { setError(reason(e)); } finally { setChecking(false); }
   };
   const typed = key.trim() !== "";
+  const mismatch = pinChanged || error === STR_AUTH.pinMismatch;
+  // Review of finding 2: the main process asks (a native dialog with both fingerprints); trusting never sends the
+  // key — the user presses Save again.
+  const [trustedNote, setTrustedNote] = useState(false);
+  const trust = () => run(async () => {
+    const r = await window.synapse.auth.trustComputer();
+    if (!r?.trusted) return;
+    setPinChanged(false);
+    setTrustedNote(true);
+  });
 
   if (!view) return <div className="settings-card"><p className="muted" role={error ? "alert" : undefined}>{error ?? "Loading…"}</p></div>;
   return (
-    <div className="settings-card account-panel">
+    <div className={firstRun ? "settings-card account-panel first-run" : "settings-card account-panel"}>
       <div className="account-key">
-        <p className="muted">{view.apiKey ? STR_AUTH.savedKey(view.apiKey.masked) : STR_AUTH.noKey}</p>
+        {view.apiKey ? <p className="muted">{STR_AUTH.savedKey(view.apiKey.masked)}</p> : !firstRun && <p className="muted">{STR_AUTH.noKey}</p>}
         <form className="settings-row" onSubmit={(e) => { e.preventDefault(); void save(); }}>
           <input aria-label={STR_AUTH.keyLabel} type="password" autoComplete="off" spellCheck={false} className="text-input grow" placeholder={STR_AUTH.keyPlaceholder}
             value={key} onChange={(e) => setKey(e.target.value)} />
@@ -122,8 +142,13 @@ export function AccountPanel({ onReady, timeoutMs = SIGN_IN_TIMEOUT_MS }: {
           <p role="status" className={test.ok ? "account-test ok" : "account-test"}><strong>{test.title}</strong>{test.detail ? <span className="muted"> {test.detail}</span> : null}</p>
         )}
       </div>
-      {view.apiKey ? <p className="muted">{STR_AUTH.appliesNext}</p> : null}
-      {error && <p role="alert" className="error">{error}</p>}
+      {view.apiKey && !firstRun ? <p className="muted">{STR_AUTH.appliesNext}</p> : null}
+      {mismatch ? (
+        <div role="alert" className="settings-row account-trust">
+          <span className="grow">{STR_AUTH.pinChanged}</span>
+          <button type="button" className="btn-outline" disabled={busy} onClick={() => void trust()}>{STR_AUTH.trustComputer}</button>
+        </div>
+      ) : error ? <p role="alert" className="error">{error}</p> : trustedNote ? <p role="status" className="muted">{STR_AUTH.trusted}</p> : null}
     </div>
   );
 }

@@ -162,14 +162,14 @@ export function VoiceRecorder({ onSaved }: { onSaved?: (v: ClonedVoiceView) => v
             <label htmlFor="clone-transcript" style={{ flexGrow: 1 }}>{STR5.recordTranscript}</label>
           </div>
           <div className="settings-row">
-            <textarea id="clone-transcript" rows={2} style={{ flexGrow: 1 }} value={transcript}
+            <textarea id="clone-transcript" className="text-input" rows={2} style={{ flexGrow: 1 }} value={transcript}
               onChange={(e) => { setOwnWords(true); setTranscript(e.target.value); }} />
           </div>
           <div className="settings-row"><span className="muted">{STR5.recordTranscriptHelp}</span></div>
 
           <div className="settings-row">
             <label htmlFor="clone-name" style={{ flexGrow: 1 }}>{STR5.recordNameLabel}</label>
-            <input id="clone-name" value={name} placeholder={STR5.recordNamePlaceholder} onChange={(e) => setName(e.target.value)} />
+            <input id="clone-name" className="text-input" value={name} placeholder={STR5.recordNamePlaceholder} onChange={(e) => setName(e.target.value)} />
           </div>
 
           <div className="settings-row">

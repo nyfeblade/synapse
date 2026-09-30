@@ -286,6 +286,8 @@ final class WalkState {
   var nodes: [[String: Any]] = []
   var visited = 0
   var truncated = false
+  /// google-setup re-review 2: an AXWebArea anywhere in the walk (a browser or a web view), even if pruned from nodes.
+  var web = false
   let deadline = DispatchTime.now().uptimeNanoseconds + UInt64(LIMIT_WALK_MS * 1_000_000)
   let windowTop: CGFloat
   init(windowTop: CGFloat) { self.windowTop = windowTop }
@@ -305,6 +307,7 @@ func walk(_ el: AXUIElement, depth: Int, level: Int, _ st: WalkState) {
   let d = axBatch(el)
   let axRole = (d["AXRole"] as? String) ?? "AXUnknown"
   let (role, mapped) = shortRole(axRole)
+  if axRole == "AXWebArea" { st.web = true }
   let subrole = d["AXSubrole"] as? String
 
   // Invisible is invisible: a zero or negative box, or AXHidden, takes its whole subtree with it.
@@ -491,6 +494,7 @@ func outline(_ t: Target, id: Any, extra: [String: Any] = [:]) {
     "vh": Int(vh.rounded()), "nodes": st.nodes,
   ]
   if st.truncated { reply["truncated"] = true }
+  if st.web { reply["web"] = true }
   for (k, v) in extra { reply[k] = v }
   log("outline \(t.name) pid=\(t.pid) window=\(axString(win, kAXTitleAttribute as String) ?? "") nodes=\(st.nodes.count) visited=\(st.visited) truncated=\(st.truncated)")
   emit(reply)

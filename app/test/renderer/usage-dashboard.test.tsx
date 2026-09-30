@@ -103,7 +103,27 @@ describe("Usage dashboard", () => {
     expect(screen.getByText(/estimate/i, { selector: ".dash-compare-basis" })).toBeTruthy();
   });
 
+  it("new-user walk finding 7: the account budget is one monthly $ field; the rest waits for advanced controls", async () => {
+    render(<UsageDashboard />);
+    await screen.findAllByText("$4.25");
+    expect(screen.queryByLabelText("Daily limit")).toBeNull();
+    expect(screen.queryByLabelText("Warn at (%)")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Account budget \(all Bots\)|Applies to chats/);
+    fireEvent.change(screen.getByLabelText("Monthly budget"), { target: { value: "120" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save budget" }));
+    await waitFor(() => expect(calls).toContainEqual(["setBudget", { botId: null, policy: { limits: [{ period: "month", unit: "usd", limit: 120 }], warnPct: 80, onLimit: "ask" } }]));
+  });
+
+  it("new-user walk finding 7: a per-Bot budget is an advanced control", async () => {
+    useDashboard.setState({ botId: "a" });
+    answer = view({ botId: "a" });
+    render(<UsageDashboard />);
+    await screen.findAllByText("$4.25");
+    expect(screen.queryByRole("button", { name: "Save budget" })).toBeNull();
+  });
+
   it("saves a Bot's daily budget with its warning and 100% action", async () => {
+    useUi.setState({ settings: { ...(useUi.getState().settings ?? {}), advancedEnabled: true } as never });
     useDashboard.setState({ botId: "a" });
     answer = view({ botId: "a" });
     render(<UsageDashboard />);
@@ -134,5 +154,33 @@ describe("Usage dashboard", () => {
     expect(useUi.getState().settingsOpen).toBe(true);
     expect(useDashboard.getState().botId).toBe("a");
     await waitFor(() => expect(calls).toContainEqual(["getUsageDashboard", { range: "week", botId: "a" }]));
+  });
+});
+
+describe("review of new-user walk finding 7: hidden limits still show, and Remove says what it removes", () => {
+  const budgets = (config: UsageDashboardView["budgets"]["config"]) => view({ budgets: { config, status: [], taskAlerts: [] } });
+
+  it("a daily account limit and a per-Bot budget show as plain rows without advanced controls", async () => {
+    answer = budgets({ account: { limits: [{ period: "day", unit: "usd", limit: 5 }, { period: "month", unit: "usd", limit: 100 }], warnPct: 80, onLimit: "ask" }, bots: { a: { limits: [{ period: "month", unit: "usd", limit: 3 }], warnPct: 80, onLimit: "ask" } } });
+    render(<UsageDashboard />);
+    await screen.findAllByText("$4.25");
+    expect(screen.getByText("Daily limit").parentElement!.textContent).toContain("$5.00");
+    expect(document.body.textContent).toContain("Courier: $3.00 a month");
+  });
+
+  it("Remove monthly budget removes only the monthly limit", async () => {
+    answer = budgets({ account: { limits: [{ period: "day", unit: "usd", limit: 5 }, { period: "month", unit: "usd", limit: 100 }], warnPct: 70, onLimit: "pause" }, bots: {} });
+    render(<UsageDashboard />);
+    await screen.findAllByText("$4.25");
+    fireEvent.click(screen.getByRole("button", { name: "Remove monthly budget" }));
+    await waitFor(() => expect(calls).toContainEqual(["setBudget", { botId: null, policy: { limits: [{ period: "day", unit: "usd", limit: 5 }], warnPct: 70, onLimit: "pause" } }]));
+  });
+
+  it("a monthly limit in tokens is shown as tokens, not as dollars in the $ field", async () => {
+    answer = budgets({ account: { limits: [{ period: "month", unit: "tokens", limit: 2_000_000 }], warnPct: 80, onLimit: "ask" }, bots: {} });
+    render(<UsageDashboard />);
+    await screen.findAllByText("$4.25");
+    expect(screen.getByText("Monthly limit").parentElement!.textContent).toContain("2.0M tokens");
+    expect((screen.getByLabelText("Monthly budget") as HTMLInputElement).value).toBe("");
   });
 });

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  LIMITS, STR, STRC, STRG, isAgentMessage, sendEntryId,
+  LIMITS, STR, STRC, STRG, STRX, composioAppName, isAgentMessage, sendEntryId,
   type ApprovalCardView, type ApprovalChoice, type ApprovalStatus, type SendMessageEntry, type Surface,
 } from "@synapse/shared";
 import type { BotService } from "../bots/bot-service";
@@ -14,7 +14,7 @@ import { describeCall } from "../presence/activity";
 import { expandHome, rawShellCwd, resolveShellCwdInfo, shellHome } from "../background/shells";
 import { needsCardFacts, type GoogleCardFacts } from "../google/card-facts";
 import { formatDraftPreviewCard, hashDraftPreview, type DraftPreview } from "../google/tools";
-import { classifyTool, insideDir, type Classification } from "../review/classify";
+import { classifyTool, insideDir, mcpToolChanges, type Classification } from "../review/classify";
 import { fixedRuleFor, fullAutoAskFor, modeAllowsWithoutCard, type FixedRulesEnv } from "../review/fixed-rules";
 import type { PermMode } from "@synapse/shared";
 import { fingerprint } from "../review/fingerprint";
@@ -32,6 +32,8 @@ import type { TurnSlot } from "../runner/turn-slot";
 import type { HostSettingsStore } from "../store/host-settings";
 import type { RehearsalRegistry } from "../teach/rehearsal-registry";
 import { originOf } from "./origin";
+import { FULL_AUTO_BULK_MAX, fullAutoIntentEligible, fullAutoIntentFloor, recipientsOf, RESOLVE_SLUGS } from "../review/full-auto-intent";
+import { outsideLog } from "../review/outside-log";
 
 export interface ReviewerLike { review(req: ReviewRequest): Promise<ReviewOutcome>; clearCache(): void }
 
@@ -64,6 +66,18 @@ export interface GateDeps {
   googleEmail?(): string | null;
   /** Final secfix item 4: whether this Bot's "google" server is the built-in one (only then are mcp__google__ calls Google). */
   googleBuiltin?(botId: string): boolean;
+  /** Bug 420: whether the owner has sent mail to this address before (their Gmail Sent folder). */
+  sentTo?(botId: string, address: string): Promise<boolean>;
+  /** Bug 413: who a Composio send really reaches (a thread's participants, a Slack channel's name and size). */
+  composioRecipients?(botId: string, slug: string, args: Record<string, unknown>): Promise<{ recipients: string[]; channels: { name: string; members: number }[] } | { error: string }>;
+  /** Bug 402: whether this Bot's "composio_apps" server is the built-in Composio connector. */
+  composioBuiltin?(botId: string): boolean;
+  /** Bug 403: a registry MCP server's URL host, so a custom server on a Composio host is classified as Composio. */
+  mcpServerHost?(serverId: string): string | null;
+  /** Bug 404: a registry server that is Composio by its command, args or URL. */
+  mcpServerComposio?(serverId: string): boolean;
+  /** google-setup security fix 1: the client ID SaveGoogleClient would put over a WORKING connection (null = no card). */
+  googleClientReplace?(botId: string): { clientId: string; replace: boolean } | null;
   /** ORIG-GOOGLE draft-send card: fetches a Gmail draft's current To/Cc/Bcc/Subject/body/attachments with the
    *  user's token, host-side, before the card is raised — so the card never says just "Send your Gmail draft …". */
   googleDraftPreview?(draftId: string): Promise<{ preview: DraftPreview } | { error: string }>;
@@ -146,6 +160,10 @@ export function truncateDetails(s: string): string {
 }
 
 /** Ruling (b) + I1: ownership gates — standing instructions for another (or a new) Bot change only with the user's OK. */
+/** Bug 418: an owner request older than this no longer speaks for a send. */
+const FULL_AUTO_REQUEST_MAX_AGE_MS = 30 * 60_000;
+/** Bug 420: how long a Sent-folder answer is trusted. */
+const SENT_CACHE_MS = 24 * 60 * 60_000;
 const OWNERSHIP = new Set(["update_agent", "create_agent"]);
 const readFs = (p: string) => { try { return fs.readFileSync(p, "utf8"); } catch { return null; } };
 const realOrSelf = (p: string) => { try { return fs.realpathSync(p); } catch { return p; } };
@@ -228,6 +246,10 @@ function uiNavKey(target: RiskTarget): boolean {
 }
 
 export class ApprovalGate {
+  /** Bug 420: the owner's Sent-folder answers, per address. */
+  private sentCache = new Map<string, { yes: boolean; at: number }>();
+  /** Bug 417: intent-allowed sends per owner request. */
+  private intentSends = new Map<string, { key: string; n: number }>();
   private reviews = new Map<string, PendingReview>();
   private records = new Map<string, ApprovalRecord>();
   private preDecided = new Map<string, { fingerprint: string; decision: PermissionDecision; cls: Classification }>();
@@ -258,6 +280,64 @@ export class ApprovalGate {
    *  Bot only pays for the reviewer when there are some. */
   private askRules(): number {
     return this.d.settings.get().autoReviewInstructions.blockInstructions.length;
+  }
+
+  /**
+   * Bug 418: the owner's current request — their messages since the Bot's last reply to them, and only those from
+   * the last 30 minutes. `since` is when it started (outside content read from then on counts, bug 415); `key`
+   * names it for the per-request send count (bug 417).
+   */
+  private ownerRequest(botId: string): { texts: string[]; since: number; key: string } {
+    const tail = this.d.bots.tail(botId, 60);
+    const owner = (e: (typeof tail)[number]) => e.kind === "message" && (e as { role?: string }).role !== "assistant" && !isAgentMessage(e);
+    const reply = (e: (typeof tail)[number]) => e.kind === "send-message" && (e as SendMessageEntry).message.type === "text";
+    let i = tail.length - 1;
+    while (i >= 0 && !owner(tail[i]!)) i--;
+    const lastOwner = i;
+    const msgs: { content: string; createdAt: number; id: string }[] = [];
+    for (; i >= 0; i--) {
+      const e = tail[i]!;
+      if (owner(e)) msgs.unshift(e as unknown as { content: string; createdAt: number; id: string });
+      else if (reply(e)) break;
+    }
+    // A reply after the owner's latest message that ENDED a turn answers it; one inside the running turn (an ack) doesn't.
+    const slot = this.d.slot(botId);
+    const answered = tail.slice(lastOwner + 1).some((e) => reply(e) && (!slot || (e as SendMessageEntry).requestId !== slot.requestId));
+    const cutoff = this.now() - FULL_AUTO_REQUEST_MAX_AGE_MS;
+    const recent = answered ? [] : msgs.filter((m) => m.createdAt >= cutoff);
+    return { texts: recent.map((m) => m.content), since: recent[0]?.createdAt ?? this.now(), key: recent.at(-1)?.id ?? "" };
+  }
+
+  /**
+   * Bug 420: which of these recipients the owner has sent mail to before (their Sent folder, host-side), each
+   * answer cached for 24 hours. Only addresses the owner didn't write out, and at most 5, are looked up.
+   */
+  private async knownContacts(botId: string, recipients: string[], request: string, self: string | null): Promise<Set<string>> {
+    const out = new Set<string>();
+    if (!this.d.sentTo) return out;
+    const lower = request.toLowerCase();
+    const todo = [...new Set(recipients.map((r) => r.toLowerCase()))].filter((r) => r !== self?.toLowerCase() && !lower.includes(r));
+    if (todo.length > FULL_AUTO_BULK_MAX) return out;
+    for (const r of todo) {
+      const hit = this.sentCache.get(r);
+      let yes: boolean;
+      if (hit && this.now() - hit.at < SENT_CACHE_MS) yes = hit.yes;
+      else {
+        try { yes = await this.d.sentTo(botId, r); this.sentCache.set(r, { yes, at: this.now() }); } catch { yes = false; }
+      }
+      if (yes) out.add(r);
+    }
+    return out;
+  }
+
+  /** Bug 413: the recipients and channels a send reaches, resolved on the host; null when they can't be. */
+  private async resolveSend(botId: string, target: RiskTarget): Promise<{ recipients: string[]; channels: { name: string; members: number }[] } | null> {
+    const tool = String(target.arguments.tool ?? "");
+    if (target.action !== "composio_write" || !RESOLVE_SLUGS.has(tool)) return { recipients: [], channels: [] };
+    if (!this.d.composioRecipients) return null;
+    const args = (target.arguments.arguments ?? {}) as Record<string, unknown>;
+    const r = await this.d.composioRecipients(botId, tool, args).catch(() => ({ error: "lookup failed" }));
+    return "error" in r ? null : r;
   }
 
   private slotFor(botId: string, toolUseId?: string): TurnSlot | null {
@@ -299,7 +379,7 @@ export class ApprovalGate {
   }
 
   private cls(botId: string, call: ToolCall): Classification {
-    return classifyTool(call, { workspace: this.d.cfg.workspace, hostPrivate: this.d.cfg.hostPrivate, walls: this.d.cfg, enforce: this.d.settings.get().autoReviewEnabled, shellCwd: this.shellCwd(botId, call), botId, ...(this.d.mcpReadOnly ? { mcpReadOnly: this.d.mcpReadOnly } : {}), googleEmail: this.d.googleEmail?.() ?? null, googleBuiltin: this.d.googleBuiltin?.(botId) ?? false });
+    return classifyTool(call, { workspace: this.d.cfg.workspace, hostPrivate: this.d.cfg.hostPrivate, walls: this.d.cfg, enforce: this.d.settings.get().autoReviewEnabled, shellCwd: this.shellCwd(botId, call), botId, ...(this.d.mcpReadOnly ? { mcpReadOnly: this.d.mcpReadOnly } : {}), googleEmail: this.d.googleEmail?.() ?? null, googleBuiltin: this.d.googleBuiltin?.(botId) ?? false, composioBuiltin: this.d.composioBuiltin?.(botId) ?? false, ...(this.d.mcpServerHost ? { mcpServerHost: this.d.mcpServerHost } : {}), ...(this.d.mcpServerComposio ? { mcpServerComposio: this.d.mcpServerComposio } : {}), googleClientReplace: this.d.googleClientReplace?.(botId) ?? null });
   }
 
   /** ORIG-GOOGLE draft-send card: fetches the draft, builds the card's redacted/truncated detail text and binds
@@ -311,7 +391,10 @@ export class ApprovalGate {
     if ("error" in r) return STRG.draftFetchFailed(r.error);
     const hash = hashDraftPreview(r.preview);
     const command = `${formatDraftPreviewCard(r.preview)}\nDraft hash: ${hash.slice(0, 12)}`;
-    const target = { ...cls.target!, arguments: { ...cls.target!.arguments, draft_hash: hash } };
+    // Bug 413: the draft's own recipients and text, so Full auto's intent check judges who it really reaches.
+    const p = r.preview;
+    const draft = { to: p.to, cc: p.cc, bcc: p.bcc, subject: p.subject, body: p.body.slice(0, 20_000) };
+    const target = { ...cls.target!, arguments: { ...cls.target!.arguments, draft_hash: hash, draft } };
     return { ...cls, command: this.d.redact ? this.d.redact(botId, command) : command, target };
   }
 
@@ -342,7 +425,9 @@ export class ApprovalGate {
       }
       const facts = r.lines.join("\n");
       const command = `${facts}\n\n${c.command ?? ""}`;
-      c = { ...c, summary: r.summary ?? c.summary, command: this.d.redact ? this.d.redact(botId, command) : command, target: { ...c.target!, arguments: { ...c.target!.arguments, card_facts: facts } } };
+      // Bug 413: an update also reaches the event's existing guests.
+      const guests = r.attendees?.length ? { existing_attendees: r.attendees } : {};
+      c = { ...c, summary: r.summary ?? c.summary, command: this.d.redact ? this.d.redact(botId, command) : command, target: { ...c.target!, arguments: { ...c.target!.arguments, card_facts: facts, ...guests } } };
     }
     return tool === "gmail_send" ? this.enrichSend(botId, c) : c;
   }
@@ -355,7 +440,7 @@ export class ApprovalGate {
 
   /** Controller ruling (a) + final secfix 9: every Google write is its own (enriched) card — never batched with siblings. */
   private static unbatchable(cls: Classification): boolean {
-    return cls.target?.action === "google_write";
+    return cls.target?.action === "google_write" || cls.target?.action === "composio_write";
   }
 
   pendingCount(botId: string): number {
@@ -727,7 +812,11 @@ export class ApprovalGate {
     // pinned to), so a Full-auto send card is never the blind "send your draft" the ORIG-GOOGLE rule forbids.
     const googleWrite = cls.target.action === "google_write";
     const google = !fa && googleWrite;
-    const ownership = !fa && (OWNERSHIP.has(cls.target.action) || isOwnershipAction(cls.target) || macCard || google);
+    // Apps through Composio: every send or change in the user's connected app is a card, whatever the mode's
+    // reviewer says (reads never get here: classify.ts keeps them quiet).
+    const composio = !fa && cls.target.action === "composio_write";
+    // google-setup security fix 1: replacing a working Google connection's client is a card in every mode.
+    const ownership = (!fa && (OWNERSHIP.has(cls.target.action) || isOwnershipAction(cls.target) || macCard || google || composio)) || cls.target.action === "replace_google_client";
 
     // ---- LAYER 1: the fixed rules (feat-mac-access-parity), before the reviewer ----
     // NEVER is a hard deny no mode or rule can lift; ALWAYS-ASK forces a card outside Full auto; ALWAYS-ALLOW skips
@@ -765,6 +854,7 @@ export class ApprovalGate {
     // ---- LAYER 1 (cont.) + MODES: reviewer skips, now that the static floor (F7/F8/F9) is known. A floor hit or an
     // ALWAYS-ASK always cards; otherwise Full auto runs, Auto-accept-edits runs an in-project edit, and Auto-review
     // OFF runs (the account master switch and the fixed NEVER already had their say above). Rehearsals win over all. ----
+    const mcpChangeAsk = !fa && mode !== "full-auto" && !this.d.settings.get().autoReviewEnabled && cls.target.action === "mcp" && mcpToolChanges(String(cls.target.arguments.tool ?? ""));
     const floorHit = st.floorHits.some((f) => f === "F7" || f === "F8" || f === "F9");
     // speed-fastpath #5 (the user's ruling): a box command that reads stored credentials (keys, tokens, the environment)
     // asks in EVERY mode, Full auto included; it never reaches the reviewer's fast path.
@@ -779,7 +869,9 @@ export class ApprovalGate {
       // written (the usual case) routine work runs silently and costs no reviewer call, exactly as before.
       if (mode === "full-auto" && this.askRules() === 0) return finish({ decision: "allow" });
       if (mode === "accept-edits" && modeAllowsWithoutCard("accept-edits", call, cls, this.fixedEnv())) return finish({ decision: "allow" });
-      if (!this.d.settings.get().autoReviewEnabled) return finish({ decision: "allow" });
+      // Bug 403: Auto-review off no longer waves through an MCP tool that sends, deletes, pays, posts, creates or
+      // updates: that one falls through to a card below. Reads and everything else still run.
+      if (!this.d.settings.get().autoReviewEnabled && !mcpChangeAsk) return finish({ decision: "allow" });
     }
     const bot = this.d.bots.summary(botId);
     const identityBefore = cls.surface === "computer" && this.d.displayIdentity ? await this.d.displayIdentity(botId) : null;
@@ -790,11 +882,51 @@ export class ApprovalGate {
     // I2: for a non-user wake the 1:1 user messages are stale — they move to the wake block, labelled, and aren't the request.
     const wake: ReviewWake = { ...wb, stale_user_messages: origin === "user" ? [] : ctx0.user_messages };
     const reviewCtx: ReviewContext = origin === "user" ? ctx0 : { ...ctx0, user_messages: [] };
-    // full-auto-quiet: in Full auto the classifier's verdict IS the card, and it never asks the reviewer.
+    // Bug 410: in Full auto a send on the user's connected accounts (a Google write, a Composio write, an MCP send)
+    // that the owner directly asked for in their own latest message runs with no card. (a) The deterministic floors
+    // (full-auto-intent.ts: not the owner's own wake, deletion, money, bulk, outside content, a recipient they didn't
+    // name) card at once; (b) otherwise the reviewer checks the action against that message and allows only a clear
+    // match. A block, an error, a degraded reviewer or a suspected injection all fall through to the card.
+    let intentReason: string | null = null;
+    if (fa?.ask && !unboundAsk && fullAutoIntentEligible(target, fa)) {
+      // Bugs 413–418: the owner's CURRENT request, the real recipients (resolved on the host), everything outside
+      // that was read since the request, and how many sends this request already made.
+      const req = this.ownerRequest(botId);
+      // Bug 421: addresses and links from the WHOLE kept log (read before the request too); copied text and the
+      // reviewer's excerpts from what was read since the request.
+      const whole = outsideLog.since(botId, 0);
+      const outside = { ...outsideLog.since(botId, req.since), emails: whole.emails, links: whole.links };
+      // Bug 421 (M3 race): the send's slot is reserved before any await, and given back on a card or a block.
+      const counter = this.intentSends.get(botId);
+      const sent = counter && counter.key === req.key ? counter.n : 0;
+      this.intentSends.set(botId, { key: req.key, n: sent + 1 });
+      const release = () => { const c = this.intentSends.get(botId); if (c && c.key === req.key && c.n > 0) this.intentSends.set(botId, { key: c.key, n: c.n - 1 }); };
+      const resolved = await this.resolveSend(botId, target);
+      const self = this.d.googleEmail?.() ?? null;
+      const known = resolved ? await this.knownContacts(botId, [...recipientsOf(target), ...resolved.recipients], req.texts.join("\n"), self) : new Set<string>();
+      intentReason = fullAutoIntentFloor({
+        target, source: slot ? (slot.reviewSource ?? slot.source) : null, origin, userMessages: req.texts,
+        outside, self, resolved, sentForRequest: sent, known,
+      });
+      if (intentReason === null && resolved) {
+        // Bug 416 (M2): any outside content read since the request reaches the reviewer, matched or not.
+        const excerpts = [...ctx0.untrusted_excerpts, ...outside.heads.filter((h) => !ctx0.untrusted_excerpts.includes(h))].slice(0, 3);
+        const r = await this.d.reviewer.review({
+          botId, botName: bot.profile.name, botDescription: bot.profile.description, surface: cls.surface, toolName: call.toolName,
+          target: resolved.recipients.length || resolved.channels.length || known.size ? { ...target, arguments: { ...target.arguments, resolved_recipients: resolved.recipients, resolved_channels: resolved.channels, ...(known.size ? { known_contacts_owner_has_emailed: [...known] } : {}) } } : target,
+          origin, wake, context: { ...reviewCtx, user_messages: req.texts, untrusted_excerpts: excerpts }, userMessageEpoch: this.d.bots.userMessageEpoch(botId), staticResult: st, fingerprint: fp, paths: [],
+          fullAutoIntent: true,
+        });
+        if (r.kind === "allow" && !r.verdict?.injection_suspected) return finish({ decision: "allow" });
+      }
+      release();
+    }
+    // full-auto-quiet: in Full auto the classifier's verdict IS the card (Bug 410: after the intent check above).
     const outcome: ReviewOutcome = unboundAsk ? { kind: "block", stage: "floor", reason: TEXT.unboundCard, proposedRule: null, verdict: null }
-      : fa?.ask ? { kind: "block", stage: "floor", reason: fa.reason, proposedRule: null, verdict: null }
+      : fa?.ask ? { kind: "block", stage: "floor", reason: intentReason || fa.reason, proposedRule: null, verdict: null }
+      : mcpChangeAsk ? { kind: "block", stage: "floor", reason: TEXT.mcpChange, proposedRule: null, verdict: null }
       : credAsk ? { kind: "block", stage: "floor", reason: unresolvedAsk && !st.signals.includes("reads_credentials") ? UNRESOLVED_READ_REASON : CREDENTIAL_READ_REASON, proposedRule: null, verdict: null }
-      : (ownership || fixedAsk) ? { kind: "block", stage: "floor", reason: ownership ? (google ? TEXT.googleWrite : OWNERSHIP.has(cls.target.action) ? TEXT.ownership : macCard ? TEXT.macFloor : TEXT.ownershipShared) : fixed.reason, proposedRule: fixedAsk ? (fixed.proposedRule ?? null) : null, verdict: null } : await this.d.reviewer.review({
+      : (ownership || fixedAsk) ? { kind: "block", stage: "floor", reason: ownership ? (google ? TEXT.googleWrite : composio ? TEXT.composioWrite : OWNERSHIP.has(cls.target.action) ? TEXT.ownership : macCard ? TEXT.macFloor : TEXT.ownershipShared) : fixed.reason, proposedRule: fixedAsk ? (fixed.proposedRule ?? null) : null, verdict: null } : await this.d.reviewer.review({
       botId, botName: bot.profile.name, botDescription: bot.profile.description, surface: cls.surface, toolName: call.toolName, target: reviewTarget,
       origin, wake, context: reviewCtx,
       userMessageEpoch: this.d.bots.userMessageEpoch(botId), staticResult: st, fingerprint: fp,
@@ -809,7 +941,8 @@ export class ApprovalGate {
     // A bad command is still BLOCKED — a floor-stage refusal denies. Anything else it merely wanted the user's OK
     // for is not one of the five categories, so in Full auto it runs and is only recorded in the activity log;
     // a block that matched one of the user's OWN ask-first rules is the exception and raises the card.
-    if (fa && !fa.ask && !credAsk && !unboundAsk) {
+    // google-setup security fix 1 (Bug 410 check): replacing the Google client is a card in Full auto too, never a deny.
+    if (fa && !fa.ask && !credAsk && !unboundAsk && cls.target.action !== "replace_google_client") {
       const matched = outcome.kind === "block" && (outcome.verdict?.matched_ask_rule_ids.length ?? 0) > 0;
       if (!matched) {
         if (outcome.kind === "block" && outcome.stage === "floor") return finish({ decision: "deny", reason: outcome.reason });
@@ -947,7 +1080,8 @@ export class ApprovalGate {
 
   private view(r: ApprovalRecord): ApprovalCardView {
     const google = r.items[0]?.cls.target?.action === "google_write";
-    const loc = google ? STRG.cardLocation : r.surface === "host_shell" ? STR.runsOnLocal : r.surface === "box_shell" || r.surface === "computer" || r.surface === "mcp" ? STR.runsOnBox : null;
+    const composioTarget = r.items[0]?.cls.target?.action === "composio_write" ? r.items[0]!.cls.target! : null;
+    const loc = google ? STRG.cardLocation : composioTarget ? STRX.cardLocation(composioTarget.arguments.toolkit ? composioAppName(String(composioTarget.arguments.toolkit)) : "connected app") : r.surface === "host_shell" ? STR.runsOnLocal : r.surface === "box_shell" || r.surface === "computer" || r.surface === "mcp" ? STR.runsOnBox : null;
     return {
       approvalId: r.id, requestId: r.requestId, surface: r.surface, title: r.title, reason: r.reason, summary: r.summary, locationLine: loc,
       details: r.command ? truncateDetails(r.command) : null, command: r.command,
@@ -1010,15 +1144,15 @@ export class ApprovalGate {
       // re-run whose fingerprint no longer matches simply gets a fresh card.
       const ok = status === "approved" || status === "always";
       for (const item of rec.items) {
-        item.status = ok ? status : status === "expired" ? "expired" : "denied";
+        item.status = ok ? status : status === "expired" || status === "stopped" ? status : "denied";
         if (ok) this.deferApproved.add(`${rec.botId}:${item.fingerprint}`);
       }
-      if (this.d.bots.has(rec.botId) && status !== "expired") {
+      if (this.d.bots.has(rec.botId) && status !== "expired" && status !== "stopped") {
         this.d.onDeferredResolution(rec.botId, ok ? `[Auto-review] The user approved: ${rec.summary}. Run exactly that action now.` : `[Auto-review] ${denyText(rec)}`);
       }
     } else for (const item of rec.items) {
       const decision = this.decisionFor(rec, item);
-      item.status = decision.behavior === "allow" ? status : status === "expired" ? "expired" : "denied";
+      item.status = decision.behavior === "allow" ? status : status === "expired" || status === "stopped" ? status : "denied";
       if (item.resolve) item.resolve(decision);
       else this.preDecided.set(item.toolUseId, { fingerprint: item.fingerprint, decision, cls: item.cls });
       this.ctxByToolUse.delete(item.toolUseId);
@@ -1040,7 +1174,7 @@ export class ApprovalGate {
       for (const r of this.records.values()) if (r.botId === botId && r.status === "pending") this.detach(r);
       return;
     }
-    for (const r of this.records.values()) if (r.botId === botId && r.status === "pending") this.settle(r, "expired", cause);
+    for (const r of this.records.values()) if (r.botId === botId && r.status === "pending") this.settle(r, cause === "stopped" ? "stopped" : "expired", cause);
   }
 
   forgetBot(botId: string): void {

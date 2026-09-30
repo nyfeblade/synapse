@@ -87,7 +87,7 @@ export function GroupSettingsSheet({ groupId, onClose }: { groupId: string; onCl
         </fieldset>
         {error && <p className="field-error" role="alert">{error}</p>}
         <div className="sheet-actions">
-          <button type="button" className="btn-outline" onClick={onClose}>{STR.cancel}</button>
+          <button type="button" className="btn-secondary" onClick={onClose}>{STR.cancel}</button>
           <button type="button" className="btn-primary" onClick={() => void save()}>Save</button>
         </div>
       </>

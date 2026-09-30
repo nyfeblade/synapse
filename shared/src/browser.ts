@@ -34,6 +34,9 @@ export interface BrowserReply {
   session: string;
   steps: number;
   status: BrowserSessionStatus;
+  /** google-setup re-review 1: on a console client page, the client-ID / secret values sitting in editable fields
+   *  (inputs, textareas, contenteditable, textbox roles). The host never captures those. Absent elsewhere. */
+  editable?: string[];
 }
 export type BrowserSessionStatus = "active" | "paused" | "stopped" | "closed";
 

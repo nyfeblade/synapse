@@ -39,13 +39,13 @@ export function ConnectListenerForm({ botId, platform, onConnected }: { botId: s
     <div className="connect-form">
       {platform === "slack" && (
         <>
-          <input type="password" aria-label="Slack app token" placeholder="xapp-…" onChange={set("appToken")} />
-          <input type="password" aria-label="Slack bot token" placeholder="xoxb-…" onChange={set("botToken")} />
+          <input className="text-input" type="password" aria-label="Slack app token" placeholder="xapp-…" onChange={set("appToken")} />
+          <input className="text-input" type="password" aria-label="Slack bot token" placeholder="xoxb-…" onChange={set("botToken")} />
         </>
       )}
-      {platform === "github" && <input type="password" aria-label="GitHub token" placeholder="github_pat_…" onChange={set("token")} />}
+      {platform === "github" && <input className="text-input" type="password" aria-label="GitHub token" placeholder="github_pat_…" onChange={set("token")} />}
       {/* I4: provider webhooks are refused unless signed with this secret */}
-      <input type="password" aria-label={`${LABEL[platform]} webhook signing secret`} placeholder="Webhook signing secret" onChange={set("signingSecret")} />
+      <input className="text-input" type="password" aria-label={`${LABEL[platform]} webhook signing secret`} placeholder="Webhook signing secret" onChange={set("signingSecret")} />
       <button type="button" className="btn-outline small" disabled={busy} onClick={() => void submit()}>{STR.connect}</button>
       {error && <span role="alert" className="form-error">{error}</span>}
     </div>

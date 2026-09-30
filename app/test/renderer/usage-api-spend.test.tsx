@@ -21,7 +21,7 @@ const dash = (o: Partial<UsageDashboardView> = {}): UsageDashboardView => ({
   ...o,
 });
 const usage = (o: Partial<UsageView> = {}): UsageView => ({
-  source: "metering", budgetUsd: null, budgetPct: null,
+  source: "metering", budgetPct: null,
   level: "L0", limitedUntil: null, weekStart: 0, rows: [], efficiency: { dropped: 0, wakesAvoided: 0, burstsCoalesced: 0, loopsEnded: 0 }, ...o,
 });
 

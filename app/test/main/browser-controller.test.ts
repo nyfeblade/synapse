@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { STRB, type BrowserArgs } from "@synapse/shared";
+import { STRB, STRGS, type BrowserArgs } from "@synapse/shared";
 import { BrowserController, type BrowserDriver, type ControllerRequest, type Tab } from "../../src/main/browser/controller";
 import { pageAgent, type PageAgent } from "../../src/main/browser/page-agent";
+// Fake Google client values are assembled at run time, so no test file holds a string GitHub push protection reads as a real secret.
+const GU = "apps.google" + "usercontent.com";
+const GX = "GOC" + "SPX-";
 
 /**
  * The controller against a fake tab: jsdom runs the REAL page agent; clicks land on the element under the point
@@ -18,6 +21,19 @@ const PAGES: Record<string, { title: string; html: string }> = {
   "http://t.test/": { title: "Home", html: `<h1>Home</h1><a href="/shop" data-y="40">Shop</a><button data-y="70" id="more">Show more</button><div id="out"></div>` },
   "http://t.test/shop": { title: "Shop", html: `<h1>Cart</h1><form method="post" action="/buy"><input aria-label="Card number" data-y="100"><input type="password" aria-label="Password" data-y="130"><button data-y="160">Pay now</button></form>` },
   // full-auto-quiet: an ordinary POST form that is not one of the five categories.
+  // google-setup: Google's OAuth pages and a console page.
+  "https://accounts.google.com/signin/oauth/v2/consentsummary?client_id=1": { title: "Sign in - Google Accounts", html: `<h1>Synapse wants access to your Google Account</h1><input type="checkbox" aria-label="Select all" data-y="70"><button data-y="100">Continue</button><button data-y="130">Cancel</button>` },
+  "https://accounts.google.com/signin/oauth/consent?client_id=1": { title: "Sign in - Google Accounts", html: `<button data-y="100">Allow</button>` },
+  "https://accounts.google.com/signin/oauth/warning?client_id=1": { title: "Sign in - Google Accounts", html: `<a href="#adv" data-y="70">Advanced</a><button data-y="100">Continue</button>` },
+  "https://accounts.google.com/o/oauth2/v2/auth?client_id=1": { title: "Sign in - Google Accounts", html: `<button data-y="100">Allow</button><button data-y="130">Use another account</button>` },
+  "https://console.cloud.google.com/auth/audience?project=synapse-1": { title: "Audience", html: `<h1>Audience</h1><button data-y="100">Publish app</button>` },
+  "https://console.cloud.google.com/auth/clients?project=synapse-1": { title: "Clients", html: `<h1>OAuth client created</h1><p>Client ID 123456789012-abcdefghijklmnop0123456789abcdef.${GU}</p><p>Client secret ${GX}Fake0nlyForTests_abcdefghijk</p><button data-y="100">OK</button>` },
+  // Localized pages (German): the guard can't lean on English labels.
+  "https://accounts.google.com/signin/oauth/warning?hl=de": { title: "Anmelden – Google Konten", html: `<button data-y="70">Zurück zur sicheren Seite</button><a href="#go" data-y="100">Weiter zu Synapse (unsicher)</a>` },
+  "https://accounts.google.com/signin/oauth/v2/consentsummary?hl=de": { title: "Anmelden – Google Konten", html: `<button data-y="100">Zulassen</button>` },
+  "https://accounts.google.com/v3/signin/identifier?hl=de": { title: "Anmelden – Google Konten", html: `<input aria-label="E-Mail oder Telefonnummer" data-y="70"><button data-y="100">Weiter</button>` },
+  // Re-review 1: a planted pair sitting in editable fields on a client page.
+  "https://console.cloud.google.com/auth/clients/create?project=synapse-1": { title: "Create client", html: `<input aria-label="Name" data-y="70" value="123456789012-abcdefghijklmnop0123456789abcdef.${GU}"><textarea aria-label="Notes" data-y="100">${GX}Fake0nlyForTests_abcdefghijk</textarea><div contenteditable="true" data-y="130">${GX}Other0nlyForTests_abcdefghijk</div><p>Client ID 999999999999-zyxwvutsrqponmlk0123456789abcdef.${GU}</p>` },
   "http://t.test/signup": { title: "Sign up", html: `<h1>Create your account</h1><form method="post" action="/signup"><input aria-label="Full name" data-y="100"><button data-y="160">Create account</button></form>` },
 };
 
@@ -48,6 +64,7 @@ class FakeTab implements Tab {
   async agent<T>(fn: keyof PageAgent, ...args: unknown[]): Promise<T> {
     const r = (syn()[fn] as (...a: unknown[]) => unknown)(...args) as T & { url?: string };
     if (fn === "collect" && r && typeof r === "object") (r as { url: string }).url = this.url;
+    if (fn === "href") return this.url as T; // jsdom's own location stays put; the tab knows the real one
     return r;
   }
   async mouse(kind: "click" | "move", x: number, y: number) {
@@ -254,5 +271,120 @@ describe("sign-in help (bug-log 150)", () => {
     expect(await c.handle(req({ action: "snapshot" }))).toEqual({ ok: false, error: STRB.signingIn });
     c.endSignin();
     await ok(req({ action: "open", url: "http://t.test/" }));
+  });
+});
+
+describe("google-setup: the final Google consent is never a Bot's click", () => {
+  const CONSENT = "https://accounts.google.com/signin/oauth/v2/consentsummary?client_id=1";
+  it("refuses a click on the consent page's approve control, even approved and with an always-allow rule", async () => {
+    const r = await ok(req({ action: "open", url: CONSENT }));
+    const go = refOf(r.text, "Continue");
+    for (const o of [{}, { approved: true }, { origins: ["accounts.google.com"] }, { mode: "full-auto" as const }]) {
+      const x = await c.handle(req({ action: "click", ref: go }, o));
+      expect(x).toEqual({ ok: false, error: STRGS.consentBlocked });
+    }
+    expect(drv.windows[0]!.clicks).toEqual([]);
+  });
+
+  it("refuses every page action on a consent page: checkbox, Enter, Space, typing with submit", async () => {
+    const r = await ok(req({ action: "open", url: CONSENT }));
+    const all = /\[(e\d+)\] checkbox "Select all"/.exec(r.text)![1]!;
+    expect(await c.handle(req({ action: "check", ref: all }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    expect(await c.handle(req({ action: "press", value: "Enter" }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    expect(await c.handle(req({ action: "press", value: "Space" }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    expect(drv.windows[0]!.keys).toEqual([]);
+    // Reading the page stays allowed, so the Bot can tell the user what it's waiting for.
+    expect((await ok(req({ action: "snapshot" }))).text).toContain("wants access");
+  });
+
+  it("security fix 4: every page action in Google's OAuth and sign-in flow is refused, whatever the label", async () => {
+    let r = await ok(req({ action: "open", url: "https://accounts.google.com/signin/oauth/consent?client_id=1" }));
+    expect(await c.handle(req({ action: "click", ref: refOf(r.text, "Allow") }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    r = await ok(req({ action: "open", url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=1" }));
+    expect(await c.handle(req({ action: "click", ref: refOf(r.text, "Allow") }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    // The account chooser is the user's too now.
+    expect(await c.handle(req({ action: "click", ref: refOf(r.text, "Use another account") }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    r = await ok(req({ action: "open", url: "https://accounts.google.com/signin/oauth/v2/consentsummary?hl=de" }));
+    expect(await c.handle(req({ action: "click", ref: refOf(r.text, "Zulassen") }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    r = await ok(req({ action: "open", url: "https://accounts.google.com/v3/signin/identifier?hl=de" }));
+    const field = /\[(e\d+)\] textbox "E-Mail oder Telefonnummer"/.exec(r.text)![1]!;
+    expect(await c.handle(req({ action: "type", ref: field, text: "someone" }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    expect(await c.handle(req({ action: "click", ref: refOf(r.text, "Weiter") }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    expect(drv.windows[0]!.clicks).toEqual([]);
+    expect(drv.windows[0]!.typed).toEqual([]);
+  });
+
+  it("security fix 4: the one exception is the unverified-app warning's link, found by structure (a localized label)", async () => {
+    const r = await ok(req({ action: "open", url: "https://accounts.google.com/signin/oauth/warning?hl=de" }));
+    // Its buttons and keys stay refused.
+    expect(await c.handle(req({ action: "click", ref: refOf(r.text, "Zurück zur sicheren Seite") }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    expect(await c.handle(req({ action: "press", value: "Enter" }))).toMatchObject({ ok: false, error: STRGS.consentBlocked });
+    await ok(req({ action: "click", ref: /\[(e\d+)\] link "Weiter zu Synapse \(unsicher\)"/.exec(r.text)![1]! }));
+    expect(drv.windows[0]!.clicks).toEqual(["Weiter zu Synapse (unsicher)"]);
+  });
+
+  it("a Google Cloud console change cards in plain words", async () => {
+    const r = await ok(req({ action: "open", url: "https://console.cloud.google.com/auth/audience?project=synapse-1" }));
+    const x = await c.handle(req({ action: "click", ref: refOf(r.text, "Publish app") }));
+    expect(x).toEqual({ ok: false, needsApproval: true, error: STRGS.consoleCard("Set the app's publishing status to In production") });
+  });
+});
+
+describe("google-setup security fix 1: the reply carries the live address", () => {
+  it("text after the page moved on its own reports the page the text came from", async () => {
+    await ok(req({ action: "open", url: "http://t.test/" }));
+    await drv.windows[0]!.navigate("http://t.test/shop"); // a script redirect, no Bot action
+    const r = await ok(req({ action: "text" }));
+    expect(r.url).toBe("http://t.test/shop");
+    expect(r.text).toContain("Cart");
+  });
+});
+
+describe("google-setup security fix 2: wait text is not an oracle for a client secret", () => {
+  it("refuses wait text shaped like a secret or a client ID, and a secret's middle never matches", async () => {
+    await ok(req({ action: "open", url: "https://console.cloud.google.com/auth/clients?project=synapse-1" }));
+    for (const probe of [(GX + "F"), "gocspx-fake0", "123456789012-a", ("abc." + GU)]) {
+      expect(await c.handle(req({ action: "wait", text: probe }))).toEqual({ ok: false, error: STRGS.waitRefused });
+    }
+    // Prefix/infix probing without the marker: the page text is scrubbed before the comparison, so it never matches.
+    for (const probe of ["Fake0nly", "Fake0nlyForTests_a", "abcdefghijklmnop0123"]) {
+      const x = await c.handle(req({ action: "wait", text: probe }));
+      expect(x.ok).toBe(false);
+      expect((x as { error: string }).error).toMatch(/^Waited/);
+    }
+    // Ordinary waits still work.
+    expect((await ok(req({ action: "wait", text: "OAuth client created" }))).url).toContain("console.cloud.google.com");
+  });
+});
+
+describe("google-setup security fix 5: no screenshots of the console's client pages", () => {
+  it("refuses a screenshot from any Bot while the live page is a client page", async () => {
+    await ok(req({ action: "open", url: "https://console.cloud.google.com/auth/clients?project=synapse-1" }, { botId: "other", botName: "Max" }));
+    expect(await c.handle(req({ action: "screenshot" }, { botId: "other", botName: "Max" }))).toEqual({ ok: false, error: STRGS.noScreenshots });
+    // Elsewhere, screenshots work as before.
+    await ok(req({ action: "open", url: "http://t.test/" }, { botId: "other", botName: "Max" }));
+    expect((await ok(req({ action: "screenshot" }, { botId: "other", botName: "Max" }))).image).toBe("SlBFRw==");
+  });
+});
+
+describe("google-setup re-review 1: no planting a client by typing", () => {
+  it("refuses typing text shaped like a client ID or secret, for any Bot", async () => {
+    const r = await ok(req({ action: "open", url: "http://t.test/signup" }, { botId: "b9", botName: "Max" }));
+    const name = /\[(e\d+)\] textbox "Full name"/.exec(r.text)![1]!;
+    for (const text of [(GX + "Planted0nlyForTests_abcdefgh"), ("123456789012-abcdefghijklmnop0123456789abcdef." + GU)]) {
+      expect(await c.handle(req({ action: "type", ref: name, text }, { botId: "b9", botName: "Max" }))).toEqual({ ok: false, error: STRGS.typeRefused });
+    }
+    expect(drv.windows[0]!.typed).toEqual([]);
+  });
+
+  it("a client page's reply lists the client values sitting in editable fields (inputs, textareas, contenteditable)", async () => {
+    const r = await ok(req({ action: "open", url: "https://console.cloud.google.com/auth/clients/create?project=synapse-1" }));
+    expect(new Set(r.editable)).toEqual(new Set([
+      ("123456789012-abcdefghijklmnop0123456789abcdef." + GU), (GX + "Fake0nlyForTests_abcdefghijk"), (GX + "Other0nlyForTests_abcdefghijk"),
+    ]));
+    // Page text outside fields is not in the list.
+    expect(r.editable).not.toContain(("999999999999-zyxwvutsrqponmlk0123456789abcdef." + GU));
+    // Elsewhere the field report isn't needed and isn't sent.
+    expect((await ok(req({ action: "open", url: "http://t.test/" }))).editable).toBeUndefined();
   });
 });

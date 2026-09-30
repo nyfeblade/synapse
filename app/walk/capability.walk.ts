@@ -4,7 +4,10 @@ import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import type { SseEvent, UsageView } from "@synapse/shared";
 import { fakeVncSocket } from "../../host/computer/fuzz-fakes";
-import { COMPOSIO_HEADER, COMPOSIO_MCP_URL } from "../src/renderer/marketplace/custom-mcp-preset";
+// Bug 403: the add form no longer offers a Composio preset; these are Composio's Connect MCP values, used to add
+// the server the way an older install already has it (existing custom servers keep working, guarded).
+const COMPOSIO_MCP_URL = "https://connect.composio.dev/mcp";
+const COMPOSIO_HEADER = "x-consumer-api-key";
 import { closeDev, launchDev, openBot, preflight, restoreOAuthPort, WALK_PREFIX, type DevApp } from "./app";
 import { Gateway } from "./gateway";
 import { assertWalkEnv, nonce, redact, redacting, registerSecret, within } from "./guards";
@@ -210,18 +213,13 @@ test("J2: Composio custom MCP server from the add form (real box)", async () => 
       await dlg.getByRole("link", { name: /Your plugins, \d+ installed/ }).click();
       await dlg.getByRole("button", { name: "Add custom MCP server" }).click();
       await dlg.getByLabel("Name").fill("Composio");
-      const url = await dlg.getByLabel("Server URL").inputValue();
-      const hdr = await dlg.getByLabel("Header name").inputValue();
-      r.check("B0 name autofills URL and header name", url === COMPOSIO_MCP_URL && hdr === COMPOSIO_HEADER, `url=${url} header=${hdr}`);
+      const retired = await dlg.getByText("Composio has its own setup").isVisible();
+      const addOff = await dlg.getByRole("button", { name: "Add", exact: true }).isDisabled();
+      r.check("B0 the add form points Composio to its own setup and won't add it", retired && addOff, `note=${retired} addDisabled=${addOff}`);
 
-      // Paste, as the user would: through the clipboard, restored afterwards. The key is never an action argument.
-      const prior = await app.evaluate(({ clipboard }) => clipboard.readText());
-      await app.evaluate(({ clipboard }, k) => clipboard.writeText(k), KEY());
-      await dlg.getByLabel("Header value").focus();
-      await win.keyboard.press("Meta+V");
-      await app.evaluate(({ clipboard }, p) => clipboard.writeText(p), prior);
+      // An older install's custom Composio server: added through the gateway, as it was before the preset retired.
       const m = g.mark();
-      await dlg.getByRole("button", { name: "Add", exact: true }).click();
+      await g.call("addMcpServer", { name: "Composio", url: COMPOSIO_MCP_URL, headers: { [COMPOSIO_HEADER]: KEY() } });
 
       let connected = false;
       try {

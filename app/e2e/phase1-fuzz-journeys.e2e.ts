@@ -25,7 +25,7 @@ test("B1-B4/N10-N12: Bot settings edits and avatar editor round-trip through the
   await expect(async () => expect(await agentOf("Tutor Prime")).toBeTruthy()).toPass({ timeout: 5000 });
 
   await win.getByRole("button", { name: "Bot settings" }).click();
-  const descField = win.getByRole("textbox", { name: "Bot description" });
+  const descField = win.getByRole("textbox", { name: "Bot instructions" });
   await descField.fill("A patient tutor.");
   await descField.blur();
 
@@ -102,6 +102,7 @@ test("T3/T5: Auto-review toggle and rules table round-trip through the host", as
 
   await win.getByRole("button", { name: "Open account menu" }).click();
   await win.getByRole("menuitem", { name: "Settings" }).click();
+  await win.getByRole("button", { name: "Auto-review", exact: true }).click(); // new-user walk finding 22: its own section
 
   const sw = win.getByRole("switch", { name: "Auto-review" });
   const before = await sw.getAttribute("aria-checked");

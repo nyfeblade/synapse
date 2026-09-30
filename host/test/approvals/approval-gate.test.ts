@@ -125,6 +125,14 @@ describe("cards and choices (APR-09…13, APR-20)", () => {
     expect(s.view()).toMatchObject({ status: "expired", cause: "user_redirect" });
   });
 
+  it("new-user walk finding 3: Stop withdraws a pending card as stopped by the user, not expired", async () => {
+    const s = setup();
+    const { perm } = await s.ask("rm -rf /workspace/old");
+    s.gate.expireAll(s.id, "stopped");
+    expect(await perm).toMatchObject({ behavior: "deny", message: expect.stringContaining("The user pressed Stop") });
+    expect(s.view()).toMatchObject({ status: "stopped", cause: "stopped" });
+  });
+
   it("re-checks the fingerprint before allowing (APR-15)", async () => {
     const s = setup(BLOCK, {}, { "/workspace/run.sh": "echo one" });
     const { perm } = await s.ask("bash /workspace/run.sh");

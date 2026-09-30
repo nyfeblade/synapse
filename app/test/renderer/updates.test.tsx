@@ -42,8 +42,8 @@ describe("Settings → Updates (SET-13, CMP-11)", () => {
 
   it("shows the latest-version box when the box image matches the bundled one", async () => {
     render(<UpdatesSection />);
-    expect(screen.getByRole("heading", { name: "Update Bots' Computer" })).toBeTruthy();
-    expect(screen.getByText("Brings the shared computer up to date for all your assistants at once. Files and sign-ins are kept; apps and packages you installed are removed.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Update Bots' computer" })).toBeTruthy();
+    expect(screen.getByText("Brings the shared computer up to date for all your Bots at once. Files and sign-ins are kept; apps and packages you installed are removed.")).toBeTruthy();
     expect(await screen.findByText("The computer is up to date")).toBeTruthy();
   });
 

@@ -236,6 +236,7 @@ export class UsageStore implements TurnObserver, UsageSink {
     return Math.round(r.c * 10_000) / 10_000;
   }
 
+  /** Only for the one-time migration into the monthly budget (budget-module.ts migrateWeeklyBudget); nothing else reads it. */
   budgetUsd(): number | null {
     return this.d.settings.extra<{ usd?: number | null }>("weeklyBudget", {}).usd ?? null;
   }

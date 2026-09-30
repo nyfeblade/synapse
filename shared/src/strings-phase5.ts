@@ -244,21 +244,25 @@ export const STR5 = {
     (estimated ? ` ${estimated} ${estimated === 1 ? "entry is an estimate" : "entries are estimates"}.` : ""),
   efficiencyThisWeek: "Efficiency this week",
   tiles: [
-    { key: "dropped", title: "Messages dropped", sub: "by the anti-ack gate" },
-    { key: "wakesAvoided", title: "Wakes avoided", sub: "info delivered without a turn" },
-    { key: "burstsCoalesced", title: "Bursts coalesced", sub: "into one turn each" },
-    { key: "loopsEnded", title: "Loops ended", sub: "ping-pong between Bots" },
+    { key: "dropped", title: "Messages dropped" },
+    { key: "wakesAvoided", title: "Wakes avoided" },
+    { key: "burstsCoalesced", title: "Bursts coalesced" },
+    { key: "loopsEnded", title: "Loops ended" },
   ] as const,
   billing: "Billing",
-  trayUsage80: "You've used 80% of this week's budget",
-  trayBudgetPaused: "Routines on hold: this week's budget is used up",
+  trayUsage80: "You've used 80% of your monthly budget",
+  trayBudgetPaused: "Routines on hold: the monthly budget is used up",
   resume: "Resume",
   resetsInHours: (h: number) => `It resets in ${plural(h, "hour", "hours")}`,
   limitSkipped: (h: number) => `Skipped: Claude usage limit reached (resets in ${h} h)`,
   limitStopped: (h: number) => `Stopped: Claude usage limit reached (resets in ${h} h).`,
   // Templates (TPL-01…04, S11)
   templateActions: "Template actions",
-  shareAsTemplate: "Share as Template",
+  // New-user walk, finding 10: plain names for the file round trip.
+  shareAsTemplate: "Export Bot…",
+  exportBot: "Export Bot…",
+  /** New-user walk, finding 16: the starter templates under Create new Bot in New chat. */
+  templatesHead: "Templates",
   viewTemplateDetails: "View template details",
   updateTemplate: "Update template",
   deleteTemplate: "Delete Template",
@@ -283,7 +287,8 @@ export const STR5 = {
   // Onboarding (ONB-01…06)
   taglineLine1: "Your team of always-on Bots that",
   taglineLine2: "you can give real work to.",
-  signIn: "Input API Key →",
+  // New-user walk, nit 26: a plain verb, no arrow.
+  signIn: "Add API key",
   meetApp: `Meet ${APP_NAME}`,
   tourPages: [
     { title: "Bots", body: "Each Bot is a teammate with its own name, instructions and memory. Chats are disposable; Bots are what you keep." },
@@ -372,7 +377,6 @@ export const STR5 = {
   savedDeviceNotConnected: "Saved device (not connected)",
   transportLabel: { "built-in": "Built-in", usb: "USB", bluetooth: "Bluetooth", "bluetooth-le": "Bluetooth", hdmi: "HDMI", displayport: "DisplayPort", airplay: "AirPlay", thunderbolt: "Thunderbolt", pci: "PCI", firewire: "FireWire", virtual: "Virtual", aggregate: "Aggregate", continuity: "iPhone" } as Record<string, string>,
   inputLevel: "Input level",
-  inputLevelHelp: "Speak — the bar moves when the microphone hears you.",
   testSpeaker: "Test speaker",
   // Bug 106: the voice calls speak with.
   callVoice: "Voice",
@@ -430,7 +434,7 @@ export const STR5 = {
   qwenStatus: { ready: "Ready", missing: "Not installed", checking: "Checking…" } as Record<string, string>,
   qwenVoiceLabel: (name: string, accent: string) => `${name} · ${accent}`,
   qwenEngineNote: "Qwen3 voices run on this Mac and use about 2.1 GB while loaded. The first sentence of each reply speaks in this Bot's Kokoro voice so the call opens straight away, and the rest streams from Qwen3.",
-  qwenNotInstalled: "Qwen3 isn't set up yet. Run app/native/qwen/install.sh to build its Python environment.",
+  qwenNotInstalled: "Qwen3 voices aren't set up on this Mac.",
   // ---- voice mode, bug 164: one control, two measured numbers ----
   voiceModeLabel: "Voice quality",
   voiceModeLight: "Light",

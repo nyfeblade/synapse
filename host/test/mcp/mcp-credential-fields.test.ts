@@ -65,6 +65,7 @@ const NOT_A_CREDENTIAL: Record<string, string> = {
   headerNames: "the NAMES of the headers a remote server sends (\"x-consumer-api-key\"). Header names are not secret — the server advertises them in access-control-allow-headers — and keeping them unsealed is what lets the UI say a key is set without reading it.",
   catalogId: "the marketplace/curated entry this server came from (\"curated:linear\"), used to match a catalog tile to an installed server.",
   source: "\"curated\" | \"marketplace\" | \"custom\" — where the server came from, which drives the read-only-tool policy (mcpReadOnly).",
+  ownerPrivateReach: "bug 363: true only when the owner added the server in the app, so it may reach the Mac or the LAN without the guarded fetch; a flag, not anything secret.",
   enabled: "the user's on/off switch for the whole server; it decides whether the server is connected at all and is rendered as a toggle, so it is a boolean the user set and can see.",
   createdAt: "the millisecond the server was added, used to order the list and to date the entry; it is a clock reading, not anything the user supplied.",
 };

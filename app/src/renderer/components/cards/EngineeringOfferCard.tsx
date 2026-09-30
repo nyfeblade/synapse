@@ -21,8 +21,8 @@ export function EngineeringOfferCard({ botId, card, isNew = false }: CardProps) 
       <p className="muted">{STR5.engineeringOfferBody}</p>
       {done ? <p className="muted">{STR5.engineeringMode}</p> : settled === "declined" ? <p className="muted">{STR5.notNow}</p> : (
         <div className="card-actions">
+          <button type="button" className="btn-secondary" onClick={() => flip(false)}>{STR5.notNow}</button>
           <button type="button" className="btn-primary" onClick={() => flip(true)}>{STR5.turnOnEngineering}</button>
-          <button type="button" className="btn-outline" onClick={() => flip(false)}>{STR5.notNow}</button>
         </div>
       )}
     </section>

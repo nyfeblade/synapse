@@ -58,3 +58,6 @@ button.dash-top-row:hover { background: var(--fill-soft); }
 .budget-ask { display: flex; flex-direction: column; gap: 10px; margin: 0 0 8px; padding: 12px 14px; border-radius: var(--radius-card); border: var(--hairline) solid var(--line-card); background: var(--bg); font-size: 13px; }
 .budget-ask-title { font-weight: 600; }
 .budget-ask-actions { display: flex; gap: 8px; justify-content: flex-end; }
+/* UI-controls pass (2026-09-29): a long Bot or task name wrapped the row to two lines; it ends in an
+   ellipsis now, with the whole name in the cell's tooltip. */
+.dash-table .usage-row span:first-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

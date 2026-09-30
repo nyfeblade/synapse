@@ -158,9 +158,10 @@ describe("New chat (BOT-03, UI-04)", () => {
     expect(screen.getByRole("option", { name: /Create new Bot/ })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("To:"), { target: { value: "Tutor" } });
     expect(screen.getByRole("option", { name: /Create "Tutor" Bot/ })).toBeTruthy();
-    expect(screen.getByRole("option", { name: /Courier/ })).toBeTruthy();
+    // New-user walk, finding 16: the typed name filters the Bots.
+    expect(screen.queryByRole("option", { name: /Courier/ })).toBeNull();
     fireEvent.keyDown(window, { key: "1", metaKey: true });
-    await vi.waitFor(() => expect(calls[0]).toEqual(["createAgent", { name: "Tutor", isKickstartRequested: true }]));
+    await vi.waitFor(() => expect(calls.filter((c) => c[0] !== "listStarterTemplates")[0]).toEqual(["createAgent", { name: "Tutor", isKickstartRequested: true }]));
   });
 
   // Traceability N5 (gate §4): the New chat composer is "Message Bot" with Attach and the mic, and no voice-chat button (NewBot board).

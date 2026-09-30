@@ -14,6 +14,8 @@ export function createAuthCommands(o: {
   keyPair(): Promise<BoxKeyPair>;
   /** Tests: a local fake Messages API. */
   baseUrl?: string;
+  /** FUZZ / fake brain: answer Test connection offline (a key with "wrong" in it is rejected), never reaching Anthropic. */
+  fake?: boolean;
   fetchFn?: typeof fetch;
 }): CommandHandlers {
   const view = async (): Promise<AuthView> => ({
@@ -43,6 +45,11 @@ export function createAuthCommands(o: {
       if (!key) {
         const c = { kind: "no-key" as const, title: STR_AUTH.noKeyTitle, detail: STR_AUTH.noKey };
         return { ok: false, reached: false, status: null, ...c };
+      }
+      if (o.fake) {
+        return /wrong/i.test(key)
+          ? { ok: false, reached: true, status: 401, kind: "invalid-key", title: STR_AUTH.keyRejected, detail: STR_AUTH.keyRejectedDetail }
+          : { ok: true, reached: true, status: 200, kind: "ok", title: STR_AUTH.ok, detail: "" };
       }
       return testAnthropicConnection(key, { ...(o.baseUrl ? { baseUrl: o.baseUrl } : {}), ...(o.fetchFn ? { fetchFn: o.fetchFn } : {}) });
     },

@@ -109,6 +109,11 @@ const lines = (s: unknown) => (typeof s === "string" && s.length ? s.split("\n")
  * all), so the line reads in the present tense ("Running <cmd>"); it switches to the past tense at tool_end
  * (gate L-1).
  */
+/** New-user walk, finding 3: what a step was about, with no verb ("rm -rf /x"), for a call that never ran. */
+export function stepTarget(name: string, input: Record<string, unknown>): string {
+  return stepText(name, input, "", true).replace(/^[A-Z][a-z]+ing /, "");
+}
+
 export function stepText(name: string, input: Record<string, unknown>, output = "", live = false): string {
   const t = (past: string, present: string) => (live ? present : past);
   switch (name) {

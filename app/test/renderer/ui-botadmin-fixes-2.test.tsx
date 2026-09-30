@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { STR, STR5, type CatalogEntry, type MarketplaceView, type SkillView, type TemplatePreview } from "@synapse/shared";
+import { STR, STR5, STR_AUTH, type CatalogEntry, type MarketplaceView, type SkillView, type TemplatePreview } from "@synapse/shared";
 import { MarketplaceModal } from "../../src/renderer/marketplace/MarketplaceModal";
 import { useMarketplace } from "../../src/renderer/marketplace/store";
 import { NewChat } from "../../src/renderer/components/NewChat";
@@ -38,10 +38,10 @@ describe("Onboarding (fix-ui-botadmin)", () => {
 
   it("the setup step has a way back to the splash", async () => {
     render(<Onboarding onDone={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Input API Key →" }));
-    expect(await screen.findByRole("heading", { name: STR5.setupTitle })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add API key" }));
+    expect(await screen.findByRole("heading", { name: STR_AUTH.firstRunTitle })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: STR5.back }));
-    expect(screen.getByRole("button", { name: "Input API Key →" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add API key" })).toBeTruthy();
   });
 
   it("'Get started' creates one Bot however fast it is double-clicked", async () => {
@@ -53,11 +53,12 @@ describe("Onboarding (fix-ui-botadmin)", () => {
     expect(calls.filter((c) => c[0] === "createAgent")).toHaveLength(1);
   });
 
-  it("a starter card imports once however fast it is double-clicked", async () => {
+  it("a picked starter imports once however fast Get started is double-clicked", async () => {
     render(<Onboarding onDone={vi.fn()} initialStep="new-bot" />);
-    const card = await screen.findByRole("button", { name: "Meet Chief of Staff" });
-    fireEvent.click(card);
-    fireEvent.click(card);
+    fireEvent.click(await screen.findByRole("radio", { name: "Chief of Staff" }));
+    const go = screen.getByRole("button", { name: "Get started" });
+    fireEvent.click(go);
+    fireEvent.click(go);
     await waitFor(() => expect(calls.filter((c) => c[0] === "importTemplate")).toHaveLength(1));
     expect(calls.filter((c) => c[0] === "previewTemplateImport")).toHaveLength(1);
   });

@@ -60,12 +60,12 @@ describe("template import (I9, I10)", () => {
     expect(importer.preview({ starterId: "starter:chief-of-staff" }).thirdParty).toBe(false);
   });
 
-  it("the preview discloses that playbooks are shared by all Bots", () => {
-    expect(importer.preview({ bytesBase64: pack() }).playbooksShared).toBe(true);
+  it("a third-party file's playbooks stay with its Bot (Bot sharing), so there is no shared-folder note", () => {
+    expect(importer.preview({ bytesBase64: pack() }).playbooksShared).toBe(false);
   });
 
   it("installs only the manifest-listed skills, never overwriting an existing one", () => {
-    const existing = path.join(root, "claude", "skills", "trip-desk--book-flights");
+    const existing = path.join(root, "claude", "skills", "trip-desk-book-flights");
     fs.mkdirSync(existing, { recursive: true });
     fs.writeFileSync(path.join(existing, "SKILL.md"), "mine");
     const { token } = importer.preview({ bytesBase64: pack() });
@@ -73,7 +73,7 @@ describe("template import (I9, I10)", () => {
     const dirs = fs.readdirSync(path.join(root, "claude", "skills")).sort();
     expect(dirs.some((d) => d.includes("sneaky"))).toBe(false);
     expect(fs.readFileSync(path.join(existing, "SKILL.md"), "utf8")).toBe("mine");
-    expect(dirs).toContain("trip-desk--book-flights-2");
+    expect(dirs).toContain("trip-desk-book-flights-2");
   });
 
   it("memories go through the memory store with redaction", () => {

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UpdatesSection } from "../../src/renderer/components/settings/UpdatesSection";
 import { accountMenuItems } from "../../src/renderer/components/account-menu";
 import { useUpdates } from "../../src/renderer/updates/store";
+import { useUi } from "../../src/renderer/store";
 
 const invoked: string[] = [];
 let state = { version: "0.2.0", track: "stable", auto: false, feed: "alex/bots", status: "none", latest: null, error: null } as Record<string, unknown>;
@@ -76,6 +77,7 @@ describe("Settings → Updates (SET-12)", () => {
 // P5 review I7: the UI stores the update source and token (in the keychain, via the main process).
 describe("Settings → Updates: update source (I7)", () => {
   it("saves the feed and token through updates.setSource and clears the token field", async () => {
+    useUi.setState({ settings: { ...(useUi.getState().settings ?? {}), advancedEnabled: true } as never }); // new-user walk finding 8: advanced controls
     const args: unknown[] = [];
     (window as unknown as { synapse: { native: { invoke: unknown } } }).synapse.native.invoke = vi.fn(async (n: string, a: unknown) => { invoked.push(n); if (n === "updates.setSource") args.push(a); return { ok: true, result: state }; });
     render(<UpdatesSection />);

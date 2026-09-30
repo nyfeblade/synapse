@@ -13,7 +13,7 @@ import { APP_SETTING_SWITCHES, quietHoursStore, registerSettingsNatives, wakeSet
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const renderer = path.join(here, "../../src/renderer");
-const rendererSource = ["voice/CallFeelCard.tsx", "voice/WhisperCard.tsx", "components/settings/ComputerSection.tsx"].map((f) => fs.readFileSync(path.join(renderer, f), "utf8")).join("\n");
+const rendererSource = ["voice/CallFeelCard.tsx", "voice/WhisperCard.tsx", "components/settings/ComputerSection.tsx", "components/settings/DiagnosticsSection.tsx"].map((f) => fs.readFileSync(path.join(renderer, f), "utf8")).join("\n");
 
 let dir: string;
 beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), "settings-natives-")); });

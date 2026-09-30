@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { BROWSER_UNREVIEWED, COMPUTER_NAME, REVIEWED_COMPUTER_ACTIONS, STRC, browserBindTarget, browserReadOnly, macAppBindTarget, macAppReadOnly, macAppSummary, messagesSend, messagesSendSummary, type BrowserArgs, type MacAppArgs, type Surface } from "@synapse/shared";
+import { BROWSER_UNREVIEWED, COMPOSIO_SERVER_ID, isComposioHost, COMPUTER_NAME, composioAppName, composioToolReadOnly, composioToolkitOf, REVIEWED_COMPUTER_ACTIONS, STRC, browserBindTarget, browserReadOnly, macAppBindTarget, macAppReadOnly, macAppSummary, messagesSend, messagesSendSummary, type BrowserArgs, type MacAppArgs, type Surface } from "@synapse/shared";
 import type { ToolCall } from "../brain/types";
 import type { HostConfig } from "../config";
 import { privateRoots, privateToAnother } from "../walls/registry";
@@ -84,9 +84,74 @@ function classifyGoogle(tool: string, input: Record<string, unknown>, googleEmai
   };
 }
 
+/**
+ * Apps through Composio (host/composio): a read (GMAIL_FETCH_EMAILS) is quiet; anything else acts on the user's own
+ * account (send, create, change, delete) and is a composio_write, which the gate always shows as a card, like a
+ * Google write. The server id is reserved (mcp/reserved.ts), so only the built-in connector answers to this name.
+ */
+function classifyComposio(tool: string, input: Record<string, unknown>): Classification {
+  if (composioToolReadOnly(tool)) return { surface: null, sideEffect: false, target: null, hardDeny: null, summary: "", command: null };
+  const toolkit = composioToolkitOf(tool);
+  const app = toolkit ? composioAppName(toolkit) : "a connected app";
+  const s = (v: unknown) => (typeof v === "string" ? v : v === undefined || v === null ? "" : JSON.stringify(v));
+  const words = tool.toLowerCase().split("_").slice(toolkit ? 1 : 0).join(" ");
+  const to = s(input.recipient_email ?? input.to ?? input.channel ?? "");
+  const subject = s(input.subject ?? input.title ?? input.summary ?? input.name ?? "");
+  const summary = `${app} through Composio: ${words}${to ? ` to ${to.slice(0, 160)}` : ""}${subject ? ` “${subject.slice(0, 120)}”` : ""}`;
+  return {
+    surface: "mcp", sideEffect: true, hardDeny: null, command: `composio.${tool}(${JSON.stringify(input)})`.slice(0, 4000), summary: summary.slice(0, 500),
+    target: { action: "composio_write", arguments: { tool, toolkit, arguments: input }, enrichment: null },
+  };
+}
+
+/**
+ * Bug 403: an MCP tool whose name says it sends, deletes, pays, posts, creates or updates something. With Auto-review
+ * off these still ask (approval-gate.ts); reads and anything else run as before. Words are split on _ - . and camelCase.
+ */
+/** Bug 404: stems long enough to match inside a glued or prefixed word (sendmail, bulkdelete, HTTPSend, unsubscribe). */
+const CHANGE_STEMS_LOOSE = ["send", "delete", "remove", "destroy", "purge", "erase", "create", "update", "modify", "insert", "upsert", "upload",
+  "rename", "publish", "subscribe", "transfer", "refund", "purchase", "checkout", "charge", "broadcast", "forward", "invite", "comment",
+  "notify", "reply", "respond", "decline", "accept", "reset", "restore", "assign", "approve", "merge", "submit", "execute", "trigger",
+  "invoke", "deploy", "revoke", "cancel", "archive", "schedule", "import", "export", "message", "tweet", "replace", "duplicate", "convert",
+  "disconnect", "connect", "uninstall", "install", "release", "unlabel", "unblock", "unmute", "unfollow", "unstar", "unpin", "unlock", "unarchive", "untrash", "dispatch"];
+/** Short or ambiguous stems: the whole word, or the word with an inflection (posts, setting, ran is not caught). */
+const CHANGE_STEMS_EXACT = ["add", "set", "run", "put", "post", "pay", "ban", "kick", "mark", "sync", "clear", "dm", "sms", "edit", "move",
+  "close", "reopen", "share", "email", "write", "patch", "trash", "wipe", "grant", "label", "block", "mute", "star", "pin", "join", "leave",
+  "lock", "copy", "stop", "start", "follow", "fork", "draft", "apply", "empty", "enable", "disable", "react", "rerun", "retry", "upvote", "vote", "order", "buy", "sell", "book"];
+const EXACT_RE = new RegExp(`^(${CHANGE_STEMS_EXACT.join("|")})((?<=[^aeiou])([a-z])\\3?)?(s|es|ed|d|ing)?$`);
+const LOOSE_RE = new RegExp(`(${CHANGE_STEMS_LOOSE.join("|")})`);
+/**
+ * Bug 403/404: an MCP tool whose name says it sends, deletes, pays, posts, creates, updates … something. With
+ * Auto-review off these still ask (approval-gate.ts). Words are split on separators and case changes (HTTPSend →
+ * http, send); a long stem counts anywhere in a word, a short one only as the word itself or its inflection. A read
+ * verb doesn't cancel a change stem: `get_schedule_list` cards (the safe side).
+ */
+export function mcpToolChanges(tool: string): boolean {
+  const words = tool.replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/([A-Z])([A-Z][a-z])/g, "$1_$2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return words.some((w) => LOOSE_RE.test(w) || EXACT_RE.test(w));
+}
+
+/** Bug 404: a Composio action slug (GMAIL_SEND_EMAIL) with a known toolkit prefix, whatever server serves it. */
+const COMPOSIO_SLUG_PREFIXES = ["GMAIL", "GOOGLECALENDAR", "GOOGLEDRIVE", "GOOGLEDOCS", "GOOGLESHEETS", "GOOGLEMEET", "GOOGLETASKS", "SLACK", "SLACKBOT",
+  "GITHUB", "GITLAB", "NOTION", "LINEAR", "JIRA", "CONFLUENCE", "TRELLO", "ASANA", "CLICKUP", "OUTLOOK", "MICROSOFT_TEAMS", "ONEDRIVE", "DROPBOX",
+  "DISCORD", "DISCORDBOT", "TWITTER", "LINKEDIN", "HUBSPOT", "SALESFORCE", "ZENDESK", "INTERCOM", "STRIPE", "SHOPIFY", "AIRTABLE", "FIGMA",
+  "CALENDLY", "ZOOM", "TELEGRAM", "WHATSAPP", "REDDIT", "YOUTUBE", "SUPABASE", "COMPOSIO", "RUBE"];
+const COMPOSIO_SLUG_RE = new RegExp(`^(${COMPOSIO_SLUG_PREFIXES.join("|")})_[A-Z0-9_]+$`);
+export function looksLikeComposioSlug(tool: string): boolean {
+  return COMPOSIO_SLUG_RE.test(tool);
+}
+
 export function classifyTool(call: ToolCall, o: { workspace: string; hostPrivate: string; enforce?: boolean; shellCwd?: string; botId?: string; mcpReadOnly?(serverId: string, tool: string): boolean; googleEmail?: string | null;
   /** Final secfix item 4: true only when this Bot's "google" server is the app's built-in one (identity, not the name). */
   googleBuiltin?: boolean;
+  /** Bug 402: true only when this Bot's "composio_apps" server is the app's built-in Composio connector. */
+  composioBuiltin?: boolean;
+  /** Bug 403: a registry MCP server's URL host (null for a command server or an unknown id). */
+  mcpServerHost?(serverId: string): string | null;
+  /** Bug 404: a registry server that is Composio by its command, args or URL (npx @composio/mcp, a proxy …). */
+  mcpServerComposio?(serverId: string): boolean;
+  /** google-setup security fix 1: the captured client ID when SaveGoogleClient would replace a working connection. */
+  googleClientReplace?: { clientId: string; replace: boolean } | null;
   /** Bug #61: the host config the Bot walls are declared against; the guard is on whenever it is given. */
   walls?: HostConfig }): Classification {
   const { toolName: name, input } = call;
@@ -368,15 +433,29 @@ export function classifyTool(call: ToolCall, o: { workspace: string; hostPrivate
   // P5 review I5/C3: the plugin/MCP admin tools are control_plane (reviewed); see ownership.ts for the ones that always ask.
   const admin = pluginAdminTarget(name, input);
   if (admin) return { surface: "control_plane", sideEffect: true, hardDeny: null, command: admin.command.slice(0, 4000), summary: admin.summary.slice(0, 500), target: { action: admin.action, arguments: admin.args, enrichment: null } };
+  if (name === "mcp__bot__SaveGoogleClient" && o.googleClientReplace) {
+    const { clientId: id, replace } = o.googleClientReplace;
+    return {
+      surface: "control_plane", sideEffect: true, hardDeny: null, command: `SaveGoogleClient ${id}`,
+      summary: replace
+        ? `Replace your connected Google client with ${id} (this signs Google out until you connect again)`
+        : `Save the Google client ${id} that the Bot read from Google Cloud. Check it matches the Client ID in your console.`,
+      target: { action: "replace_google_client", arguments: { client_id: id, replace }, enrichment: null },
+    };
+  }
   if (name.startsWith("mcp__bot__")) return none(true);
   if (name.startsWith("mcp__google__") && o.googleBuiltin === true) {
     const g = classifyGoogle(name.slice("mcp__google__".length), input, o.googleEmail);
     if (g) return g;
   }
+  if (name.startsWith(`mcp__${COMPOSIO_SERVER_ID}__`) && o.composioBuiltin === true) return classifyComposio(name.slice(`mcp__${COMPOSIO_SERVER_ID}__`.length), input);
   if (name.startsWith("mcp__")) {
     const [, rawServer = "", ...rest] = name.split("__");
     const server = rawServer.replace(/^claude_ai_/, "");
     const tool = rest.join("__");
+    // Bug 403: a custom MCP server on a Composio host (the retired "Composio" preset) is Composio: the same fixed
+    // read list, and every other tool a composio_write card — never the reviewer's or the trust flag's call.
+    if (isComposioHost(o.mcpServerHost?.(rawServer)) || o.mcpServerComposio?.(rawServer) === true || looksLikeComposioSlug(tool)) return classifyComposio(tool, input);
     // P5 review I6: name matching only for curated/claude.ai/trusted servers (mcp/registry.ts mcpReadOnly); default reviewed.
     if (o.mcpReadOnly ? o.mcpReadOnly(rawServer, tool) : rawServer.startsWith("claude_ai_") && READ_ONLY_MCP.test(tool)) return none(false);
     const args = JSON.stringify(input).slice(0, 300);

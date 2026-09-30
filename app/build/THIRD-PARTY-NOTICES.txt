@@ -1,6 +1,6 @@
 Synapse — third-party notices
 
-Synapse itself is MIT-licensed (LICENSE in its source repository). Synapse.app bundles the components below;
+Synapse itself is licensed under Apache-2.0 (LICENSE and NOTICE in its source repository). Synapse.app bundles the components below;
 each keeps its own licence. The full licence texts ship with each component inside the app
 (Contents/Resources/kokoro/python/lib/python3.12/site-packages/*/, the Electron framework's
 LICENSES.chromium.html, each package's own LICENSE file, and so on). Contents/Resources/kokoro/LICENSES.txt
@@ -245,7 +245,7 @@ JavaScript packages inside the app (app.asar) (126)
   zustand — MIT
   zwitch — MIT
 
-JavaScript packages inlined into the host (Resources/host/dist/host.mjs) (29)
+JavaScript packages inlined into the host (Resources/host/dist/host.mjs) (30)
   @pinojs/redact — MIT
   @zone-eu/mailsplit — (MIT OR EUPL-1.1+)
   atomic-sleep — MIT
@@ -274,6 +274,7 @@ JavaScript packages inlined into the host (Resources/host/dist/host.mjs) (29)
   sonic-boom — MIT
   split2 — ISC
   thread-stream — MIT
+  undici — MIT
   yaml — ISC
 
 JavaScript packages installed from npm into the box by box/deploy.sh (not in the app) (103)

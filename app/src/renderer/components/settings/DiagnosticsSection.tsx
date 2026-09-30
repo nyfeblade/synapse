@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { STR, STRO } from "@synapse/shared";
+import { STR, STRF, STRO, STRSH } from "@synapse/shared";
+import { openFeedback } from "../../feedback/store";
 import { nativeCall, onNative } from "../../native";
 import { confirmCopy } from "../../toast";
 import { useMacDisk } from "../MacDiskBanner";
+import { SavedSwitch, useSavedNativeSwitch } from "../SavedSwitch";
 import { registerSectionBlock } from "./sections";
 
 interface Report { id: string; at: number; kind: string; message: string; appVersion: string; hostVersion: string | null; count: number; seen: boolean }
@@ -31,11 +33,27 @@ export function DiagnosticsSection() {
             </span>
             <button type="button" className="btn-outline small" onClick={() => act("crashes.copy", r.id, () => confirmCopy(STRO.reportCopied))}>{STRO.copyReport}</button>
             <button type="button" className="btn-outline small" onClick={() => act("crashes.reveal", r.id)}>{STRO.revealReport}</button>
+            <button type="button" className="btn-outline small" onClick={() => void openFeedback({ type: "bug", crash: r.id })}>{STRF.sendReport}</button>
           </div>
         ))}
       </div>
       {error && <div className="error small" role="alert">{error}</div>}
       <StorageCard />
+      <DeveloperTools />
+    </div>
+  );
+}
+
+/** Bot sharing: the owner's advanced actions (a Bot menu's Export for website). Off by default. */
+function DeveloperTools() {
+  const [err, setErr] = useState<string | null>(null);
+  const sw = useSavedNativeSwitch("devTools.get", "devTools.set", setErr);
+  return (
+    <div className="settings-card">
+      <div className="settings-row">
+        <span style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: 2 }}><span>{STRSH.showDeveloperTools}</span>{err && <span className="error" role="alert">{err}</span>}</span>
+        <SavedSwitch label={STRSH.showDeveloperTools} {...sw} onToggle={sw.toggle} />
+      </div>
     </div>
   );
 }

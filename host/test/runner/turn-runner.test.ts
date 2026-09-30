@@ -17,10 +17,12 @@ import { initLayout } from "../../store/layout";
 import { Supervisor } from "../../supervisor/supervisor";
 import { TrayService } from "../../trays/trays";
 import { tmpConfig } from "../helpers";
+import { TEXT } from "../../review/texts";
+const STOP_TEXT = TEXT.expired.stopped!;
 
 const until = async (f: () => boolean, ms = 3000) => { const t = Date.now() + ms; while (!f()) { if (Date.now() > t) throw new Error("timeout"); await new Promise((r) => setTimeout(r, 5)); } };
 
-function setup(script: FakeScript, flags: Partial<ConformanceFlags> = {}, extra: Partial<RunnerDeps> = {}, brainOpts: FakeBrainOptions = {}) {
+function setup(script: FakeScript, flags: Partial<ConformanceFlags> = {}, extra: Partial<RunnerDeps> = {}, brainOpts: FakeBrainOptions = {}, gateOver: Partial<ApprovalGateLike> = {}) {
   const cfg = tmpConfig();
   initLayout(cfg);
   const hub = new SseHub();
@@ -49,6 +51,7 @@ function setup(script: FakeScript, flags: Partial<ConformanceFlags> = {}, extra:
   const gate: ApprovalGateLike = {
     preToolUse: async () => ({ decision: "allow" }), canUseTool: async () => ({ behavior: "allow" }),
     expireAll: (id, cause) => expired.push(`${id}:${cause}`), forgetBot: () => {},
+    ...gateOver,
   };
   runner.attach(supervisor, gate);
   const id = bots.create({ origin: "user", kickstart: false, name: "Piper" });
@@ -271,6 +274,25 @@ describe("TurnRunner", () => {
     expect(s.acks.get(s.id)).toBeNull();
   });
 
+  it("new-user walk finding 3: Stop on a pending approval withdraws it as stopped, and the step says so (never 'Ran')", async () => {
+    let release: ((d: { behavior: "deny"; message: string }) => void) | null = null;
+    const causes: string[] = [];
+    const s = setup(() => [{ tool: "Bash", input: { command: "rm -rf /workspace/tmp/x" } }, send("done")], {}, {}, {}, {
+      canUseTool: () => new Promise((r) => { release = r as never; }),
+      preToolUse: async () => ({ decision: "ask" as const, reason: "needs your OK" }),
+      expireAll: (_id, cause) => { causes.push(cause); release?.({ behavior: "deny", message: STOP_TEXT }); },
+    });
+    s.runner.sendPrompt(s.id, "please run it", "n1");
+    await until(() => release !== null);
+    await s.runner.interruptAgent(s.id);
+    await until(() => s.runner.isIdle(s.id));
+    expect(causes).toContain("stopped");
+    const step = s.bots.tail(s.id, 100).find((e) => e.kind === "tool-call") as { status: string; step: string } | undefined;
+    expect(step?.status).toBe("stopped");
+    expect(step?.step).not.toMatch(/^Ran\b/);
+    expect(step?.step).toContain("rm -rf /workspace/tmp/x");
+  });
+
   it("deletes a Bot after draining it (BOT-09)", async () => {
     const s = setup(() => [{ wait: 5000 }]);
     s.runner.sendPrompt(s.id, "work", "n1");
@@ -355,5 +377,17 @@ describe("TurnRunner", () => {
     expect(events).toContain("tool_start");
     const user = s.bots.tail(s.id, 10).find((e) => e.kind === "message");
     expect(user).toMatchObject({ voice: { durationMs: 5000 }, hints: ["h"] });
+  });
+});
+
+describe("review of new-user walk finding 3: only a call Stop cut short says Stopped", () => {
+  it("a call that failed on its own while Stop was pending stays Failed", async () => {
+    const { cutByStop } = await import("../../runner/turn-runner");
+    const { TEXT } = await import("../../review/texts");
+    expect(cutByStop(true, true, TEXT.expired.stopped!)).toBe(true);
+    expect(cutByStop(true, true, "Tool call interrupted")).toBe(true);
+    expect(cutByStop(true, true, "rm: /workspace/tmp/x: Permission denied")).toBe(false);
+    expect(cutByStop(true, false, TEXT.expired.stopped!)).toBe(false);
+    expect(cutByStop(false, true, "ok")).toBe(false);
   });
 });

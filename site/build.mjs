@@ -5,9 +5,13 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import zlib from "node:zlib";
+import { canonicalJson, scanShare, shareLinks, validateShare, SHARE_LIMITS } from "../shared/src/bot-share.js";
+import { looksLikeInjection, stripHidden } from "../shared/src/feedback-content.js";
+import { FORM_SPECS, FORM_OF, EYE_INK, formPath, botSvg, botDefs } from "../shared/src/bot-face.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const dist = path.join(here, "dist");
+const defaultDist = path.join(here, "dist");
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 /** Inline Markdown: **bold**, `code` and [links](https://…). Everything else is text. */
@@ -59,13 +63,24 @@ export const PAGES = {
   docs: { file: "docs.html", path: "/docs", title: "Synapse Docs: install, API key and using your AI agents", description: "How to install Synapse on your Mac, add your Anthropic API key, work with your AI agents, and fix common problems." },
   changelog: { file: "changelog.html", path: "/changelog", title: "Synapse Changelog: what's new in each version", description: "Every version of Synapse, the open-source Mac app for a team of AI agents: new features, fixes and known issues." },
   feedback: { file: "feedback.html", path: "/feedback", title: "Send feedback about Synapse", description: "Report a bug, suggest an idea or tell us what you think of Synapse, the open-source Mac app for a team of AI agents." },
+  bots: { file: "bots.html", path: "/bots", title: "Synapse Bots: ready-made AI agents for your Mac", description: "Ready-made Bots for Synapse, the open-source Mac app for a team of AI agents. Add one in a click." },
+  privacy: { file: "privacy.html", path: "/privacy", title: "Synapse Privacy Policy", description: "What Synapse, the open-source Mac app for a team of AI agents, and its website collect: no telemetry, no account, and feedback only when you send it." },
+  terms: { file: "terms.html", path: "/terms", title: "Synapse Terms of Use", description: "The terms for using Synapse, the open-source Mac app for a team of AI agents, its website and its feedback system." },
 };
+
+/** Pages with their own tags that stay out of the sitemap: /bot only shows a Bot from its link's fragment. */
+export const LINK_PAGES = {
+  bot: { file: "bot.html", path: "/bot", title: "A Bot for Synapse", description: "A Bot someone shared with you. Add it to Synapse, the open-source Mac app for a team of AI agents.", noindex: true },
+};
+/** Pages that show someone's Bot load no analytics script (it could record the link's fragment). */
+export const NO_ANALYTICS = new Set(["bot", "bots"]);
 
 const attr = (s) => esc(s).replace(/"/g, "&quot;");
 /** The <head> tags a search engine or a link preview reads, for one page. */
 export function seoHead(key, version) {
-  const p = PAGES[key], url = `${SITE_URL}${p.path}`, image = `${SITE_URL}/assets/og.png`;
+  const p = PAGES[key] ?? LINK_PAGES[key], url = `${SITE_URL}${p.path}`, image = `${SITE_URL}/assets/og.png`;
   const tags = [
+    ...(p.noindex ? [`<meta name="robots" content="noindex">`] : []),
     `<title>${esc(p.title)}</title>`,
     `<meta name="description" content="${attr(p.description)}">`,
     `<link rel="canonical" href="${url}">`,
@@ -89,13 +104,13 @@ export function seoHead(key, version) {
       applicationCategory: "ProductivityApplication", operatingSystem: "macOS 14 or later (Apple silicon)",
       ...(version ? { softwareVersion: version } : {}),
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-      downloadUrl: `${REPO}/releases`, license: `${REPO}/blob/main/LICENSE`, codeRepository: REPO,
+      downloadUrl: `${REPO}/releases`, license: "https://www.apache.org/licenses/LICENSE-2.0", codeRepository: REPO,
       author: { "@type": "Person", name: "nyfeblade", url: "https://github.com/nyfeblade" },
     };
     tags.push(`<script type="application/ld+json">${JSON.stringify(app).replace(/</g, "\\u003c")}</script>`);
   }
   // Vercel Web Analytics for the website only: cookie-free, no personal data; the app itself sends nothing.
-  tags.push(`<script defer src="/_vercel/insights/script.js"></script>`);
+  if (!NO_ANALYTICS.has(key)) tags.push(`<script defer src="/_vercel/insights/script.js"></script>`);
   return tags.join("\n");
 }
 
@@ -105,38 +120,8 @@ export function sitemap(today) {
 }
 export const robots = () => `User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n`;
 
-/* ---- Bots: the app's avatar (app/src/renderer/avatar/face-forms.ts, face-sim.ts) as plain SVG ----
-   One formula for every body (a superellipse), the same face frame on every form: solid black eyes and
-   mouth, a flat body colour, no highlight or rim. Motion (breathing, blinks) is CSS in site.css. */
-const FORM_SPECS = {
-  pebble: { a: 32, b: 30, n: 2.4, cy: 56 },
-  orb: { a: 30, b: 30, n: 2, cy: 56 },
-  tile: { a: 30, b: 29, n: 4.2, cy: 57 },
-  capsule: { a: 26, b: 31.7, n: 2.6, cy: 54.3 },
-  dome: { a: 31, b: 32, n: 2, cy: 58, nLow: 3.6, bLow: 28 },
-  gem: { a: 34, b: 32, n: 1.55, cy: 54 },
-};
-/** The starter templates' shape ids → the form each draws (face-forms.ts FORM_OF). */
-const FORM_OF = { pebble: "pebble", orb: "orb", tile: "tile", pill: "capsule", capsule: "capsule", dome: "dome", gem: "gem", puff: "pebble", bead: "dome", hex: "gem", diamond: "gem", shield: "tile", crescent: "orb", petal: "dome", stadium: "capsule", notch: "tile", wave: "pebble" };
-export const EYE_INK = "#111110";
-export function formPath(form, N = 72) {
-  const f = FORM_SPECS[form];
-  const r = (v) => Math.round(v * 10) / 10;
-  let d = "";
-  for (let i = 0; i < N; i++) {
-    const t = (2 * Math.PI * i) / N, c = Math.cos(t), s = Math.sin(t);
-    const low = f.nLow && s > 0, n = low ? f.nLow : f.n, b = low ? f.bLow : f.b;
-    d += (i ? "L" : "M") + r(50 + f.a * Math.sign(c) * Math.abs(c) ** (2 / n)) + " " + r(f.cy + b * Math.sign(s) * Math.abs(s) ** (2 / n));
-  }
-  return d + "Z";
-}
-/** One Bot: the body from the shared sprite, then the face. `cls` adds classes (motion, size). */
-export function botSvg(shape, color, cls = "") {
-  const form = FORM_OF[shape] ?? "pebble";
-  return `<svg class="bot${cls ? " " + cls : ""}" viewBox="14 20 72 72" aria-hidden="true"><g class="bb"><use href="#f-${form}" fill="${color}"/><g class="face" fill="${EYE_INK}"><rect class="eye" x="36.3" y="45.5" width="6.4" height="13" rx="3.2"/><rect class="eye" x="57.3" y="45.5" width="6.4" height="13" rx="3.2"/><path class="mouth" d="M45.5 66.9Q50 70.9 54.5 66.9" fill="none" stroke="${EYE_INK}" stroke-width="2.6" stroke-linecap="round"/></g></g></svg>`;
-}
-/** The body forms, once per page, as symbols the avatars <use>. */
-export const botDefs = () => `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>${Object.keys(FORM_SPECS).map((f) => `<path id="f-${f}" d="${formPath(f)}"/>`).join("")}</defs></svg>`;
+/* ---- Bots: drawn by shared/src/bot-face.js (the same file the /bot page loads in the browser) ---- */
+export { FORM_SPECS, FORM_OF, EYE_INK, formPath, botSvg, botDefs };
 /** <!--BOT:shape:#hex--> or <!--BOT:shape:#hex:classes--> → the inline avatar. */
 export const expandBots = (html) => html.replace(/<!--BOT:(\w+):(#[0-9a-fA-F]{6})(?::([\w -]+))?-->/g, (_, s, c, k) => botSvg(s, c, k ?? ""));
 
@@ -158,9 +143,9 @@ export function footer() {
   return `<footer class="site-footer"><div class="wrap">
   <div class="foot">
     <div class="foot-brand"><a class="brand" href="/"><img src="/assets/icon.png" alt="" width="26" height="26">Synapse</a></div>
-    <div><h2>Product</h2><a href="${GH}/releases" data-dl>Download</a><a href="/#features">Features</a><a href="/#starters">Starter Bots</a><a href="/changelog">Changelog</a></div>
-    <div><h2>Help</h2><a href="/docs">Docs</a><a href="/docs#install">Install</a><a href="/docs#troubleshooting">Troubleshooting</a><a href="/docs#privacy">Privacy</a><a href="/feedback">Send feedback</a></div>
-    <div><h2>Project</h2><a href="${GH}">GitHub</a><a href="${GH}/issues">Report an issue</a><a href="${GH}/blob/main/LICENSE">MIT licence</a></div>
+    <div><h2>Product</h2><a href="${GH}/releases" data-dl>Download</a><a href="/#features">Features</a><a href="/bots">Bots</a><a href="/changelog">Changelog</a></div>
+    <div><h2>Help</h2><a href="/docs">Docs</a><a href="/docs#install">Install</a><a href="/docs#troubleshooting">Troubleshooting</a><a href="/feedback">Send feedback</a></div>
+    <div><h2>Project</h2><a href="${GH}">GitHub</a><a href="${GH}/issues">Report an issue</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="${GH}/blob/main/LICENSE">Apache-2.0 licence</a><a href="${GH}/blob/main/TRADEMARKS.md">Trademarks</a></div>
   </div>
   <p class="legal">Synapse is open source and not affiliated with Anthropic. Claude is a trademark of Anthropic.</p>
   <div class="wordmark" aria-hidden="true">Synapse</div>
@@ -236,13 +221,78 @@ export function hashAssets(dir) {
 /** Every /assets/… reference in a page → its hashed name. */
 export const renameAssets = (html, names) => html.replace(/\/assets\/[\w./-]+\.[a-z0-9]+(?=["')\s?#])/g, (m) => names[m] ?? m);
 
-export function build(today = new Date().toISOString().slice(0, 10)) {
+/* ---- The curated catalogue: site/bots/<slug>.json → /bots ---- */
+const ENTRY_KEYS = ["slug", "blurb", "order", "addedAt", "payload"];
+const stable = (v) => (Array.isArray(v) ? v.map(stable) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, stable(v[k])])) : v);
+const realDate = (d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
+/** A payload's link fragment, synchronously (Node's zlib is the same raw deflate the browser's CompressionStream is). */
+export const fragmentSync = (payload) => `b1.${zlib.deflateRawSync(Buffer.from(canonicalJson(payload))).toString("base64url")}`;
+
+/**
+ * Every catalogue entry, checked with the app's own codec; a bad one fails the build (Vercel keeps the last good
+ * deployment). Text that reads like a prompt injection is a warning. Sorted by order, then addedAt.
+ */
+export function loadCatalogue(dir = path.join(here, "bots")) {
+  const entries = [], warnings = [], seen = new Set();
+  if (!fs.existsSync(dir)) return { entries, warnings };
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".json")).sort()) {
+    const bad = (why) => { throw new Error(`site/bots/${f}: ${why}`); };
+    let e;
+    try { e = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")); } catch { bad("not valid JSON"); }
+    if (!e || typeof e !== "object" || Array.isArray(e)) bad("not an entry");
+    const extra = Object.keys(e).filter((k) => !ENTRY_KEYS.includes(k));
+    if (extra.length) bad(`unknown field ${extra.join(", ")} (an entry has slug, blurb, order, addedAt and payload; never an author)`);
+    if (typeof e.slug !== "string" || !/^[a-z0-9][a-z0-9-]{0,59}$/.test(e.slug) || `${e.slug}.json` !== f) bad("the slug must be the file name (a-z, 0-9 and -)");
+    if (seen.has(e.slug)) bad(`duplicate slug ${e.slug}`);
+    seen.add(e.slug);
+    if (typeof e.blurb !== "string" || !e.blurb.trim() || e.blurb.length > SHARE_LIMITS.blurb) bad(`the blurb must be 1 to ${SHARE_LIMITS.blurb} characters`);
+    if (stripHidden(e.blurb).text !== e.blurb) bad("hidden characters in the blurb");
+    if (typeof e.order !== "number" || !Number.isFinite(e.order)) bad("order must be a number");
+    if (!realDate(e.addedAt)) bad("addedAt must be a real date, YYYY-MM-DD");
+    const v = validateShare(e.payload);
+    if (!v.ok) bad("invalid payload");
+    if (v.hiddenRemoved) bad("hidden characters in the payload");
+    if (JSON.stringify(stable(v.payload)) !== JSON.stringify(stable(e.payload))) bad("the payload isn't the canonical v1 share object (an unknown field, or a shape, model or colour the app would change)");
+    const scan = scanShare(v.payload);
+    if (scan.hiddenRemoved) bad("hidden characters in the payload");
+    for (const x of scan.flags) warnings.push(`site/bots/${f}: ${x.field} reads like a prompt injection`);
+    if (looksLikeInjection(e.blurb)) warnings.push(`site/bots/${f}: blurb reads like a prompt injection`);
+    const fragment = fragmentSync(v.payload);
+    if (fragment.length > SHARE_LIMITS.linkMaxChars) bad(`too big for a link (${fragment.length} characters, the limit is ${SHARE_LIMITS.linkMaxChars})`);
+    entries.push({ slug: e.slug, blurb: e.blurb, order: e.order, addedAt: e.addedAt, payload: v.payload, fragment, links: shareLinks(fragment, SITE_URL) });
+  }
+  entries.sort((a, b) => a.order - b.order || a.addedAt.localeCompare(b.addedAt) || a.slug.localeCompare(b.slug));
+  return { entries, warnings };
+}
+
+/** /bots: the cards (static, every field escaped), the tool chips, and the list as inert JSON for bots.js. */
+export function renderCatalogue(tpl, entries) {
+  const toolsOf = (e) => e.payload.tools.map((t) => t.name);
+  const tools = [...new Set(entries.flatMap(toolsOf))].sort((a, b) => a.localeCompare(b));
+  const chips = tools.map((t) => `<button type="button" class="bchip" data-tool="${attr(t)}" aria-pressed="false">${esc(t)}</button>`).join("");
+  const cards = entries.map((e) => {
+    const p = e.payload, q = [p.name, p.title, e.blurb, ...toolsOf(e)].join(" ").toLowerCase();
+    return `<article class="bcard" data-slug="${attr(e.slug)}" data-tools="${attr(toolsOf(e).join("\n"))}" data-q="${attr(q)}"><a class="bcard-a" href="/bot#${attr(e.fragment)}">${botSvg(p.shape, p.color, "md")}<h3>${esc(p.name)}</h3><p>${esc(e.blurb)}</p><span class="bcard-by">Synapse</span></a></article>`;
+  }).join("\n");
+  const data = entries.map((e) => ({ slug: e.slug, name: e.payload.name, title: e.payload.title, blurb: e.blurb, tools: toolsOf(e), fragment: e.fragment, web: e.links.web, app: e.links.app }));
+  const json = JSON.stringify(data).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+  return tpl.replace("<!--BOTS:CHIPS-->", () => chips).replace("<!--BOTS:CARDS-->", () => cards).replace("<!--BOTS:DATA-->", () => json);
+}
+
+/** Shared plain-JS files the pages import: copied into dist/assets, then hashed with the rest (leaf first). */
+const SHARED_MODULES = ["feedback-content.js", "bot-face.js", "bot-share.js"];
+
+/** `out`: site/dist, or another folder (tests build side by side without racing on one folder). */
+export function build(today = new Date().toISOString().slice(0, 10), out = defaultDist) {
+  const dist = out;
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, "assets"), { recursive: true });
   fs.cpSync(path.join(here, "assets"), path.join(dist, "assets"), { recursive: true });
   // The feedback page's preview uses the same text checks as the app and /api/feedback: one file, copied in and
   // imported by feedback.js (hashed with the rest, so a new version is never paired with an old one).
-  fs.copyFileSync(path.join(here, "..", "shared", "src", "feedback-content.js"), path.join(dist, "assets", "feedback-content.js"));
+  // /bot and /bots use the app's own share codec and Bot drawing the same way (bot-share.js imports its two
+  // neighbours; hashAssets rewrites those imports leaf first).
+  for (const f of SHARED_MODULES) fs.copyFileSync(path.join(here, "..", "shared", "src", f), path.join(dist, "assets", f));
   const names = hashAssets(path.join(dist, "assets"));
   const bustAssets = (html) => renameAssets(html, names);
   const releases = parseChangelog(fs.readFileSync(path.join(here, "..", "CHANGELOG.md"), "utf8"));
@@ -252,12 +302,19 @@ export function build(today = new Date().toISOString().slice(0, 10)) {
   fs.writeFileSync(path.join(dist, "docs.html"), withSeo(fs.readFileSync(path.join(here, "docs.html"), "utf8"), "docs"));
   // A private-ish stats page: unlinked, noindex, not in the sitemap; public GitHub download counts only.
   fs.writeFileSync(path.join(dist, "stats.html"), bustAssets(partials(fs.readFileSync(path.join(here, "stats.html"), "utf8"), "stats")));
+  for (const key of ["privacy", "terms"]) fs.writeFileSync(path.join(dist, PAGES[key].file), withSeo(fs.readFileSync(path.join(here, PAGES[key].file), "utf8"), key));
   fs.writeFileSync(path.join(dist, "feedback.html"), withSeo(fs.readFileSync(path.join(here, "feedback.html"), "utf8"), "feedback"));
   // The private conversation page (/feedback/thread, a rewrite in vercel.json, so /feedback stays a
   // plain page and not a folder): not in the sitemap, not indexed.
   fs.writeFileSync(path.join(dist, "feedback-thread.html"), bustAssets(partials(fs.readFileSync(path.join(here, "feedback-thread.html"), "utf8"), "feedback")));
   // Vercel serves 404.html for any path that isn't a page.
   fs.writeFileSync(path.join(dist, "404.html"), bustAssets(partials(fs.readFileSync(path.join(here, "404.html"), "utf8"), "404")));
+  // /bot: a shared Bot, decoded in the browser from the link's fragment.
+  fs.writeFileSync(path.join(dist, "bot.html"), withSeo(fs.readFileSync(path.join(here, "bot.html"), "utf8"), "bot"));
+  // /bots: the curated catalogue (site/bots/*.json). A bad entry throws here and fails the build.
+  const catalogue = loadCatalogue();
+  for (const w of catalogue.warnings) console.warn(`site: warning: ${w}`);
+  fs.writeFileSync(path.join(dist, "bots.html"), withSeo(renderCatalogue(fs.readFileSync(path.join(here, "bots.template.html"), "utf8"), catalogue.entries), "bots"));
   const { toc, body } = renderReleases(releases);
   const page = fs.readFileSync(path.join(here, "changelog.template.html"), "utf8").replace("<!--TOC-->", toc).replace("<!--RELEASES-->", body);
   fs.writeFileSync(path.join(dist, "changelog.html"), withSeo(page, "changelog"));

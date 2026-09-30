@@ -5,29 +5,33 @@ import { hkdfSync, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { availableMemory, refreshAvailableMemory, seedAvailableMemory } from "./mac-memory";
-import { scrubClaudeLogin, boxPortEnv, WRONG_HOST_MESSAGE, APP_NAME, CALL_FEEL, LIMITSC, VOICE_ENGINE_MEMORY_MB, defaultVoiceMode, isVoiceMode, resolveVoiceMode, shouldDropToLight, type VoiceMode } from "@synapse/shared";
+import { STRF, scrubClaudeLogin, boxPortEnv, WRONG_HOST_MESSAGE, APP_NAME, CALL_FEEL, LIMITSC, VOICE_ENGINE_MEMORY_MB, defaultVoiceMode, isVoiceMode, resolveVoiceMode, shouldDropToLight, type VoiceMode } from "@synapse/shared";
 import { BoxLifecycle, OrbBoxOps, bundledImageVersion, defaultBoxDir, type LifecycleState } from "./box-lifecycle";
 import { BoxPin } from "./box-pin";
 import { CoordinatorHost, type CoordinatorProcess } from "./coordinator-host";
 import { execCommand, OrbBoxProvider } from "./box-provider";
 import { shutdownOnQuit } from "./box-quit";
 import { resolveOrb } from "./orb-path";
+import { MacNetsWatcher } from "./mac-nets";
 import { resolveGateway, type GatewayHandle } from "./gateway-bootstrap";
 import { gatewayCall, type HostCreds } from "./gateway-call";
+import { registerComposioPaste } from "./native/composio-paste";
 import { createHostFetch, streamProves } from "./host-fetch";
 import { deployAndReconnect, hostMoved } from "./auto-update-steps";
 import { PROBE_ENV, codeIdentity, electronStore, migrationItemName, openLegacyKeychain, runProbeMode } from "./keychain";
 import { FileKeyStore } from "./file-key-store";
 import { SECRETS_RELOCKED_MESSAGE, mayCreateKey, openSealing, prepareSealing, retireStaleHashKey, sealer } from "./sealing";
-import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, MessageChannelMain, screen, shell, systemPreferences, utilityProcess } from "electron";
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, MessageChannelMain, nativeTheme, screen, shell, systemPreferences, utilityProcess } from "electron";
 import { ensureMicAccess, privacySettingsUrl } from "./native/privacy";
 import { captureScreen } from "./native/screen-share";
 import { clampRectToWorkArea, maximizeRect } from "./window-bounds";
 import { readAppSettings, writeAppSettings } from "./app-settings";
 import { emitNative, installNativeIpc, registerNative, tapNative } from "./native";
 import { installCrashReporting } from "./crash/wire";
+import { fitPng, installFeedback } from "./feedback/wire";
 import { logsDir } from "./backup/wire";
-import { registerDeepLinks } from "./native/deep-links";
+import { registerDeepLinks, setImportSheetOpen } from "./native/deep-links";
+import { registerClipboardBotLink, registerShareMenu } from "./native/share-menu";
 import { registerOpenBotpacks } from "./native/open-botpacks";
 import { registerAudioDevices } from "./native/audio-devices";
 import { registerDictation, writeContextFile } from "./native/dictation";
@@ -35,7 +39,7 @@ import { makeLmCache } from "./native/stt-lm";
 import { downloadModel, helperHasWhisper, helperWhisperArgs, humanBytes, whisperRoot, whisperStatus } from "./native/stt-whisper";
 import { registerWakeWord } from "./native/wake-wire";
 import { registerBotCalls } from "./native/bot-calls-wire";
-import { quietHoursStore, registerSettingsNatives, wakeSettingsStore } from "./native/settings-natives";
+import { quietHoursStore, registerSettingsNatives, switchValue, wakeSettingsStore } from "./native/settings-natives";
 import { bundledKokoroDir, prosodyFrom, registerKokoro, type Prosody } from "./native/kokoro";
 import { SELFTEST_ENV, kokoroSelfTest } from "./native/kokoro-selftest";
 import { runPortableMigration } from "./portable-migration";
@@ -57,17 +61,17 @@ import { fetchLogoDataUrl } from "./native/logo";
 import { installAppMenu } from "./native/menu";
 import { defaultReleaseDir, launchHealth, markHealthy, registerUpdater, validFeed } from "./native/updater";
 import { bundledHostBuild, redeployHostIfChanged } from "./native/host-redeploy";
-import { applyNativeTheme } from "./native-theme";
+import { applyNativeTheme, cacheTheme, readCachedTheme, windowBackground } from "./native-theme";
 import { registerBackups } from "./backup/wire";
 import { setDockBadge, showAppNotification, showBotNotification } from "./notify";
 import { registerMacDisk } from "./mac-disk";
 import { configureProfile } from "./profile";
 import { resolveUnpacked } from "./resolve-unpacked";
 import { MacSecretVault } from "./secret-vault";
-import { createApiKeySender, registerAuthIpc, type ApiKeySender } from "./auth-key";
+import { confirmTrustDialog, createApiKeySender, registerAuthIpc, type ApiKeySender } from "./auth-key";
 import { SecretSync, sealWith } from "./secret-sync";
 import { saveFileFromGateway } from "./save-file";
-import { readSecret, storeSecret } from "./secrets";
+import { readSecret, sealedSecretNames, storeSecret } from "./secrets";
 import { effectiveFeed, migrateUpdateSourceFromKeychain, readUpdateSource, writeUpdateSource } from "./update-source";
 import { SnapshotSink } from "./snapshot-sink";
 import { postToRenderer, sendToRenderer } from "./to-renderer";
@@ -94,7 +98,8 @@ const fileKeys = new FileKeyStore(profileDir, { mayCreate: () => mayCreateKey(pr
 
 let windowLoaded = false;
 // macOS delivers `open-url` before `whenReady()` resolves, so register before awaiting it.
-registerDeepLinks(app, () => windowLoaded);
+// Bot sharing: a link brings the window forward (the first one; only one is ever opened).
+registerDeepLinks(app, () => windowLoaded, () => BrowserWindow.getAllWindows()[0] ?? null);
 registerOpenBotpacks(app, () => windowLoaded);
 
 function hashKey(profileDir: string): () => Buffer {
@@ -188,6 +193,7 @@ function startSecrets(profileDir: string, baseUrl: string, token: string): void 
     // No client time limit: a Save must reach its real end before a queued Remove runs (auth-key.ts), or a Save given
     // up on here could still land on the box after the Remove. The panel shows its slow note meanwhile.
     call: gatewayCall(baseUrl, token, hostCallOpts), pin, seal: sealWith, log: (s) => console.error(s),
+    confirmTrust: (oldFp, newFp) => confirmTrustDialog((opts) => { const w = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]; return w ? dialog.showMessageBox(w, opts) : dialog.showMessageBox(opts); }, oldFp, newFp),
     mac: {
       save: (key) => macKeyRpc<{ ok: boolean; error?: string }>("save", key),
       clear: () => macKeyRpc<void>("clear"),
@@ -225,6 +231,8 @@ let retryBoxUpdate: (() => Promise<void>) | null = null;
 
 let lifecycle: BoxLifecycle | null = null;
 let backupTimer: NodeJS.Timeout | null = null;
+/** Bug 365: the Mac's own networks follow into the box firewall when they change (Wi-Fi, VPN, a new IPv6 prefix). */
+let macNets: MacNetsWatcher | null = null;
 function startBoxOps(win: BrowserWindow, profileDir: string, baseUrl: string, token: string, reconnect: () => Promise<void>): void {
   // FUZZ mode has no box (no OrbStack machine); only box:info answers, from the repo's bundled
   // box/ dir (present in development). Update/Recover/Reset would need a real machine, so they
@@ -238,6 +246,11 @@ function startBoxOps(win: BrowserWindow, profileDir: string, baseUrl: string, to
     ipcMain.handle("box:reset", () => { throw new Error("Not available in FUZZ mode"); });
     return;
   }
+  macNets ??= new MacNetsWatcher({
+    apply: async (nets) => (await execCommand(resolveOrb(), ["-m", boxMachine(), "-u", "root", "/usr/local/lib/bots/bots-ports", "mac-nets", nets.join(" ")], { timeoutMs: 20_000 })).code === 0,
+    log: (l) => process.stderr.write(`${l}\n`),
+  });
+  macNets.start();
   const call = gatewayCall(baseUrl, token, hostCallOpts);
   const sink = new SnapshotSink({
     dir: path.join(profileDir, "snapshots"), call,
@@ -297,8 +310,11 @@ async function start(): Promise<void> {
   app.setAboutPanelOptions({ applicationName: APP_NAME });
   // Dev runs (`electron .`) show the Synapse icon in the Dock too; packaged builds get it from icon.icns.
   if (!app.isPackaged) { try { app.dock?.setIcon(path.join(__dirname, "..", "build", "icon.png")); } catch { /* icon is cosmetic */ } }
+  // New-user walk, finding 4: the cached theme first, so the launch and the window paint in it from the start.
+  const themeFile = path.join(app.getPath("userData"), "theme.json");
+  applyNativeTheme(readCachedTheme(themeFile));
   const win = new BrowserWindow({
-    width: 1440, height: 900, minWidth: 1024, minHeight: 680,
+    width: 1440, height: 900, minWidth: 1024, minHeight: 680, backgroundColor: windowBackground(nativeTheme.shouldUseDarkColors),
     titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 18 }, show: false,
     webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: false },
   });
@@ -313,6 +329,24 @@ async function start(): Promise<void> {
     userData: app.getPath("userData"), logsDir: logsDir(), appVersion: app.getVersion(), hostVersion: () => lastHostVersion,
     secrets: () => [gatewayToken, readUpdateSource(app.getPath("userData")).token, readSecret(app.getPath("userData"), "backupKey")].filter((v): v is string => !!v),
     reg: registerNative, emit: emitNative, reveal: (f) => shell.showItemInFolder(f), copyText: (t) => clipboard.writeText(t),
+  });
+  // Send feedback and 👍/👎 (local). The window's own screenshot only; FUZZ never leaves the app.
+  installFeedback({
+    reg: registerNative, userData: app.getPath("userData"), home: os.homedir(), appVersion: app.getVersion(), macos: process.getSystemVersion(),
+    logFiles: () => [path.join(logsDir(), "main.log.1"), path.join(logsDir(), "main.log")],
+    // Every secret main can read: the live gateway token, the update feed's token, and each sealed Mac-side secret.
+    secrets: () => [gatewayToken, readUpdateSource(app.getPath("userData")).token, ...sealedSecretNames(app.getPath("userData")).map((n) => readSecret(app.getPath("userData"), n))].filter((v): v is string => !!v),
+    username: (() => { try { return os.userInfo().username; } catch { return undefined; } })(),
+    // Only a development build may send somewhere else.
+    endpoint: !app.isPackaged ? process.env.SYNAPSE_FEEDBACK_URL : undefined,
+    crashText: (id) => { const r = id === "latest" ? crash.store.list()[0] : crash.store.list().find((x) => x.id === id); return r ? crash.store.reportText(r.id) : null; },
+    capture: async () => (win.isDestroyed() ? null : fitPng(await win.webContents.capturePage())),
+    openExternal: (url) => shell.openExternal(url), offline: process.env.FUZZ === "1",
+    // A reply: a quiet notice in the window, and a macOS notification when the window isn't in front.
+    onReply: (unread) => {
+      emitNative("feedback-reply", { unread });
+      if (!win.isDestroyed() && !win.isFocused()) showAppNotification(win, { title: STRF.synapse, body: STRF.replyNotice });
+    },
   });
   tapNative((ch, p) => {
     const e = p as { type?: string; code?: string; message?: string } | null;
@@ -416,6 +450,9 @@ async function start(): Promise<void> {
   ipcMain.handle("app-info", () => ({ userName: os.userInfo().username }));
 
   installNativeIpc(ipcMain, () => win);
+  registerShareMenu(() => (win.isDestroyed() ? null : win), { fuzz: process.env.FUZZ === "1" });
+  registerClipboardBotLink();
+  registerNative("share.importSheetOpen", (a: { open?: unknown }) => { setImportSheetOpen(a?.open === true); return {}; });
   registerExternal();
   registerFiles(() => win);
   registerNative("fetchLogo", (a: { url: string }) => fetchLogoDataUrl(a.url));
@@ -453,6 +490,8 @@ async function start(): Promise<void> {
   // settings-persist: the Settings switches kept in app-settings.json (Keep Bots running, Keep voice ready,
   // Question intonation, Call sounds, Whisper in calls) — one table, round-tripped in settings-natives.test.ts.
   registerSettingsNatives(registerNative, appSettingsStore, { changed: (k) => { if (k === "keepVoiceReady") kokoro.keepReadyChanged(); } });
+  // Bot sharing: the owner's advanced actions (Export for website) — Settings' "Show developer tools", or SYNAPSE_OWNER=1.
+  registerNative("ownerTools.get", () => ({ on: process.env.SYNAPSE_OWNER === "1" || switchValue(appSettingsStore.read(), "showDeveloperTools") }));
   app.on("will-quit", () => kokoro.dispose());
   // Cloned voices (F5). Optional and off until the user records one: with no saved voice this
   // starts no Python, reads no weights and takes no memory. It is never kept hot — the model is
@@ -765,6 +804,13 @@ async function start(): Promise<void> {
   // Settings → Account and the setup screen can Save before the first connection lands (or after it failed): the
   // auth IPC is there from the start and says why, instead of Electron's "No handler registered".
   registerAuthIpc(ipcMain, () => (hostConnected ? apiKeySender : null), () => hostConnectError);
+  // Settings → Connected accounts → Composio: the Paste click reads the clipboard here and hands the key straight to
+  // the host. FUZZ never touches the real clipboard: it pastes a stand-in key the fake Composio accepts.
+  registerComposioPaste({
+    reg: registerNative,
+    readClipboard: () => (process.env.FUZZ === "1" ? process.env.FUZZ_COMPOSIO_KEY ?? "ak_fuzz_example_key_0000" : clipboard.readText()),
+    call: () => (handle ? gatewayCall(handle.baseUrl, handle.token, hostCallOpts) : null),
+  });
   // Settings → Backups: talks to whichever host the app is connected to right now.
   registerBackups({
     userData: app.getPath("userData"), appDir: app.getAppPath(), runtime: appRuntime(), appVersion: app.getVersion(), fuzz: process.env.FUZZ === "1",
@@ -787,7 +833,11 @@ async function start(): Promise<void> {
     machine: boxMachine,
   });
   ipcMain.handle("save-file", (_e, req: { path: string; name: string }) => (handle ? saveFileFromGateway(win, hostFetch, req) : { saved: false }));
-  ipcMain.on("native-theme", (_e, pref: string) => applyNativeTheme(pref));
+  ipcMain.on("native-theme", (_e, pref: string) => {
+    applyNativeTheme(pref);
+    cacheTheme(themeFile, pref);
+    if (!win.isDestroyed()) win.setBackgroundColor(windowBackground(nativeTheme.shouldUseDarkColors));
+  });
   const connect = async () => {
     coordinator.postMessage({ type: "state", state: { kind: "starting" } });
     streamUp = false;

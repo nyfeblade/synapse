@@ -15,10 +15,12 @@ import { ChatView } from "./components/ChatView";
 import { NewChat } from "./components/NewChat";
 import { Overlays } from "./components/Overlays";
 import { ConfirmHost } from "./components/ConfirmDialog";
+import { FeedbackHost } from "./feedback/FeedbackSheet";
 import { SettingsModal } from "./components/SettingsModal";
 import { Sidebar } from "./components/Sidebar";
 import { openDeepLink } from "./deep-links";
 import { ConnectGoogleSheet } from "./google/ConnectGoogleSheet";
+import { ComposioDisclosure, ComposioSheet } from "./composio/ComposioSheet";
 import { MarketplaceModal } from "./marketplace/MarketplaceModal";
 import { nativeCall, onNative } from "./native";
 import { Onboarding } from "./onboarding/Onboarding";
@@ -27,6 +29,7 @@ import { useSetupGate } from "./firstrun/store";
 import { DetailsSheet } from "./templates/DetailsSheet";
 import { ExportSheet } from "./templates/ExportSheet";
 import { ImportSheet } from "./templates/ImportSheet";
+import { ShareSheet } from "./templates/ShareSheet";
 import { useTemplates } from "./templates/store";
 import { overlaysOpen } from "./overlay-stack";
 import { useOverlays } from "./overlays";
@@ -43,6 +46,8 @@ export function App() {
   useWakeBridge();
   usePhoneBridge();
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  /** Bot sharing: whether the onboarding answer is in (a share link waits for it, and for setup, to finish). */
+  const [onboardingKnown, setOnboardingKnown] = useState(false);
   /** Portable install: a profile whose host has no Claude sign-in goes to sign-in, whatever else it has seen. */
   const [onboardingStep, setOnboardingStep] = useState<"splash" | "setup">("splash");
   const computerOpen = useComputer((s) => s.open); // before the onboarding early return (hook order)
@@ -83,8 +88,14 @@ export function App() {
     void callQuiet("getOnboarding", {}).then((o) => {
       setOnboardingStep(o.hasSeenOnboarding && !o.tokenConfigured ? "setup" : "splash");
       setNeedsOnboarding(!o.hasSeenOnboarding || !o.tokenConfigured);
+      setOnboardingKnown(true);
     }).catch(() => {});
   }, [connection.kind]);
+  // Bot sharing: a synapse://import link opens its sheet only in the app proper; during first-run setup or
+  // onboarding (or before the host answers) it is held, and opens the moment they're done.
+  useEffect(() => {
+    useTemplates.getState().setImportReady(connection.kind === "connected" && onboardingKnown && !needsOnboarding && setupGate === "app");
+  }, [connection.kind, onboardingKnown, needsOnboarding, setupGate]);
   // The global chords, and the one rule that guards them. ⌘N and ⌘, act on the app *underneath*
   // whatever is covering it: ⌘N while Settings was open navigated behind the modal and put focus in
   // a text field under the scrim, so everything typed went somewhere invisible (WCAG 2.4.11), and ⌘,
@@ -154,6 +165,8 @@ export function App() {
     return (
       <div className="window" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
         <Onboarding initialStep={onboardingStep} onDone={(id) => { setNeedsOnboarding(false); void useUi.getState().openBot(id); }} />
+        {/* Bot sharing: onboarding's Paste a Bot link confirms here, over the last step. */}
+        <ImportSheet />
       </div>
     );
   }
@@ -184,11 +197,15 @@ export function App() {
       {computerOpen && <ComputerView />}
       <MarketplaceModal />
       <ConnectGoogleSheet />
+      <ComposioSheet />
+      <ComposioDisclosure />
       <ExportSheet />
       <ImportSheet />
+      <ShareSheet />
       <DetailsSheet />
       <Overlays />
       <ConfirmHost />
+      <FeedbackHost />
       {connection.kind === "connected" && <IncomingCall />}
       {connection.kind === "connected" && <CallHost />}
       {setupReopened && <div className="setup-overlay"><SetupScreen onClose={() => useSetupGate.getState().close()} /></div>}

@@ -25,3 +25,8 @@ export function readSecret(userData: string, name: string): string | null {
     }
   }, null);
 }
+
+/** The names of every sealed secret in this profile (secrets/<name>.bin). */
+export function sealedSecretNames(userData: string): string[] {
+  try { return fs.readdirSync(path.join(userData, "secrets")).filter((f) => f.endsWith(".bin")).map((f) => f.slice(0, -4)); } catch { return []; }
+}

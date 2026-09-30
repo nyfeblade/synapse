@@ -3,6 +3,7 @@ import { API_KEY_RE, STR_AUTH, STR_COST } from "@synapse/shared";
 import { callQuiet } from "../bridge";
 import { API_KEY_CHANGED } from "./settings/AccountSection";
 import { Announce } from "./Announce";
+import { MoneyInput, formatMoney, parseMoney } from "./MoneyInput";
 
 const MAC_KEY_DISMISSED = "synapse.macKeyPromptDismissed";
 const readFlag = (k: string) => { try { return localStorage.getItem(k) === "1"; } catch { return false; } };
@@ -34,7 +35,7 @@ export function KeyPrompts() {
     } catch { setMacKey(false); }
     try {
       const b = await callQuiet("getBudgetPrompt", {});
-      setBudget(b?.show ? String(b.suggestedUsd) : null);
+      setBudget(b?.show ? formatMoney(b.suggestedUsd) : null);
     } catch { setBudget(null); }
   }, []);
   useEffect(() => {
@@ -50,8 +51,8 @@ export function KeyPrompts() {
     try { await fn(); } catch (e) { setError(reason(e)); } finally { setBusy(false); }
   };
   const saveBudget = () => run(async () => {
-    const n = Number(budget);
-    if (!Number.isFinite(n) || n <= 0) throw new Error(STR_COST.amountInvalid);
+    const n = parseMoney(budget ?? "");
+    if (n === null || n <= 0) throw new Error(STR_COST.amountInvalid);
     // Review fix 2: the host merges the monthly limit into the account policy (its other limits and settings stay).
     await callQuiet("setMonthlyBudget", { usd: n });
     await callQuiet("dismissBudgetPrompt", {});
@@ -76,19 +77,20 @@ export function KeyPrompts() {
           <form className="disk-banner key-prompt" onSubmit={(e) => { e.preventDefault(); void saveMacKey(); }}>
             <label htmlFor="mac-api-key">{STR_AUTH.macKeyTitle}</label>
             <input id="mac-api-key" type="password" autoComplete="off" spellCheck={false} className="text-input" placeholder={STR_AUTH.keyPlaceholder} value={key} onChange={(e) => setKey(e.target.value)} />
+            <button type="button" className="btn-secondary" disabled={busy} onClick={skipMacKey}>{STR_COST.notNow}</button>
             <button type="submit" className="btn-primary" disabled={busy || !key.trim()}>{STR_AUTH.save}</button>
-            <button type="button" className="btn-outline small" disabled={busy} onClick={skipMacKey}>{STR_COST.notNow}</button>
           </form>
         )}
         {budget !== null && (
           <form className="disk-banner key-prompt" onSubmit={(e) => { e.preventDefault(); void saveBudget(); }}>
             <label htmlFor="monthly-budget">{STR_COST.monthlyBudget}</label>
-            <input id="monthly-budget" className="text-input narrow" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} />
+            <MoneyInput id="monthly-budget" className="narrow" value={budget} onChange={setBudget}
+              invalid={error === STR_COST.amountInvalid} aria-describedby={error ? "key-prompt-error" : undefined} />
+            <button type="button" className="btn-secondary" disabled={busy} onClick={() => void skipBudget()}>{STR_COST.notNow}</button>
             <button type="submit" className="btn-primary" disabled={busy}>{STR_COST.save}</button>
-            <button type="button" className="btn-outline small" disabled={busy} onClick={() => void skipBudget()}>{STR_COST.notNow}</button>
           </form>
         )}
-        {error && <p role="alert" className="error">{error}</p>}
+        {error && <p id="key-prompt-error" role="alert" className="error">{error}</p>}
       </div>
     </Announce>
   );

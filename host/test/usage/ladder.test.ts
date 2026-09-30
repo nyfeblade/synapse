@@ -24,7 +24,9 @@ function setup(o: { pct?: number | null; cost?: number; budget?: number | null }
     },
     list: () => trays, dismiss: () => {},
   } as never;
-  const make = () => new UsageLadder({ usage, trays: trayService, now: () => now, onReviewerDegraded: (u) => degraded.push(u) });
+  // `pct` is the share of the monthly budget spent (the only budget); `cost`/`budget` give it as dollars.
+  const monthBudgetPct = () => state.pct ?? (state.budget ? (state.cost / state.budget) * 100 : null);
+  const make = () => new UsageLadder({ usage, trays: trayService, now: () => now, onReviewerDegraded: (u) => degraded.push(u), monthBudgetPct });
   const ladder = make();
   return {
     ladder, trays, degraded, state, advance: (ms: number) => { now += ms; }, now: () => now,
@@ -58,7 +60,7 @@ describe("UsageLadder levels and effects (§14.2)", () => {
     t.ladder.evaluate();
     t.ladder.evaluate();
     expect(t.ladder.level()).toBe("L1");
-    expect(t.trays.filter((x) => x.title === "You've used 80% of this week's budget")).toHaveLength(1);
+    expect(t.trays.filter((x) => x.title === "You've used 80% of your monthly budget")).toHaveLength(1);
     expect(t.ladder.allowsBackground("dreaming")).toBe(true);
     t.state.pct = 91;
     expect(t.ladder.level()).toBe("L2");
@@ -72,7 +74,7 @@ describe("UsageLadder levels and effects (§14.2)", () => {
     t.ladder.evaluate();
     expect(t.ladder.level()).toBe("L3");
     expect(t.ladder.usagePct()).toBe(125);
-    expect(t.trays.some((x) => x.title === "Routines on hold: this week's budget is used up")).toBe(true);
+    expect(t.trays.some((x) => x.title === "Routines on hold: the monthly budget is used up")).toBe(true);
     expect(t.ladder.routinePausedUntil("r1")).toBe(Number.POSITIVE_INFINITY);
     t.ladder.resumeRoutines();
     expect(t.ladder.routinePausedUntil("r1")).toBeNull();
@@ -117,8 +119,8 @@ it("dismissTray resume-routines resumes its own budget tray and falls through ot
   expect(t.ladder.routinePausedUntil("r")).toBeNull();
 });
 
-const USAGE80 = "You've used 80% of this week's budget";
-const BUDGET = "Routines on hold: this week's budget is used up";
+const USAGE80 = "You've used 80% of your monthly budget";
+const BUDGET = "Routines on hold: the monthly budget is used up";
 const LIMIT = "Usage limit reached";
 
 describe("a dismissed ladder tray stays dismissed (§14.2)", () => {
@@ -233,4 +235,20 @@ describe("the ladder counts the dollar budgets only", () => {
     expect(l.level()).toBe("L0");
   });
 
+});
+
+describe("review of new-user walk finding 7: one budget", () => {
+  const trays = { add: (t: object) => ({ ...t, buttons: [] }), list: () => [], dismiss: () => {} } as never;
+  it("the ladder reads the monthly budget only; a stale weekly amount changes nothing", () => {
+    const usage = { weekCostUsd: () => 500, budgetUsd: () => 10, weekStart: () => 1, ladderState: () => ({ dismissed: {}, resumedWeek: null }), setLadderState: () => {} } as never;
+    const l = new UsageLadder({ usage, trays, now: () => 1, monthBudgetPct: () => null });
+    expect(l.level()).toBe("L0");
+    expect(l.usagePct()).toBeNull();
+  });
+
+  it("there is no setWeeklyBudget command", () => {
+    const ctx = { hub: { publish: () => {} }, trays: { get: () => undefined, dismiss: () => {} }, flags: () => ({ usageSource: "rate_limit_event" }) } as never;
+    const m = createUsageModule(ctx, { usage: {} as never, ladder: {} as never });
+    expect(Object.keys(m.handlers ?? {})).not.toContain("setWeeklyBudget");
+  });
 });

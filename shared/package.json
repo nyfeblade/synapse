@@ -1,1 +1,1 @@
-{ "name": "@synapse/shared", "private": true, "license": "MIT", "type": "module", "exports": { ".": "./src/index.ts" } }
+{ "name": "@synapse/shared", "private": true, "license": "Apache-2.0", "type": "module", "exports": { ".": "./src/index.ts" } }

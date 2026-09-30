@@ -129,7 +129,8 @@ export const STR_COST = {
   budgetContinue: "Continue",
   budgetKeepPaused: "Not now",
   budgetOpenSettings: "Budgets",
-  money: (usd: number) => (usd > 0 && usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`),
+  // UI-controls pass (2026-09-29): thousands separators and never "$NaN" ("$1,234.50", not "$1234.50").
+  money: (usd: number) => (!Number.isFinite(usd) ? "—" : usd > 0 && usd < 0.01 ? "<$0.01" : `$${usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`),
   amount: (unit: BudgetUnit, n: number) => (unit === "usd" ? STR_COST.money(n) : `${n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : Math.round(n)} tokens`),
   periodWord: (p: BudgetPeriod | "task") => (p === "day" ? "daily" : p === "month" ? "monthly" : "task"),
   whose: (h: { scope: BudgetScope }, name: string) => (h.scope === "account" ? "Your account" : name),

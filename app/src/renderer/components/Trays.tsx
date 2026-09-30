@@ -21,7 +21,9 @@ export function Trays({ botId }: { botId: string }) {
           <div className="tray-text"><span className="tray-title">{t.title}{t.count > 1 ? ` (${t.count})` : ""}</span>{t.detail && <span className="tray-detail">{t.detail}</span>}</div>
           {t.buttons.map((b) => <button key={b.label} type="button" className="btn-outline small" onClick={() => {
             // ORIG-GOOGLE: "Reconnect Google" opens the Connect Google sheet; the notification goes away.
-            if (b.action === "reconnect-google") useGoogle.getState().openSheet();
+            // google-setup: it goes straight to Google's sign-in; "Let a Bot click through" opens the Bot panel.
+            if (b.action === "reconnect-google") useGoogle.getState().openSheet({ reconnect: true });
+            if (b.action === "reconnect-google-bot") useGoogle.getState().openSheet({ mode: "bot" });
             // The button's own action has to reach the host, or "Resume routines" just hides the notice.
             const forward = b.action === "retry" || b.action === "resume-routines" ? { action: b.action } : {};
             void call("dismissTray", { trayId: t.id, ...forward });

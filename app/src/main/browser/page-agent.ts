@@ -27,6 +27,11 @@ export interface PageAgent {
   scrollInto(ref: string): boolean;
   /** The focused element's ref (press Enter is judged on it). */
   activeRef(): string | null;
+  /** The document's live address (the consent guard reads it at action time, not from the last outline). */
+  href(): string;
+  /** google-setup re-review 1: matches of the given patterns inside editable fields (input/textarea values,
+   *  contenteditable and textbox-role text), so the host never captures a value a Bot could have typed. */
+  editable(sources: string[]): string[];
   bar(o: { bot: string; mode: "active" | "paused" | "stopped" | "off"; text: BarText }): void;
   barRoot(): ShadowRoot | null;
   /** Tests only: jsdom can't make a trusted event. */
@@ -307,6 +312,18 @@ export function pageAgent(): void {
       if (!el) return "";
       const t = ((el as HTMLElement).innerText ?? el.textContent ?? "").replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n\n").trim();
       return t.slice(0, max);
+    },
+    href() { return location.href; },
+    editable(sources) {
+      const out = new Set<string>();
+      const res = sources.map((s) => new RegExp(s, "g"));
+      for (const el of document.querySelectorAll("input, textarea, [contenteditable], [role=textbox], [role=searchbox], [role=combobox]")) {
+        if (el.getAttribute("contenteditable") === "false") continue;
+        const tag = el.tagName.toLowerCase();
+        const v = tag === "input" || tag === "textarea" ? String((el as HTMLInputElement).value ?? "") : String(el.textContent ?? "");
+        for (const re of res) for (const m of v.matchAll(re)) out.add(m[0]);
+      }
+      return [...out];
     },
     activeRef() {
       const el = document.activeElement;

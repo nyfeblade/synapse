@@ -106,7 +106,8 @@ export class PluginMarketplaces implements PluginSource {
   async add(source: string): Promise<PluginMarketplaceView> {
     const url = normalizeSource(source, !!this.d.allowFileUrls);
     const tmp = path.join(this.d.dir, `.clone-${this.d.now()}-${Math.random().toString(36).slice(2, 8)}`);
-    await this.git(["clone", "--depth", "1", url, tmp]);
+    // Bug 368: never follow an HTTP redirect (a repo host can't bounce the clone to the Mac or the LAN).
+    await this.git(["-c", "http.followRedirects=false", "clone", "--depth", "1", url, tmp]);
     try { assertNoLinks(tmp); } catch (e) { fs.rmSync(tmp, { recursive: true, force: true }); throw e; }
     const manifest = readJson<{ name?: string } | null>(path.join(tmp, ".claude-plugin", "marketplace.json"), null);
     if (!manifest?.name) {

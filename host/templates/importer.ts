@@ -2,7 +2,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { APP_NAME, STR5, type AvatarShape, type CatalogCategory, type StarterView, type TemplatePreview } from "@synapse/shared";
+import { strToU8 } from "fflate";
+import { APP_NAME, AVATAR_COLORS, LIMITS, decodeShare, normalizeAvatarColor, normalizeAvatarShape, runsCode as runsCodeOf, scanShare, shareHash, STR5, type AvatarShape, type CatalogCategory, type SharePayload, type StarterView, type TemplatePreview } from "@synapse/shared";
 import type { BotService } from "../bots/bot-service";
 import type { HostConfig } from "../config";
 import { GatewayError } from "../gateway/errors";
@@ -11,6 +12,8 @@ import type { TemplateCatalogItem, TemplateSource } from "../phase5/types";
 import { slugify, withSourceMetadata } from "../util/text";
 import { log } from "../util/log";
 import { writeJsonAtomic } from "../util/atomic-json";
+import { recordThirdPartySkills } from "../skills/third-party";
+import { slugify as skillSlug } from "../skills/skill-file";
 import { writeSkillFileNoClobber, writeSkillHelperFileNoClobber } from "../skills/skill-box-ops";
 import { readBotpack, type BotpackContents } from "./botpack";
 import type { TemplatePackager } from "./packager";
@@ -22,13 +25,34 @@ export function loadStarters(file = path.join(path.dirname(fileURLToPath(import.
 }
 
 const PREVIEW_TTL_MS = 30 * 60_000;
+const MAX_PREVIEWS = 20;
 const TEAM = { name: `${APP_NAME} Team` };
+/** Bot sharing: a bad link's one calm line, by the codec's failure code. */
+const SHARE_CODES = { damaged: "SHARE_DAMAGED", "too-long": "SHARE_TOO_LONG", newer: "SHARE_NEWER" } as const;
+const FIELD_LABEL: Record<string, string> = { name: "Name", title: "Title", instructions: "Instructions" };
+
+/** A shared colour as a palette colour: its own when it is one, else the nearest by RGB distance. */
+export function paletteColor(hex: string): string {
+  const exact = normalizeAvatarColor(hex);
+  if (exact) return exact;
+  const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [r, g, b] = rgb(/^#[0-9a-f]{6}$/i.test(hex) ? hex : "#777777");
+  let best: string = AVATAR_COLORS[1], dist = Infinity;
+  for (const c of AVATAR_COLORS) {
+    const [cr, cg, cb] = rgb(c);
+    const d = (cr! - r!) ** 2 + (cg! - g!) ** 2 + (cb! - b!) ** 2;
+    if (d < dist) { dist = d; best = c; }
+  }
+  return best;
+}
+
+interface Preview { pack: BotpackContents; sourceTemplateId: string; at: number; thirdParty: boolean; share: boolean }
 
 export class TemplateImporter implements TemplateSource {
-  private previews = new Map<string, { pack: BotpackContents; sourceTemplateId: string; at: number }>();
+  private previews = new Map<string, Preview>();
 
   /** remember: MemoryStore.add for the new Bot (I10); redact: the secret scanner, applied to every imported fact first. */
-  constructor(private d: { cfg: HostConfig; bots: BotService; packager: TemplatePackager; starters: StarterTemplate[]; installedCatalogIds(): Set<string>; kickstart(botId: string): void; selfName(): string | null; now(): number;
+  constructor(private d: { cfg: HostConfig; bots: Pick<BotService, "create" | "require" | "ids" | "summary"> & Partial<Pick<BotService, "updateSettings">>; packager: TemplatePackager; starters: StarterTemplate[]; installedCatalogIds(): Set<string>; kickstart(botId: string): void; selfName(): string | null; now(): number;
     /** Bug 44(b): @returns whether the fact is now in the Bot's memory. A false is acted on, not warned about. */
     remember?(botId: string, fact: string): boolean;
     /** A notification in the new Bot's chat (TrayService): the last resort when a promised fact could not be saved at all. */
@@ -61,23 +85,80 @@ export class TemplateImporter implements TemplateSource {
       if (!t) throw new GatewayError("NOT_FOUND", "No such template.", 404);
       pack = { template: t, skills: {}, memoriesMd: t.manifest.memories.map((m) => `- ${m}`).join("\n"), avatar: null };
       sourceTemplateId = a.templateId;
+      thirdParty = t.thirdParty === true;
     } else {
       // I9: a file is third-party by ORIGIN (a claimed author name proves nothing), and nothing is saved on preview.
-      pack = readBotpack(new Uint8Array(Buffer.from(a.bytesBase64 ?? "", "base64")));
+      const bytes = new Uint8Array(Buffer.from(a.bytesBase64 ?? "", "base64"));
+      pack = readBotpack(bytes);
       sourceTemplateId = `tpl:${pack.template.id}`;
-      thirdParty = true;
+      // New-user walk, finding 10: the file this host exported (same bytes) is the user's own.
+      thirdParty = !(typeof this.d.packager.exportedHere === "function" && this.d.packager.exportedHere(bytes));
     }
+    return this.hold({ pack, sourceTemplateId, thirdParty, share: false });
+  }
+
+  /** Keeps a preview for Add Bot (nothing is saved until then) and describes it. */
+  private hold(p: Omit<Preview, "at">): TemplatePreview {
     const token = randomBytes(16).toString("hex");
     for (const [k, v] of this.previews) if (this.d.now() - v.at > PREVIEW_TTL_MS) this.previews.delete(k);
-    this.previews.set(token, { pack, sourceTemplateId, at: this.d.now() });
-    const m = pack.template.manifest;
+    this.previews.set(token, { ...p, at: this.d.now() });
+    // Security review: a flood of links can't grow this without bound; the oldest preview goes first.
+    while (this.previews.size > MAX_PREVIEWS) this.previews.delete(this.previews.keys().next().value!);
+    const m = p.pack.template.manifest;
     const installed = this.d.installedCatalogIds();
     return {
-      token, name: m.profile.name, description: m.profile.description, ...(pack.template.author ? { author: pack.template.author } : {}),
+      token, name: m.profile.name, description: m.profile.description, ...(p.pack.template.author ? { author: p.pack.template.author } : {}),
       facts: m.memories, playbooks: m.skills.map((s) => s.name), jobs: m.routines.map((r) => r.name),
-      apps: m.plugins.map((p) => ({ name: p.name, needsConnecting: !installed.has(p.catalogId) })), thirdParty,
-      playbooksShared: m.skills.length > 0,
+      apps: m.plugins.map((x) => ({ name: x.name, needsConnecting: !installed.has(x.catalogId) })), thirdParty: p.thirdParty,
+      // A third-party Bot's playbooks stay with it (added to every other Bot's disabled list), so nothing to disclose.
+      playbooksShared: m.skills.length > 0 && !p.thirdParty,
     };
+  }
+
+  /**
+   * Bot sharing: a share link's fragment → a preview, decoded, validated, stripped of hidden characters and scanned
+   * HERE (the renderer only passes the text along). Always third-party. No memories, routines or avatar exist in a
+   * link, so none are made. Saves nothing: Add Bot is importTemplate(token), the one import path.
+   */
+  async previewShare(fragment: unknown): Promise<TemplatePreview> {
+    const d = await decodeShare(typeof fragment === "string" ? fragment : "");
+    if (!d.ok) throw new GatewayError(SHARE_CODES[d.code], d.message, 400);
+    const scan = scanShare(d.payload);
+    const x: SharePayload = scan.payload;
+    const sourceTemplateId = `share:${await shareHash(x)}`;
+    const shape = normalizeAvatarShape(x.shape) ?? "pebble", color = paletteColor(x.color);
+    const pack: BotpackContents = {
+      template: {
+        id: randomUUID(), name: x.name, sourceBotId: null, visibility: "local", createdAt: this.d.now(), updatedAt: this.d.now(),
+        manifest: {
+          profile: { name: x.name, title: x.title, description: x.instructions, avatarShape: shape, avatarColor: color, ...(x.model ? { model: x.model as never } : {}) },
+          skills: x.skills.map((k) => ({ id: k.id, name: k.name, description: k.description })), memories: [], routines: [], plugins: x.tools,
+        },
+      },
+      skills: Object.fromEntries(x.skills.map((k) => [k.id, Object.fromEntries(Object.entries(k.files).map(([f, b]) => [f, strToU8(b)]))])),
+      memoriesMd: "", avatar: null,
+    };
+    const skillName = new Map(x.skills.map((k) => [k.id, k.name]));
+    const flags = scan.flags.map((f) => FIELD_LABEL[f.field] ?? (f.field.startsWith("skill:") ? `Skill: ${skillName.get(f.field.slice(6)) ?? f.field.slice(6)}` : `Tool: ${f.field.slice(5)}`));
+    if (d.hiddenRemoved || scan.hiddenRemoved) flags.push("Hidden characters removed");
+    return {
+      ...this.hold({ pack, sourceTemplateId, thirdParty: true, share: true }),
+      share: true, instructions: x.instructions, skills: x.skills.map((k) => ({ name: k.name, runsCode: runsCodeOf(k.files) })), flags,
+      alreadyAdded: this.usedSources().has(sourceTemplateId), face: { shape, color },
+    };
+  }
+
+  private usedSources(): Set<string> {
+    return new Set(this.d.bots.ids().map((id) => this.d.bots.require(id).store.getKv<string | null>("sourceTemplateId", null)).filter((x): x is string => !!x));
+  }
+
+  /** New-user walk, finding 11: "Scout" next to a Scout becomes "Scout 2" (then 3, …). */
+  private freeName(name: string): string {
+    const taken = new Set(this.d.bots.ids().map((id) => { try { return this.d.bots.summary(id).profile.name.trim().toLowerCase(); } catch { return ""; } }));
+    if (!taken.has(name.trim().toLowerCase())) return name;
+    let n = 2;
+    while (taken.has(`${name} ${n}`.toLowerCase())) n++;
+    return `${name} ${n}`;
   }
 
   import(token: string): { id: string } {
@@ -85,8 +166,16 @@ export class TemplateImporter implements TemplateSource {
     if (!p || this.d.now() - p.at > PREVIEW_TTL_MS) throw new GatewayError("PREVIEW_EXPIRED", "This preview expired. Open the template again.", 410);
     this.previews.delete(token);
     const m = p.pack.template.manifest;
-    const id = this.d.bots.create({ name: m.profile.name, title: m.profile.title, description: m.profile.description, avatarShape: m.profile.avatarShape as AvatarShape, avatarColor: m.profile.avatarColor, model: m.profile.model as never, origin: "user", kickstart: true });
+    const third = p.thirdParty;
+    // Bot sharing (safety): a third-party Bot (a share link, the website, someone else's .botpack) does not speak first
+    // (a kickstart counts as the user's own turn); the user sends the first message.
+    const id = this.d.bots.create({ name: this.freeName(m.profile.name), title: m.profile.title, description: m.profile.description, avatarShape: m.profile.avatarShape as AvatarShape, avatarColor: m.profile.avatarColor, model: m.profile.model as never, origin: "user", kickstart: !third });
     this.d.bots.require(id).store.setKv("sourceTemplateId", p.sourceTemplateId);
+    if (third) {
+      // …and starts in Ask, whatever mode new Bots would otherwise get; no always-allow rule comes with it.
+      this.d.bots.updateSettings?.(id, { permMode: "ask", noLimits: undefined });
+      this.d.bots.require(id).store.setKv("importedFrom", p.share ? "share" : "file");
+    }
     const botDir = path.join(this.d.cfg.dataRoot, "agents", id);
     // I10: facts go through the memory store, after the secret scanner's redaction.
     //
@@ -126,12 +215,16 @@ export class TemplateImporter implements TemplateSource {
     const listed = new Set(m.skills.map((s) => s.id));
     const skillsRoot = path.join(this.d.cfg.claudeConfigDir, "skills");
     const boxRouted = this.d.cfg.brain === "claude";
+    const written: string[] = [];
     for (const [skillId, files] of Object.entries(p.pack.skills)) {
       if (!listed.has(skillId)) continue;
-      const base = `${prefix}--${slugify(skillId)}`;
+      // A valid skill id (one dash, within the id limit, room left for "-2"): the old "name--skill" folder was an id
+      // the skill library refused, so it never listed it and a Bot's opt-out could never block it (security review).
+      const base = skillSlug(`${prefix}-${skillId}`).slice(0, LIMITS.skillIdMax - 4).replace(/-+$/, "");
       let dest = path.join(skillsRoot, base);
       for (let n = 2; fs.existsSync(dest); n++) dest = path.join(skillsRoot, `${base}-${n}`);
       const destId = path.basename(dest);
+      written.push(destId);
       if (!boxRouted) fs.mkdirSync(dest, { recursive: true });
       for (const [rel, bytes] of Object.entries(files)) {
         const text = Buffer.from(bytes).toString("utf8");
@@ -145,12 +238,20 @@ export class TemplateImporter implements TemplateSource {
         }
       }
     }
+    // Bot sharing (safety): the skills folder is shared by every Bot, so a third-party Bot's skills are recorded as
+    // its own (host-private), and every other Bot — including ones made later — has them off (SkillLibrary.disabledFor).
+    if (third) {
+      recordThirdPartySkills(this.d.cfg, written, id);
+      // What came with it is what its share sheet ticks by default.
+      this.d.bots.require(id).store.setKv("importedTools", m.plugins.map((x) => x.catalogId));
+    }
     // I9: a file import is saved as a local template only once the user adds it.
     if (p.sourceTemplateId.startsWith("tpl:") && !this.d.packager.list().some((t) => `tpl:${t.id}` === p.sourceTemplateId)) {
       const dest = path.join(this.d.packager.templatesDir, p.pack.template.id, "template.json");
-      if (!fs.existsSync(dest)) writeJsonAtomic(dest, p.pack.template, 0o640);
+      // Security review: the saved template remembers it is third-party, so adding it again keeps Ask and no kickstart.
+      if (!fs.existsSync(dest)) writeJsonAtomic(dest, { ...p.pack.template, ...(third ? { thirdParty: true } : {}) }, 0o640);
     }
-    this.d.kickstart(id);
+    if (!third) this.d.kickstart(id);
     return { id };
   }
 }
@@ -158,6 +259,7 @@ export class TemplateImporter implements TemplateSource {
 export function importHandlers(importer: TemplateImporter): Partial<CommandHandlers> {
   return {
     previewTemplateImport: (a) => importer.preview(a),
+    previewShareImport: (a) => importer.previewShare(a.payload),
     importTemplate: (a) => importer.import(a.token),
     listStarterTemplates: () => ({ starters: importer.starterViews() }),
   };

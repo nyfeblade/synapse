@@ -111,8 +111,9 @@ export const STR_AUTH = {
   firstRunTitle: "Add your Anthropic API key",
   firstRunContinue: "Continue",
   // Test connection and turn errors.
-  ok: "Reached Anthropic ✓ — key works",
-  keyRejected: "Reached Anthropic ✓ — key rejected",
+  // New-user walk, finding 9: no check mark beside a failure.
+  ok: "Key works",
+  keyRejected: "Key rejected",
   keyRejectedDetail: "Anthropic didn't accept this API key. Check it was copied whole, or create a new one in the Console.",
   billing: "No API credits",
   billingDetail: "Your Anthropic account has no credits or billing isn't set up. Add credits in the Anthropic Console → Billing.",
@@ -132,6 +133,15 @@ export const STR_AUTH = {
   noKeyTitle: "No API key",
   noKeyDetail: "Bots need an Anthropic API key. Add one in Settings → Account.",
   macKeyTitle: "Save the API key on this Mac",
+  // New-user walk, finding 2: a changed box identity is trusted where it's reported (the key panel), not in a missing section.
+  pinMismatch: "The Bots' computer has changed since this Mac paired with it. Trust it in Settings → Account if you reset or set it up again.",
+  pinChanged: "The Bots' computer has changed since this Mac paired with it.",
+  trustComputer: "Trust this computer",
+  // A native alert: a short message, the reason and the evidence in the detail (UI-controls pass, 2026-09-29).
+  trustConfirmTitle: "The Bots' computer's identity changed",
+  trustConfirmDetail: (oldFp: string, newFp: string) => `Only trust it if you reset or reinstalled it yourself.\n\nPaired with: ${oldFp}\nNow: ${newFp}`,
+  trustConfirmCancel: "Cancel",
+  trusted: "Trusted. Save the key again to send it.",
   keyNotSaved: "The key wasn't saved. Try again.",
   macKeyNotSaved: "Saved on the Bots' computer, but not on this Mac:",
   save: "Save",

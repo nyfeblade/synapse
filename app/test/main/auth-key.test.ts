@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { createApiKeySender } from "../../src/main/auth-key";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { STR_AUTH } from "@synapse/shared";
+import { boxKeyFingerprint, createApiKeySender, registerAuthIpc } from "../../src/main/auth-key";
+import { BoxPin } from "../../src/main/box-pin";
 
 const KEY = "sk-ant-api03-" + "M".repeat(80) + "9x9x";
 const view = { mode: "api-key", apiKey: null, subscriptionConfigured: true, boxPublicKey: "PK" };
@@ -13,10 +18,10 @@ function fake(pin: "pinned" | "match" | "mismatch" = "match", o: { hostRefuses?:
     if (cmd === "getAuth") return view;
     if (cmd === "setApiKey") { if (o.hostRefuses) throw new Error("That doesn't look like an Anthropic API key"); return { ...view, apiKey: { masked: "sk-ant-…9x9x", savedAt: 1 } }; }
     if (cmd === "clearApiKey") return view;
-    return { ok: false, reached: true, kind: "invalid-key", status: 401, title: "Reached Anthropic ✓ — key rejected", detail: "" };
+    return { ok: false, reached: true, kind: "invalid-key", status: 401, title: "Key rejected", detail: "" };
   }) as never;
   const sender = createApiKeySender({
-    call, pin: { check: () => pin }, seal: async (pk, v) => `sealed(${pk}):${v.length}`, log: (s) => logs.push(s),
+    call, pin: { check: () => pin, pinned: () => "PK", repin: () => {} }, seal: async (pk, v) => `sealed(${pk}):${v.length}`, log: (s) => logs.push(s),
     mac: {
       save: async (k) => { if (o.macThrows) return { ok: false, error: "This Mac's permission key can't be trusted." }; mac.push(`save:${k}`); return { ok: true }; },
       clear: async () => { mac.push("clear"); }, has: async () => mac.at(-1)?.startsWith("save:") ?? false,
@@ -38,16 +43,17 @@ describe("the API key leaves the Mac's main process sealed to the box, never in 
   it("test: a not-yet-saved key is tested sealed too", async () => {
     const { sent, sender } = fake();
     const r = await sender.test(KEY);
-    expect(r.title).toBe("Reached Anthropic ✓ — key rejected");
+    expect(r.title).toBe("Key rejected");
     expect(sent[1]).toEqual(["testAuthConnection", { sealed: `sealed(PK):${KEY.length}` }]);
   });
 
   it("a changed box identity stops the key from being sent", async () => {
     const { sent, sender, mac } = fake("mismatch");
-    await expect(sender.save(KEY)).rejects.toThrow(/identity changed/);
+    await expect(sender.save(KEY)).rejects.toThrow(/has changed since/);
     expect(sent.map((s) => s[0])).toEqual(["getAuth"]);
     expect(mac).toEqual([]);
   });
+
 });
 
 describe("dual-auth: the same key serves (through the Mac key proxy) the Bots' claude on this Mac", () => {
@@ -92,7 +98,7 @@ describe("key operations run one at a time", () => {
       log.push(`${cmd}:end`);
       return cmd === "getAuth" ? view : { ...view, apiKey: cmd === "setApiKey" ? { masked: "m", savedAt: 1 } : null };
     }) as never;
-    const s = createApiKeySender({ call, pin: { check: () => "match" }, seal: async () => "sealed" });
+    const s = createApiKeySender({ call, pin: { check: () => "match", pinned: () => "PK", repin: () => {} }, seal: async () => "sealed" });
     const saving = s.save(KEY);
     await new Promise((r) => setTimeout(r, 10));
     const removing = s.remove();
@@ -105,7 +111,7 @@ describe("key operations run one at a time", () => {
 
   it("a failed operation doesn't block the next one", async () => {
     const call = (async (cmd: string) => { if (cmd === "setApiKey") throw new Error("refused"); return view; }) as never;
-    const s = createApiKeySender({ call, pin: { check: () => "match" }, seal: async () => "sealed" });
+    const s = createApiKeySender({ call, pin: { check: () => "match", pinned: () => "PK", repin: () => {} }, seal: async () => "sealed" });
     await expect(s.save(KEY)).rejects.toThrow("refused");
     await expect(s.remove()).resolves.toBeTruthy();
   });
@@ -124,5 +130,62 @@ describe("the key sender's gateway calls have no client time limit", () => {
     const block = src.slice(at, src.indexOf("});", at));
     expect(block).not.toMatch(/timeoutMs/);
     expect(src).not.toMatch(/AUTH_CALL_TIMEOUT_MS/);
+  });
+});
+
+describe("review of new-user walk finding 2: Trust this computer is confirmed in main, never by the renderer alone", () => {
+  const dirs: string[] = [];
+  afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+  const OLD = Buffer.alloc(32, 1).toString("base64");
+  const NEW = Buffer.alloc(32, 2).toString("base64");
+  function rig(o: { confirm?: boolean; getAuthFails?: boolean } = {}) {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "trust-")); dirs.push(d);
+    const pin = new BoxPin(path.join(d, "box-pin.json"));
+    pin.check(OLD);
+    const sent: string[] = [];
+    const asked: [string, string][] = [];
+    const sender = createApiKeySender({
+      call: (async (cmd: string) => { sent.push(cmd); if (cmd === "getAuth" && o.getAuthFails) throw new Error("box down"); return { ...view, boxPublicKey: NEW }; }) as never,
+      pin, seal: async () => "sealed",
+      confirmTrust: async (oldFp, newFp) => { asked.push([oldFp, newFp]); return o.confirm ?? false; },
+    });
+    return { pin, sent, asked, sender };
+  }
+
+  it("the mismatch line names no missing section", () => {
+    expect(STR_AUTH.pinMismatch).not.toMatch(/Updates/);
+  });
+
+  it("Cancel keeps the old pin; the dialog showed both short fingerprints", async () => {
+    const { pin, asked, sender } = rig({ confirm: false });
+    expect(await sender.trust()).toEqual({ trusted: false });
+    expect(pin.check(OLD)).toBe("match");
+    expect(asked).toHaveLength(1);
+    expect(asked[0]![0]).toBe(boxKeyFingerprint(OLD));
+    expect(asked[0]![1]).toBe(boxKeyFingerprint(NEW));
+    expect(boxKeyFingerprint(NEW)).toMatch(/^[0-9a-f]{4}( [0-9a-f]{4}){7}$/);
+  });
+
+  it("confirmed: the new key is pinned, and no API key is sent until the user saves again", async () => {
+    const { pin, sent, sender } = rig({ confirm: true });
+    expect(await sender.trust()).toEqual({ trusted: true });
+    expect(pin.check(NEW)).toBe("match");
+    expect(sent).toEqual(["getAuth"]);
+  });
+
+  it("a failed fetch of the box key leaves the old pin and asks nothing", async () => {
+    const { pin, asked, sender } = rig({ confirm: true, getAuthFails: true });
+    await expect(sender.trust()).rejects.toThrow(/box down/);
+    expect(pin.check(OLD)).toBe("match");
+    expect(asked).toEqual([]);
+  });
+
+  it("the renderer's IPC call can't skip the confirmation, whatever it passes", async () => {
+    const { pin, asked, sender } = rig({ confirm: false });
+    const handlers = new Map<string, (e: unknown, ...a: unknown[]) => unknown>();
+    registerAuthIpc({ removeHandler: () => {}, handle: (ch, fn) => handlers.set(ch, fn) }, () => sender, () => null);
+    expect(await handlers.get("auth:trust-computer")!({}, { confirmed: true })).toEqual({ trusted: false });
+    expect(asked).toHaveLength(1);
+    expect(pin.check(OLD)).toBe("match");
   });
 });

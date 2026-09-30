@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MCP_HEADER_REDACTED, STR5, type McpServerView } from "@synapse/shared";
+import { MCP_HEADER_REDACTED, STR5, STRX, type McpServerView } from "@synapse/shared";
+import { useComposio } from "../../src/renderer/composio/store";
 import { ManagePlugins } from "../../src/renderer/marketplace/ManagePlugins";
 
 /**
@@ -47,12 +48,12 @@ describe("adding a header-authenticated remote server", () => {
   it("sends the header name and value with the url, in one step", async () => {
     render(<ManagePlugins />);
     fireEvent.click(await screen.findByRole("button", { name: STR5.addCustomServer }));
-    fireEvent.change(screen.getByLabelText(STR5.serverName), { target: { value: "Composio" } });
-    fireEvent.change(screen.getByLabelText(STR5.serverUrl), { target: { value: "https://connect.composio.dev/mcp" } });
-    fireEvent.change(screen.getByLabelText(STR5.headerName), { target: { value: "x-consumer-api-key" } });
-    fireEvent.change(screen.getByLabelText(STR5.headerValue), { target: { value: "ck-secret-1" } });
+    fireEvent.change(screen.getByLabelText(STR5.serverName), { target: { value: "Acme" } });
+    fireEvent.change(screen.getByLabelText(STR5.serverUrl), { target: { value: "https://mcp.acme.example/mcp" } });
+    fireEvent.change(screen.getByLabelText(STR5.headerName), { target: { value: "x-api-key" } });
+    fireEvent.change(screen.getByLabelText(STR5.headerValue), { target: { value: "ak-secret-1" } });
     fireEvent.click(screen.getByRole("button", { name: STR5.add }));
-    await vi.waitFor(() => expect(calls).toContainEqual(["addMcpServer", { name: "Composio", url: "https://connect.composio.dev/mcp", headers: { "x-consumer-api-key": "ck-secret-1" } }]));
+    await vi.waitFor(() => expect(calls).toContainEqual(["addMcpServer", { name: "Acme", url: "https://mcp.acme.example/mcp", headers: { "x-api-key": "ak-secret-1" } }]));
   });
 
   it("omits headers entirely when the user did not set one", async () => {
@@ -80,29 +81,19 @@ describe("adding a header-authenticated remote server", () => {
     expect((screen.getByRole("button", { name: STR5.add }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("naming the server Composio fills the Connect URL and the consumer-key header", async () => {
+  it("bug 403: naming a server Composio (or a composio.dev URL) points to its own setup and can't be added here", async () => {
     render(<ManagePlugins />);
     fireEvent.click(await screen.findByRole("button", { name: STR5.addCustomServer }));
     fireEvent.change(screen.getByLabelText(STR5.serverName), { target: { value: "Composio" } });
-    expect((screen.getByLabelText(STR5.serverUrl) as HTMLInputElement).value).toBe("https://connect.composio.dev/mcp");
-    expect((screen.getByLabelText(STR5.headerName) as HTMLInputElement).value).toBe("x-consumer-api-key");
-    expect(addForm().getByText(STR5.composioHeaderHint)).toBeTruthy();
-  });
-
-  it("a composio.dev URL fills the header name when it is still empty", async () => {
-    render(<ManagePlugins />);
-    fireEvent.click(await screen.findByRole("button", { name: STR5.addCustomServer }));
+    expect((screen.getByLabelText(STR5.serverUrl) as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText(STR5.headerName) as HTMLInputElement).value).toBe("");
+    expect(addForm().getByText(STRX.presetRetired)).toBeTruthy();
+    expect((screen.getByRole("button", { name: STR5.add }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText(STR5.serverName), { target: { value: "Work" } });
     fireEvent.change(screen.getByLabelText(STR5.serverUrl), { target: { value: "https://connect.composio.dev/mcp" } });
-    expect((screen.getByLabelText(STR5.headerName) as HTMLInputElement).value).toBe("x-consumer-api-key");
-  });
-
-  it("does not overwrite a header name the user already typed", async () => {
-    render(<ManagePlugins />);
-    fireEvent.click(await screen.findByRole("button", { name: STR5.addCustomServer }));
-    fireEvent.change(screen.getByLabelText(STR5.headerName), { target: { value: "Authorization" } });
-    fireEvent.change(screen.getByLabelText(STR5.serverName), { target: { value: "Composio" } });
-    expect((screen.getByLabelText(STR5.headerName) as HTMLInputElement).value).toBe("Authorization");
+    expect((screen.getByRole("button", { name: STR5.add }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(addForm().getByRole("button", { name: STRX.setUpComposio }));
+    expect(useComposio.getState().open).toBe(true);
   });
 
   it("a non-Composio server is left blank", async () => {

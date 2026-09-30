@@ -47,8 +47,8 @@ export function ActivityGroup({ item }: { item: Extract<TranscriptItem, { kind: 
       <button type="button" className="activity-rows" aria-expanded={open} aria-label={open ? "Hide steps" : "Show steps"} onClick={() => setOpen(!open)}>
         {/* Where the run stands, as one 14px mark: still going, or finished. The look study puts it
             at the head of the summary line, and it is the only colour the card carries. */}
-        <span ref={item.running ? loopInView : undefined} className={`activity-mark ${item.running ? "running" : "done"}`} aria-hidden="true">
-          {!item.running && <CheckIcon size={9} />}
+        <span ref={item.running ? loopInView : undefined} className={`activity-mark ${item.running ? "running" : item.waiting ? "waiting" : item.stopped ? "stopped" : "done"}`} aria-hidden="true">
+          {!item.running && !item.waiting && !item.stopped && <CheckIcon size={9} />}
         </span>
         <span className="activity-lines">
           {item.rows.map((r, i) => (

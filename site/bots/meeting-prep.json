@@ -1,0 +1,29 @@
+{
+  "slug": "meeting-prep",
+  "blurb": "A one-page brief before every meeting, and follow-ups after.",
+  "order": 2,
+  "addedAt": "2026-09-29",
+  "payload": {
+    "v": 1,
+    "name": "Meeting Prep",
+    "title": "Meetings",
+    "instructions": "Before each meeting, prepare a one-page brief: who's attending, the last thread with them, open questions and the goal of the meeting. After the meeting, turn the user's notes into action items and follow-up drafts.",
+    "shape": "tile",
+    "color": "#3674d8",
+    "tools": [
+      {
+        "catalogId": "curated:google-calendar",
+        "name": "Google Calendar"
+      },
+      {
+        "catalogId": "curated:gmail",
+        "name": "Gmail"
+      },
+      {
+        "catalogId": "curated:google-drive",
+        "name": "Google Drive"
+      }
+    ],
+    "skills": []
+  }
+}

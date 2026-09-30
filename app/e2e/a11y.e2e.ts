@@ -155,10 +155,10 @@ test("a11y: no new accessibility violations on any reachable surface", async () 
   const { app, win } = await launch(`e2e-a11y-${Date.now()}`, { onboard: false });
   try {
     // Onboarding (ONB-01…05), scanned step by step: it is the only surface every first-run user must pass.
-    await expect(win.getByRole("button", { name: "Input API Key →" })).toBeVisible({ timeout: 30_000 });
+    await expect(win.getByRole("button", { name: "Add API key" })).toBeVisible({ timeout: 30_000 });
     await freezeAnimations(win);
     await scan(win, "onboarding/sign-in");
-    await win.getByRole("button", { name: "Input API Key →" }).click();
+    await win.getByRole("button", { name: "Add API key" }).click();
     // synapse-public: the Anthropic API key is the only sign-in (a stand-in key; the fake brain never calls out).
     await win.getByLabel("Anthropic API key").fill(E2E_TEST_API_KEY);
     await scan(win, "onboarding/api-key");

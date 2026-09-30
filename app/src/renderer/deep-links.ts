@@ -1,6 +1,7 @@
-import { APP_SCHEME, APP_SCHEMES } from "@synapse/shared";
+import { APP_SCHEME, APP_SCHEMES, STRSH } from "@synapse/shared";
 import { sectionOf } from "./components/settings/sections";
 import { useUi } from "./store";
+import { useTemplates } from "./templates/store";
 
 export { APP_SCHEME };
 /** synapse:// or, for one release, the old bots:// (bug 286). */
@@ -18,9 +19,25 @@ export function parseSettingLink(url: string): { kind: "settings"; section: stri
 /** The row the next render should flash (SET-18: "highlights it for 2 s"). */
 export let pendingFocus: { scope: string; row: string } | null = null;
 
+/**
+ * Bot sharing: synapse://import#b1.… → the fragment. Only the new scheme: an import is a new route, and the old
+ * bots:// alias (bug 286) never carried one.
+ */
+export function parseImportLink(url: string): string | null {
+  const m = new RegExp(`^${APP_SCHEME}://import/?#(b\\d{1,6}\\.[\\s\\S]+)$`).exec(String(url ?? "").trim());
+  return m ? m[1]! : null;
+}
+
 export function openDeepLink(url: string): boolean {
+  // A share link, from a browser or a Bot's own reply: it opens the confirm sheet, never adds anything by itself.
+  const share = parseImportLink(url);
+  if (share) { void useTemplates.getState().importShare(share); return true; }
   const p = parseSettingLink(url);
-  if (!p) return false;
+  if (!p) {
+    // A route this version doesn't know (a newer app's link) says so, instead of doing nothing.
+    if (new RegExp(`^(?:${SCHEMES})://`, "i").test(String(url ?? "").trim())) { useTemplates.getState().shareError(STRSH.linkNeedsNewer, true); return true; }
+    return false;
+  }
   const ui = useUi.getState();
   if (p.kind === "settings") {
     // The URL names the sub-focus (e.g. "usage"), which may now be a block folded into a different

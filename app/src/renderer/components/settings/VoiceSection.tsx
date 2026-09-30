@@ -147,7 +147,7 @@ export function VoiceSection() {
           {select("input", STR5.microphone)}
         </div>
         <div className="settings-row">
-          <span style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: 2 }}><span id="audio-level-label">{STR5.inputLevel}</span><span className="muted">{meterError ?? STR5.inputLevelHelp}</span></span>
+          <span style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: 2 }}><span id="audio-level-label">{STR5.inputLevel}</span>{meterError ? <span className="muted">{meterError}</span> : null}</span>
           <div className="level-meter" role="meter" aria-labelledby="audio-level-label" aria-valuemin={0} aria-valuemax={100} aria-valuenow={level}>
             <span className="level-meter-fill" style={{ width: `${level}%` }} />
           </div>

@@ -3,12 +3,12 @@ import { LIMITSC, STRC, SUBAGENT_TYPES, computerTitle, type GatewayCommands, typ
 
 describe("Phase 3 contracts", () => {
   it("uses the product name in computer titles (D13) and keeps the spec's copy otherwise", () => {
-    expect(computerTitle()).toBe("Bots' Computer");
-    expect(STRC.inUse).toBe("Bots' Computer, in use");
+    expect(computerTitle()).toBe("Bots' computer");
+    expect(STRC.inUse).toBe("Bots' computer, in use");
     expect(STRC.boxHelpBadge).toBe("Action needed");
     expect(STRC.pausedUntilHandBack("Scout")).toBe("Scout is paused until you hand it back");
-    expect(STRC.updateTitle).toBe("Update Bots' Computer");
-    expect(STRC.updateHelp).toBe("Brings the shared computer up to date for all your assistants at once. Files and sign-ins are kept; apps and packages you installed are removed.");
+    expect(STRC.updateTitle).toBe("Update Bots' computer");
+    expect(STRC.updateHelp).toBe("Brings the shared computer up to date for all your Bots at once. Files and sign-ins are kept; apps and packages you installed are removed.");
     expect(STRC.resetHelp).toBe("If the computer gets stuck, start it fresh. It's restored from your most recent snapshot, so the newest changes might not survive.");
     expect(STRC.secretFooter).toBe("Kept encrypted; your Bot never sees it");
     expect(STRC.secretPlaceholder("API key")).toBe("Paste your API key");

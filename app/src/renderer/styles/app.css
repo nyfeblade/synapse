@@ -57,7 +57,7 @@ a { color: var(--ink); }
    --danger, so --ink-on-accent on --danger stays exactly 4.93:1. */
 .sidebar-error { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: var(--radius-control); background: var(--fill-inset); color: var(--danger-ink); font-size: var(--type-small); }
 .sidebar-error span:first-child { flex-grow: 1; }
-.main { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); position: relative; }
+.main { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); position: relative; --read-width: 760px; }
 
 .connection { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--ink-muted); }
 .connection .title { font-size: 15px; color: var(--ink); font-weight: 500; }
@@ -212,6 +212,9 @@ a { color: var(--ink); }
 .avatar-live { display: flex; justify-content: center; padding: 8px 0 4px; }
 .menu { position: fixed; z-index: 20; min-width: 180px; padding: 4px; border-radius: var(--radius-card); background: var(--surface-raised); border: var(--hairline) solid var(--line-modal); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; }
 .menu-item { height: 30px; padding: 0 10px; border: none; border-radius: var(--radius-control); background: transparent; color: var(--ink); font-size: var(--type-ui); text-align: left; }
+/* New-user walk, finding 13: a picker menu marks its chosen item with a check at the far edge. */
+.menu-item[role="menuitemradio"], .menu-item[aria-haspopup] { display: flex; align-items: center; gap: 12px; }
+.menu-item .menu-check { margin-left: auto; color: var(--ink-2); }
 .menu-item.danger { color: var(--danger-ink); }
 /* A hairline divider between two groups of menu items (the account menu, Marketplace ahead of
    Settings). Not a control: no hover/active/focus rule, never clickable, skipped by the menu's own
@@ -249,7 +252,9 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 .pick.selected kbd { background: var(--bg); }
 
 /* ---- Composer (shared) ---- */
-.composer-wrap { padding: 6px var(--chat-inset) 16px; }
+/* New-user walk, finding 23: the transcript and the composer keep a reading width (--read-width), centred; on a
+   large window they no longer stretch ~1500px. */
+.composer-wrap { padding: 6px max(var(--chat-inset), calc((100% - var(--read-width)) / 2)) 16px; }
 /* The composer: one rounded sheet, the field on top and its controls in a row under it — the model
    and mode pills on the left, Send (in the live accent) on the right. The one soft shadow in the
    conversation, because it floats over the end of it. */
@@ -278,6 +283,7 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 .live-chip { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 1; min-width: 0; max-width: 260px; height: 20px; padding: 0; border-radius: 0; border: none; background: none; color: var(--ink-faint); font-size: var(--type-small); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .live-chip::before { content: ""; width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--accent); }
 .live-chip.on-call::before { background: var(--dot-ok); }
+.live-chip.waiting::before { background: var(--dot-blocked); }
 .live-chip.working::before { animation: pulse var(--loop-mid) ease-in-out infinite; }
 /* ---- The header's Call. It is a LABELLED control, not a glyph: a 28px bar with the word on it,
    the way Mail labels its one header action, with the headset as the glyph beside the word. It keeps
@@ -294,7 +300,7 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
    "Wor…" while a 1,400px name still runs off the window. */
 .title-btn > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @keyframes shimmer { 50% { opacity: 0.45; } }
-.transcript { flex-grow: 1; min-height: 0; overflow-y: auto; padding-block: 24px 16px; padding-inline: var(--chat-inset); display: flex; flex-direction: column; gap: 8px; }
+.transcript { flex-grow: 1; min-height: 0; overflow-y: auto; padding-block: 24px 16px; padding-inline: max(var(--chat-inset), calc((100% - var(--read-width)) / 2)); display: flex; flex-direction: column; gap: 8px; }
 /* 8 (the gap) + 12 = the 20px that separates one turn from the next. `:first-child` keeps its
    `margin-top: auto` below, so the first turn is still pinned to the bottom of a short history. */
 .transcript > .doc-head, .transcript > .msg.user, .transcript > .separator { margin-top: 12px; }
@@ -343,6 +349,12 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 /* Done, or still going. A 14px mark, flat, in the one place a success colour is real state. */
 .activity-mark { width: 14px; height: 14px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; }
 .activity-mark.done { background: color-mix(in srgb, var(--dot-ok) 18%, transparent); color: var(--dot-ok); }
+/* New-user walk, finding 3: a run the user stopped — a small neutral square, no colour. */
+.activity-mark.stopped { background: var(--fill-inset); }
+.activity-mark.stopped::before { content: ""; width: 6px; height: 6px; border-radius: 1px; background: var(--ink-muted); }
+/* New-user walk, finding 6: held on an approval card — a still pause mark (two bars), not a spinner. */
+.activity-mark.waiting { background: var(--fill-inset); gap: 2px; grid-auto-flow: column; }
+.activity-mark.waiting::before, .activity-mark.waiting::after { content: ""; width: 2px; height: 6px; border-radius: 1px; background: var(--ink-muted); }
 .activity-mark.running { border: 1.5px solid var(--ink-faint); border-top-color: transparent; animation: spin var(--loop-mid) linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .activity-chev { flex-shrink: 0; color: var(--ink-icon); transition: transform var(--motion-chevron) var(--ease-out); }
@@ -463,6 +475,11 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 .card-note { font-size: var(--type-ui); color: var(--ink-2); }
 .card-link { align-self: flex-start; border: none; background: transparent; padding: 0; font-size: var(--type-ui); font-weight: 500; color: var(--ink); }
 .card-foot { font-size: var(--type-small); color: var(--ink-muted); }
+/* New-user walk, finding 20: a settled approval is one quiet row under its step, not a second card. */
+.approval-settled { align-self: stretch; max-width: var(--bot-col); margin-left: var(--bot-indent); box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 0 2px; font-size: var(--type-small); color: var(--ink-muted); }
+.approval-settled-what { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.approval-settled-note { flex-basis: 100%; }
+.card-command { font-size: var(--type-small); color: var(--ink-2); overflow-wrap: anywhere; white-space: pre-wrap; }
 .inline-link { border: none; background: transparent; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
 .inline-link.muted { align-self: flex-start; color: var(--ink-muted); text-decoration: none; }
 .pill { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 999px; border: var(--hairline) solid var(--line-button); background: var(--bg); color: var(--ink); font-size: var(--type-small); flex-shrink: 0; }
@@ -571,11 +588,13 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 .avatar-btn { align-self: center; border: none; background: transparent; padding: 0; display: flex; }
 .field { display: flex; flex-direction: column; gap: 4px; position: relative; }
 .field label, .field > span { font-size: var(--type-small); color: var(--ink-muted); }
-.field input, .field textarea { width: 100%; box-sizing: border-box; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-window); background: var(--bg); font-family: inherit; font-size: var(--type-ui); color: var(--ink); outline: none; }
-.field input { height: var(--control-h); padding: 0 8px; }
+.field input, .field textarea { width: 100%; box-sizing: border-box; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-field); background: var(--bg); font-family: inherit; font-size: var(--type-ui); color: var(--ink); outline: none; }
+.field input { height: var(--control-h); padding: 0 10px; text-overflow: ellipsis; }
 .field textarea { padding: 8px 10px; resize: none; line-height: 1.45; }
-.select { width: 100%; height: var(--control-h); padding: 0 8px; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-window); background: var(--bg); color: var(--ink); font-size: var(--type-ui); display: flex; align-items: center; justify-content: space-between; }
-.select.open { border-color: var(--ink); }
+/* The listbox trigger (Bot settings: Model, Effort) is a `.dropdown` that fills its column: `.select` is a
+   width modifier on the one dropdown bar, not a second select design (UI-controls pass, 2026-09-29). */
+.select { width: 100%; }
+.select.open { background: var(--fill-press); }
 .listbox { position: absolute; left: 0; right: 0; top: 58px; z-index: 2; margin: 0; padding: 4px; list-style: none; border-radius: var(--radius-card); background: var(--surface-raised); border: var(--hairline) solid var(--line-modal); box-shadow: var(--shadow-pop); }
 .opt { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: var(--radius-xs); font-size: var(--type-ui); cursor: default; }
 .opt.selected { background: var(--fill-soft); }
@@ -587,6 +606,8 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 /* Settings → Account (sign-in mode, API key). */
 .account-mode { cursor: default; }
 .account-key { display: flex; flex-direction: column; gap: 4px; }
+/* New-user walk, finding 17: the first-run key card keeps one width (it jumped from ~195 to ~600 px on the first keystroke). */
+.account-panel.first-run { width: 520px; max-width: 100%; box-sizing: border-box; text-align: left; }
 .account-test { margin: 4px 0 0; font-size: var(--type-ui); }
 /* Bug 281: the API-key check's result: a title, then label / value rows. */
 .account-check { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; }
@@ -669,7 +690,7 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 .settings-block { border-radius: var(--radius-control); transition: background-color var(--motion-sheet); }
 .settings-block.flash { background: var(--fill-soft); }
 .rules { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; font-size: var(--type-ui); }
-.rules input { height: var(--control-h); padding: 0 8px; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-window); background: var(--bg); font-family: inherit; font-size: var(--type-ui); color: var(--ink); outline: none; }
+.rules input { height: var(--control-h); box-sizing: border-box; padding: 0 10px; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-field); background: var(--bg); font-family: inherit; font-size: var(--type-ui); color: var(--ink); outline: none; }
 .rule-controls { display: flex; align-items: center; gap: 10px; }
 .rules-table { border-radius: var(--radius-control); background: var(--bg); border: var(--hairline) solid var(--line-row); overflow: hidden; }
 .rules-head { display: flex; gap: 12px; height: 30px; align-items: center; padding: 0 12px; font-size: var(--type-small); color: var(--ink-faint); }
@@ -740,7 +761,16 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 .cc-shot { height: 170px; width: 100%; object-fit: cover; border-radius: var(--radius-control); background: var(--fill-inset); }
 .cc-actions { display: flex; gap: 6px; }
 .cc-footer { font-size: var(--type-small); color: var(--ink-faint); }
-.field-input { height: 34px; padding: 0 10px; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-button); background: var(--bg); color: var(--ink); font: inherit; font-size: var(--type-ui); }
+/* ---- THE text field (UI-controls pass, 2026-09-29). There were five: `.text-input` (30px + border,
+   content-box, so 31), `.field-input` (34/35), `.field input` (28), `.rules input` (28 + border) and the
+   routine panel's (padding-sized, ~32) — five heights for one control, three border colours, and a
+   placeholder in Chromium's own #757575. One bar now: the 28px control height every dropdown and
+   secondary button already sits on, border-box so the hairline never adds to it, the field edge from
+   --line-field (3:1, WCAG 1.4.11), and an ellipsis for a value too long to show. `.text-input` and
+   `.field-input` are two names for it (both are in use and tested); the element-scoped rules below
+   and `.field input`/`.rules input` restate the same numbers. field-controls.test.ts holds them to it. */
+.text-input,
+.field-input { height: var(--control-h); box-sizing: border-box; padding: 0 10px; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-field); background: var(--bg); color: var(--ink); font: inherit; font-size: var(--type-ui); min-width: 0; text-overflow: ellipsis; }
 /* The transcript form card (Cards.tsx) rendered bare <input>/<textarea>/<select> with no class at
    all — Arial, border-radius 0, native borders, a MEASURED 15.5px input bar, a monospace textarea
    with the OS resize grabber — while the app's OTHER form card used `.field-input`. All three now
@@ -748,11 +778,34 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
    cannot. They are separate selectors, not a second `.field-input` definition, so
    duplicate-selectors.test.ts still sees exactly one. The caret is drawn from --ink-icon with two
    gradients rather than an image, so it inverts with the theme like everything else. */
-textarea.field-input { height: auto; min-height: 76px; padding: 8px 10px; resize: none; line-height: 1.45; }
+/* Placeholder ink for every field: Chromium's default #757575 is 3.9:1 on dark --surface-raised, under
+   AA. --ink-faint clears 4.5:1 on each field fill in both themes (5.0 light, 4.8 dark). `opacity: 1`
+   because Chromium also fades the placeholder by default. The composer keeps its own rule. */
+::placeholder { color: var(--ink-faint); opacity: 1; }
+/* A disabled field takes the app's one disabled treatment (a legible ghost, see the buttons below). */
+input:disabled:not([type="checkbox"]):not([type="radio"]), textarea:disabled, select:disabled { opacity: 0.5; cursor: default; }
+/* A field with a rejected value: its edge takes the error ink; the message itself sits under the field
+   (`.field-error`), and the field names it with aria-describedby. */
+.text-input[aria-invalid="true"], .field-input[aria-invalid="true"] { border-color: var(--danger-ink); }
+/* MoneyInput: the "$" is drawn inside the field, so the unit is never a label's job. */
+.money-input { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.money-input.narrow { width: 110px; flex: 0 0 110px; }
+.money-input > .text-input { width: 100%; padding-left: 20px; font-variant-numeric: tabular-nums; }
+.money-prefix { position: absolute; left: 10px; font-size: var(--type-ui); color: var(--ink-muted); pointer-events: none; }
+textarea.text-input,
+textarea.field-input { height: auto; min-height: 76px; padding: 8px 10px; resize: none; line-height: 1.45; text-overflow: clip; }
+/* Every native <select> draws the same caret: the field-styled ones and `.dropdown` alike, from
+   --ink-icon so it inverts with the theme. A select is named by its value and caret, so it takes the
+   dropdown's soft fill instead of the field's edge — fewer outlines, one select. */
+select.dropdown,
 select.field-input {
-  appearance: none; padding-right: 26px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--ink-icon) 50%), linear-gradient(135deg, var(--ink-icon) 50%, transparent 50%);
-  background-position: right 12px center, right 7.5px center;
+  appearance: none; padding-right: 26px; border: none; background-color: var(--fill-button);
+  /* A chevron, not a filled triangle: two 1.4px diagonal strokes meeting at the bottom, the same mark
+     as the listbox trigger's ChevronDown and the native macOS popup button. */
+  background-image:
+    linear-gradient(45deg, transparent calc(50% - 0.7px), var(--ink-icon) calc(50% - 0.7px), var(--ink-icon) calc(50% + 0.7px), transparent calc(50% + 0.7px)),
+    linear-gradient(135deg, transparent calc(50% - 0.7px), var(--ink-icon) calc(50% - 0.7px), var(--ink-icon) calc(50% + 0.7px), transparent calc(50% + 0.7px));
+  background-position: right 13px center, right 8px center;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
 }
@@ -801,9 +854,13 @@ select.field-input {
 .memory-history li span:first-child { text-decoration: line-through; text-decoration-color: var(--ink-muted); }
 .memory-fact-actions { display: flex; gap: 4px; flex-shrink: 0; }
 .memory-edit { display: flex; flex-direction: column; gap: 6px; flex-grow: 1; }
-.memory-add { display: flex; gap: 6px; align-items: center; }
-.memory-add > input { flex-grow: 1; min-width: 0; }
-.memory-tier-select { width: auto; flex-shrink: 0; }
+/* UI-controls pass (2026-09-29): in the 320px panel the text, the tier and Add shared one row and the
+   text field was left ~90px — its placeholder cut mid-word. The text takes its own row; tier and Add
+   sit under it. */
+.memory-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.memory-add > input { flex: 1 0 100%; min-width: 0; }
+.memory-tier-select { width: auto; flex: 1 1 auto; min-width: 0; }
+.memory-refresh-row { justify-content: flex-end; }
 .memory-entry-text { display: flex; flex-direction: column; }
 .small { font-size: var(--type-small); }
 
@@ -873,8 +930,15 @@ select.field-input {
    and this banner appears on no board — see the DECLARATIONS in contrast-pairs.test.ts. */
 .key-prompt label { flex: 0 0 auto; }
 .key-prompt .text-input { flex: 1 1 auto; min-width: 0; }
-.key-prompt .text-input.narrow { flex: 0 0 96px; }
-.key-prompts > .error { margin: 4px 16px 0; }
+/* New-user walk, finding 1: with no rule of its own this strip was a full-height flex child of the
+   .window row, so the first-run budget prompt shoved the sidebar and chat 427px to the right. It
+   floats at the top centre now, like .mac-disk-banner (auto margins, since tray-in animates transform).
+   UI-controls pass (2026-09-29): at 12px it sat ON the chat header and covered the Bot's name; it floats
+   just under the 56px header bar (--bar-h) now. */
+.key-prompts { position: fixed; top: 64px; left: 0; right: 0; width: fit-content; max-width: calc(100vw - 32px); margin: 0 auto; z-index: 45; display: flex; flex-direction: column; gap: 6px; }
+.key-prompts .disk-banner { margin: 0; background: var(--surface-raised); border: var(--hairline) solid var(--line-modal); box-shadow: var(--shadow-pop); }
+.surface-announce .key-prompts { position: static; margin: 0; }
+.key-prompts > .error { margin: 0 4px; }
 .disk-banner.hard { background: var(--warn-soft); color: var(--warn-ink); }
 .disk-banner span { flex-grow: 1; }
 /* Bug-log 128: the Mac's own disk (not the box's). App-level, so it floats at the top centre like
@@ -897,7 +961,7 @@ select.field-input {
 .msg.user .msg-line{flex-direction:row-reverse}
 /* Bug 198: a message sent while the Bot worked — "Queued" until its next step shows it to the Bot, then "Delivered". */
 .msg-steer{margin-top:3px;padding:0 4px;font-size:var(--type-small);color:var(--ink-faint);font-variant-numeric:tabular-nums}
-.msg-line > .bubble{min-width:0}.msg.highlight .bubble{outline:2px solid var(--line-button)}.modal{animation:surface-in var(--motion-sheet) backwards;background:var(--surface-raised);border:var(--hairline) solid var(--line-modal);border-radius:var(--radius-surface);box-shadow:var(--shadow-modal);display:flex;flex-direction:column;overflow:hidden}.modal-head{display:flex;align-items:center;gap:10px;padding:18px 16px 10px 28px}.modal-head h2{margin:0;flex-grow:1;font-size: 18px;font-weight:500}.btn-outline.danger{color: var(--danger-ink)}.card-primitive{max-width:640px;border:var(--hairline) solid var(--line-card);border-radius:var(--radius-card);padding:12px 14px;background:var(--bg);display:flex;flex-direction:column;gap:8px}.card-error{color: var(--danger-ink);font-size: var(--type-ui)}.chips-row{display:flex;gap:6px;flex-wrap:wrap;padding:0 8px 6px}.chip-x{border:none;background:transparent;margin-left:4px;color:inherit}.grow{flex-grow:1;min-width:0}.clamp1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.msg-line > .bubble{min-width:0}.msg.highlight .bubble{outline:2px solid var(--line-button)}.modal{animation:surface-in var(--motion-sheet) backwards;background:var(--surface-raised);border:var(--hairline) solid var(--line-modal);border-radius:var(--radius-surface);box-shadow:var(--shadow-modal);display:flex;flex-direction:column;overflow:hidden}.modal-head{display:flex;align-items:center;gap:10px;padding:18px 16px 10px 28px}.modal-head h2{margin:0;flex-grow:1;font-size: var(--type-title);font-weight:600}.btn-outline.danger{color: var(--danger-ink)}.card-primitive{max-width:640px;border:var(--hairline) solid var(--line-card);border-radius:var(--radius-card);padding:12px 14px;background:var(--bg);display:flex;flex-direction:column;gap:8px}.card-error{color: var(--danger-ink);font-size: var(--type-ui)}.chips-row{display:flex;gap:6px;flex-wrap:wrap;padding:0 8px 6px}.chip-x{border:none;background:transparent;margin-left:4px;color:inherit}.grow{flex-grow:1;min-width:0}.clamp1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .search-placeholder{flex-grow:1;text-align:left}
 
 .chip.file{display:inline-flex;align-items:center;gap:6px;max-width:220px}.chip.error{color: var(--danger-ink)}
@@ -952,10 +1016,16 @@ select.field-input {
 .routine-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
 .routine-name { font-size: var(--type-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .routine-when { font-size: var(--type-small); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.routine-detail { gap: 8px; overflow-y: auto; }
+/* UI-controls pass (2026-09-29): the routine editor inherited .panel's centred column — labels, a
+   fixed-width textarea with the OS grabber and a clipped title all centred. A form: left-aligned, fields
+   full width, actions at the start. */
+.routine-detail { gap: 8px; overflow-y: auto; align-items: stretch; text-align: left; }
+.routine-detail > .btn-outline, .routine-detail > .danger-btn { align-self: flex-start; }
 .panel-tools.start { justify-content: flex-start; align-items: center; gap: 6px; }
-.routine-title-input { font-size: 15px; font-weight: 500; border: none; background: transparent; color: var(--ink); padding: 4px 0; }
-.routine-detail textarea, .routine-detail input:not(.routine-title-input) { font: inherit; font-size: var(--type-ui); border: var(--hairline) solid var(--line-button); border-radius: var(--radius-control); padding: 6px 8px; background: var(--bg); color: var(--ink); }
+.routine-title-input { font-size: 15px; font-weight: 500; border: none; background: transparent; color: var(--ink); padding: 4px 0; min-width: 0; text-overflow: ellipsis; }
+.routine-detail textarea, .routine-detail input:not(.routine-title-input) { font: inherit; font-size: var(--type-ui); border: var(--hairline) solid var(--line-field); border-radius: var(--radius-control); padding: 0 10px; box-sizing: border-box; background: var(--bg); color: var(--ink); }
+.routine-detail input:not(.routine-title-input) { height: var(--control-h); text-overflow: ellipsis; }
+.routine-detail textarea { padding: 8px 10px; resize: none; line-height: 1.45; }
 .field-label { font-size: var(--type-small); font-weight: 500; color: var(--ink-faint); margin-top: 6px; }
 .field-help { font-size: var(--type-small); color: var(--ink-muted); }
 .form-error { font-size: var(--type-small); color: var(--danger-ink); }
@@ -1108,7 +1178,7 @@ select.dropdown { flex-shrink: 1; min-width: 0; max-width: 100%; overflow: hidde
 /* ---- Marketplace (Marketplace.dc.html) ---- */
 .mkt-dialog { width: 800px; height: 820px; max-height: calc(100vh - 40px); border-radius: var(--radius-surface); background: var(--surface-raised); border: var(--hairline) solid var(--line-modal); box-shadow: var(--shadow-modal); display: flex; flex-direction: column; overflow: hidden; }
 .mkt-head { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px 28px; }
-.mkt-head h2 { margin: 0; flex-grow: 1; font-size: 18px; font-weight: 500; }
+.mkt-head h2 { margin: 0; flex-grow: 1; font-size: var(--type-title); font-weight: 600; }
 .mkt-installed { display: flex; align-items: center; gap: 8px; text-decoration: none; font-size: var(--type-ui); color: var(--ink-muted); }
 .logo-stack { display: flex; }
 .logo-stack .logo-tile + .logo-tile { margin-left: -6px; }
@@ -1140,13 +1210,36 @@ select.dropdown { flex-shrink: 1; min-width: 0; max-width: 100%; overflow: hidde
    selector with the pre-existing FullRequestSheet rule above (line 138), and being later in source order was
    silently overriding FullRequestSheet's sizing/shadow. Values are unchanged from the brief. */
 .tpl-sheet { width: 520px; max-height: calc(100vh - 80px); overflow-y: auto; padding: 22px 24px; border-radius: var(--radius-surface); background: var(--surface-raised); border: var(--hairline) solid var(--line-modal); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; gap: 10px; }
-.tpl-sheet h2 { margin: 0; font-size: 17px; font-weight: 500; }
+/* One dialog title (UI-controls pass, 2026-09-29): the sheets, the modals and the confirm drew four
+   (18/500, 17/500, 15/600 and the feedback sheet's 17/600). All take the feedback sheet's. */
+.tpl-sheet h2 { margin: 0; font-size: var(--type-title); font-weight: 600; }
 .tpl-section { border: none; padding: 0; margin: 0; }
 .tpl-section legend, .tpl-section h3 { font-size: var(--type-ui); font-weight: 500; margin: 0 0 4px; }
 .tpl-item { display: flex; gap: 8px; align-items: flex-start; font-size: var(--type-ui); padding: 3px 0; }
 .chip.warn { margin-left: 8px; background: var(--warn-soft); color: var(--warn-ink); }
 .warning { padding: 10px 12px; border-radius: var(--radius-control); background: var(--warn-soft); color: var(--warn-ink); font-size: var(--type-ui); }
 .pre-wrap { white-space: pre-wrap; }
+
+/* ---- Bot sharing: the Share sheet and the Import sheet's additions (labels only, flat) ---- */
+.tpl-sheet form { display: flex; flex-direction: column; gap: 10px; }
+.tpl-head { display: flex; align-items: center; gap: 12px; }
+.tpl-head .tpl-face { flex: none; }
+.tpl-head-text { display: flex; flex-direction: column; min-width: 0; }
+.tpl-head-text h2 { overflow-wrap: anywhere; }
+.tpl-row-toggle { all: unset; cursor: default; display: flex; align-items: center; gap: 6px; font-size: var(--type-ui); font-weight: 500; }
+.tpl-row-toggle::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--motion-tap); margin-left: 2px; }
+.tpl-row-toggle[aria-expanded="true"]::after { transform: translateY(-2px) rotate(45deg); }
+.share-row.tpl-section legend { padding: 0; }
+.tpl-row-toggle:focus-visible { outline: 2px solid var(--line-button); outline-offset: 2px; border-radius: 4px; }
+.tpl-instructions { margin: 6px 0 0; padding: 10px 12px; max-height: 220px; overflow: auto; border-radius: var(--radius-control); background: var(--fill-inset); color: var(--ink-2); font-size: var(--type-ui); overflow-wrap: anywhere; }
+.share-rows { display: flex; flex-direction: column; border-top: var(--hairline) solid var(--line-card); }
+.share-row { padding: 10px 0; border-bottom: var(--hairline) solid var(--line-card); }
+.share-look { display: flex; justify-content: space-between; align-items: center; font-size: var(--type-ui); }
+.share-row-label { font-weight: 500; }
+.tpl-line-text { margin: 0; font-size: var(--type-ui); }
+.tpl-line { width: 400px; }
+.share-website { display: flex; flex-direction: column; gap: 8px; }
+.share-blurb { display: flex; flex-direction: column; gap: 4px; font-size: var(--type-ui); }
 
 /* ---- Onboarding: splash, tour, tool grid, first Bot (Task 21) ---- */
 .sidebar-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 8px 6px; }
@@ -1185,8 +1278,9 @@ select.dropdown { flex-shrink: 1; min-width: 0; max-width: 100%; overflow: hidde
 .onb-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-window); }
 .onb-dots i.on { background: var(--ink); }
 .tool-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 180px)); gap: 8px; max-height: 50vh; overflow-y: auto; }
-.tool-cell { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-card); font-size: var(--type-ui); text-align: left; }
-.tool-cell.on { border-color: var(--ink); }
+/* New-user walk, finding 18: borderless rows (was a wall of 45 bordered tiles); the chosen ones get a quiet fill. */
+.tool-cell { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius-control); border: none; font-size: var(--type-ui); text-align: left; }
+.tool-cell.on { background: var(--fill-selected); }
 /* The native tick was macOS SYSTEM BLUE — the only saturated blue in a monochrome product, and a
    light chrome box against black in dark mode. `accent-color` keeps the real OS checkbox (and its
    focus ring, its tick glyph, its hit target) and only re-tints it; :root's `color-scheme` already
@@ -1211,8 +1305,12 @@ select.dropdown { flex-shrink: 1; min-width: 0; max-width: 100%; overflow: hidde
    left edge of the screen and the first card. `align-self: stretch` + `min-width: 0` are what keep
    the row from handing its 4300px max-content width back up to .onb (see the note on .onb above). */
 .onb-suggest { display: flex; flex-direction: column; align-self: stretch; min-width: 0; gap: 10px; }
-.carousel { display: flex; gap: 10px; overflow-x: auto; min-width: 0; max-width: 100%; align-self: stretch; align-items: stretch; padding-bottom: 4px; }
-.starter-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 200px; padding: 12px; border-radius: var(--radius-card); border: var(--hairline) solid var(--line-card); background: var(--bg); text-align: left; }
+/* New-user walk, finding 19: six picks in a grid that fits the column (was a sideways scroller with clipped cards). */
+.starter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; min-width: 0; width: min(720px, 100%); align-self: center; }
+.starter-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; padding: 12px; border-radius: var(--radius-card); border: var(--hairline) solid transparent; background: var(--fill-inset); text-align: left; }
+.starter-card[aria-checked="true"] { border-color: var(--ink); background: var(--bg); }
+.starter-card .starter-name { font-weight: 500; }
+.starter-card .chip { max-width: none; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 /* Was `background: #111; color: #e6e6e6`, hard-coded and wrong in both themes: a heavy black slab in
    an otherwise white minimal screen, and #111 on #0B0B0B — about 1.05:1 — in dark, locatable only by
@@ -1230,7 +1328,7 @@ select.dropdown { flex-shrink: 1; min-width: 0; max-width: 100%; overflow: hidde
 .tabs [aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
 .manage-list { display: flex; flex-direction: column; gap: 10px; }
 .tool-row { font-size: var(--type-ui); }
-.text-area { width: 100%; min-height: 56px; box-sizing: border-box; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-window); padding: 8px; font: inherit; font-size: var(--type-ui); }
+.text-area { width: 100%; min-height: 56px; box-sizing: border-box; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-field); resize: none; padding: 8px; font: inherit; font-size: var(--type-ui); }
 .connect-card { width: 460px; }
 .mention-picker { bottom: 64px; top: auto; left: 16px; width: 320px; }
 
@@ -1393,7 +1491,7 @@ select.dropdown { flex-shrink: 1; min-width: 0; max-width: 100%; overflow: hidde
 .send-btn:not(:disabled):hover { opacity: 0.88; }
 .send-btn:not(:disabled):active { opacity: 0.76; }
 .composer-pill:not(:disabled):hover { background-color: var(--fill-hover); border-color: var(--line-button-hover); color: var(--ink-2); }
-.select.open:hover, .select.open:active { border-color: var(--ink); }
+.select.open:hover, .select.open:active { background-color: var(--fill-press); }
 /* Dictation keeps its recording colour on hover — only the level changes. */
 .round-btn.listening:not(:disabled):hover { background-color: var(--danger); opacity: 0.86; }
 .round-btn.listening:not(:disabled):active { background-color: var(--danger); opacity: 0.72; }
@@ -1671,9 +1769,10 @@ select.dropdown { flex-shrink: 1; min-width: 0; max-width: 100%; overflow: hidde
    header's title button, lies over the conversation's edge instead of squeezing it; under ~760px
    the sidebar goes too, and
    ⌘K is the way between Bots. Nothing reflows inside a column when a column goes. ---- */
+/* New-user walk, finding 24: opened again while narrow, the panel used to lie over the conversation and cover the
+   composer's mic and send at the 1024px floor. It stays in the row and the chat column gives way (a smaller inset). */
 @media (max-width: 1180px) {
-  .window > .panel-mount > .panel:not(.wide) { position: absolute; top: 0; right: 0; bottom: 0; z-index: 4; background: var(--bg); box-shadow: var(--shadow-pop); }
-  .window > .panel-mount > .panel.wide { position: absolute; top: 0; right: 0; bottom: 0; z-index: 4; box-shadow: var(--shadow-pop); }
+  .main { --chat-inset: 24px; }
 }
 @media (max-width: 760px) {
   .sidebar { display: none; }
@@ -1777,7 +1876,7 @@ select.dropdown { flex-shrink: 1; min-width: 0; max-width: 100%; overflow: hidde
 .tile-wrap > .row-call { top: 6px; right: 4px; transform: none; }
 .row-wrap:hover > .row-call, .tile-wrap:hover > .row-call, .row-call:focus-visible { opacity: 1; }
 .row-status[data-presence="call"] { color: var(--dot-ok); }
-.row-status[data-presence="busy"] { color: var(--ink-2); }
+.row-status[data-presence="busy"], .row-status[data-presence="waiting"] { color: var(--ink-2); }
 /* A voicemail: a centred, borderless notice. A call's summary (smooth pass, Task 4): once it is
    carrying its action items it is a small soft card on the Bot's side, the same fill and radius as
    every other card in the conversation, not a centred aside. */
@@ -1863,7 +1962,7 @@ a.row, a.tile, a.nav-item, a.side-link, a.mkt-row-main, a.mkt-card, a.mkt-instal
 /* The destructive confirm (brief 2): a question, at most one line, Cancel then the named act. */
 .confirm-dialog { width: 380px; max-width: calc(100vw - 40px); }
 .confirm-body { display: flex; flex-direction: column; gap: 8px; padding: 22px 22px 18px; }
-.confirm-title { margin: 0; font-size: var(--type-body); font-weight: 600; }
+.confirm-title { margin: 0; font-size: var(--type-title); font-weight: 600; }
 .confirm-line { margin: 0; font-size: var(--type-ui); color: var(--ink-muted); }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 /* EmptyView: icon, title, at most one line, at most one action. */
@@ -1913,3 +2012,6 @@ a.row, a.tile, a.nav-item, a.side-link, a.mkt-row-main, a.mkt-card, a.mkt-instal
    once when the snap won't play); public/launch-cover.js is the backstop that fades it out. */
 #launch-cover { position: fixed; inset: 0; background: var(--bg); z-index: 59; pointer-events: none; transition: opacity var(--motion-enter); }
 #launch-cover.gone { opacity: 0; }
+
+/* New-user walk, finding 16: New chat's starter templates, under a small label (the blurb is the tooltip). */
+.picker .pick-head { padding: 10px 12px 4px; font-size: var(--type-label); color: var(--ink-muted); list-style: none; }

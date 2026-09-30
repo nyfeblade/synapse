@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import readline from "node:readline";
 import { boxPortEnv, userPorts, WRONG_HOST_MESSAGE } from "@synapse/shared";
+import { macNetsEnv } from "../mac-nets";
 import type { Exec } from "../box-provider";
 import type { BoxStep, StepContext } from "./provisioner";
 import { adoptable, CREATED_MARKER, listMachines, machineMarks, machineSize, type MachineInfo, type MachineMarks } from "./orb";
@@ -64,7 +65,8 @@ export interface BoxStepDeps {
 export function boxSteps(d: BoxStepDeps): BoxStep[] {
   const run = d.run ?? runStreamed;
   const uid = d.uid ?? process.getuid?.() ?? 501;
-  const env = () => ({ ORB: d.orb(), BOX_MACHINE: d.machine, ...boxPortEnv(uid) });
+  // Bug 365: the Mac's own networks go to the box firewall at provision and deploy.
+  const env = () => ({ ORB: d.orb(), BOX_MACHINE: d.machine, ...boxPortEnv(uid), ...macNetsEnv() });
   let listed: MachineInfo[] | null = null;
   let marks: MachineMarks | null = null;
   const machine = async (): Promise<MachineInfo | undefined> => {

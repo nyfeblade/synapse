@@ -37,7 +37,7 @@ describe("command palette (PAL-01…04)", () => {
       { id: "mkt:curated:linear", title: "Linear", subtitle: "Marketplace", icon: { kind: "logo", name: "Linear", logo: null }, onSelect: () => {} },
     ]);
     const rows = withShortcuts(defaultRows({ bots: useUi.getState().bots, pinned: ["scout"], currentBotId: "courier", theme: "light", actions: {} as never }, market));
-    expect(rows.map((r) => r.title)).toEqual(["Scout", "Courier", "Ledger", "Planner", "Scribe", "Fixer", STR.chatSettings, STR.settingsGeneral, STR.settingsComputer, STR.settingsUsage, "Theme: Light", STR.marketplace, "Linear"]);
+    expect(rows.map((r) => r.title)).toEqual(["Scout", "Courier", "Ledger", "Planner", "Scribe", "Fixer", STR.botSettingsRow, STR.settingsGeneral, STR.settingsComputer, STR.settingsUsage, "Theme: Light", STR.marketplace, "Linear"]);
     expect(rows.map((r) => r.shortcut)).toEqual(["⌘1", "⌘2", "⌘3", "⌘4", "⌘5", "⌘6", "⌘7", "⌘8", "⌘9", null, null, null, null]);
     // UI polish pass: the Computer and Usage rows are live deep links now, not disabled stubs.
     expect(rows.find((r) => r.title === STR.settingsComputer)!.disabled).toBeFalsy();

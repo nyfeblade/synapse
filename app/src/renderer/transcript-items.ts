@@ -1,4 +1,4 @@
-import { daySeparator, isAgentMessage, isPageFormCard, type ActivityIcon, type AgentMessageEntry, type AgentRef, type ApprovalCardView, type BoxHelpView, type CardPayload, type EventEntry, type FormCardView, type SecretRequestView, type SendMessageEntry, type TimelineEvent, type ToolCallEntry, type TranscriptEntry, type UserAttachmentEntry, type UserMessageEntry } from "@synapse/shared";
+import { STR, daySeparator, isAgentMessage, isPageFormCard, type ActivityIcon, type AgentMessageEntry, type AgentRef, type ApprovalCardView, type BoxHelpView, type CardPayload, type EventEntry, type FormCardView, type SecretRequestView, type SendMessageEntry, type TimelineEvent, type ToolCallEntry, type TranscriptEntry, type UserAttachmentEntry, type UserMessageEntry } from "@synapse/shared";
 
 export interface ActivityRow { verb: string; noun: string; count: number; icon: ActivityIcon; live?: boolean }
 export type TranscriptItem =
@@ -17,7 +17,7 @@ export type TranscriptItem =
   | { kind: "event"; key: string; entry: EventEntry }
   | { kind: "event-row"; key: string; entry: EventEntry }
   | { kind: "exchange"; key: string; peers: AgentRef[]; entries: AgentMessageEntry[]; count: number }
-  | { kind: "activity"; key: string; rows: ActivityRow[]; more: number; steps: ToolCallEntry[]; running: boolean }
+  | { kind: "activity"; key: string; rows: ActivityRow[]; more: number; steps: ToolCallEntry[]; running: boolean; stopped?: boolean; waiting?: boolean }
   | { kind: "approval"; key: string; approval: ApprovalCardView }
   | { kind: "box-help"; key: string; request: BoxHelpView }
   | { kind: "secret"; key: string; entryId: string; secret: SecretRequestView }
@@ -60,7 +60,10 @@ const PHASE4_EVENTS = new Set<TimelineEvent["type"]>([
   "agents-messaged", "agent-exchange", "wake-origin", "member-pass", "group-created",
 ]);
 
-function rowsFor(steps: ToolCallEntry[]): { rows: ActivityRow[]; more: number } {
+/** A live step's text without its "-ing" verb ("Running rm -rf /x" → "rm -rf /x"). */
+const target = (step: string) => step.replace(/^[A-Z][a-z]+ing /, "");
+
+function rowsFor(steps: ToolCallEntry[], waiting: ReadonlySet<string> = new Set()): { rows: ActivityRow[]; more: number } {
   const merged = new Map<string, { row: ActivityRow; ids: Set<string>; plain: number; steps: number; nounPlural: string; noun: string }>();
   // Rows with no summary metric: the step still running (shimmering), and — the host sets metric to null
   // on every failed tool call — the ones that errored. Without a row for those, a segment whose steps all
@@ -69,8 +72,11 @@ function rowsFor(steps: ToolCallEntry[]): { rows: ActivityRow[]; more: number } 
   const live: ActivityRow[] = [];
   for (const s of steps) {
     if (!s.metric) {
-      if (s.status === "running") live.push({ verb: s.step, noun: "", count: 0, icon: s.icon, live: true });
+      // New-user walk, finding 6: held on an approval card, it isn't running; it waits on the user.
+      if (s.status === "running" && waiting.has(s.requestId)) live.push({ verb: STR.waitingStep(target(s.step)), noun: "", count: 0, icon: s.icon });
+      else if (s.status === "running") live.push({ verb: s.step, noun: "", count: 0, icon: s.icon, live: true });
       else if (s.status === "error") live.push({ verb: `Failed: ${s.step}`, noun: "", count: 0, icon: s.icon });
+      else if (s.status === "stopped") live.push({ verb: STR.stoppedStep(s.step), noun: "", count: 0, icon: s.icon });
       continue;
     }
     const k = `${s.metric.verb}|${s.metric.noun}`;
@@ -95,6 +101,7 @@ function rowsFor(steps: ToolCallEntry[]): { rows: ActivityRow[]; more: number } 
  * GRP-14).
  */
 export function buildTranscriptItems(entries: TranscriptEntry[], nowMs: number): TranscriptItem[] {
+  const waitingOn = new Set(entries.flatMap((e) => (e.kind === "send-message" && e.message.type === "auto-review-approval" && e.message.approval.status === "pending" ? [e.message.approval.requestId] : [])));
   const visibleRequests = new Set(entries.filter((e) => e.kind === "send-message").map((e) => (e as { requestId: string }).requestId));
   const replyCount = new Map<string, number>();
   for (const e of entries) {
@@ -111,8 +118,11 @@ export function buildTranscriptItems(entries: TranscriptEntry[], nowMs: number):
     if (!seg) return;
     const steps = seg.steps;
     if (!(steps[0]!.hidden && !visibleRequests.has(steps[0]!.requestId))) {
-      const { rows, more } = rowsFor(steps);
-      if (rows.length) out.push({ kind: "activity", key: `act-${seg.id}`, rows, more, steps, running: steps.some((s) => s.status === "running") });
+      const { rows, more } = rowsFor(steps, waitingOn);
+      const live = steps.filter((s) => s.status === "running");
+      const waiting = live.length > 0 && live.every((s) => waitingOn.has(s.requestId));
+      const running = live.length > 0 && !waiting;
+      if (rows.length) out.push({ kind: "activity", key: `act-${seg.id}`, rows, more, steps, running, ...(waiting ? { waiting: true } : {}), ...(!live.length && steps.some((s) => s.status === "stopped") ? { stopped: true } : {}) });
     }
     seg = null;
   };

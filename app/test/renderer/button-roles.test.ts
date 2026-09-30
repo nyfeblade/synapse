@@ -81,8 +81,8 @@ const STYLE_DIR = RENDERER + "styles/";
 /** Stylesheet load order (main.tsx, then the sheets components import), because later wins on ties. */
 const SHEET_ORDER = [
   "tokens.css", "app.css", "widgets.css", "skills.css", "skill-picker.css",
-  "palette.css", "message-actions.css", "bot-admin.css", "code-block.css", "files.css", "google.css", "usage-dashboard.css", "voice-calls.css",
-  "living-avatars.css",
+  "palette.css", "message-actions.css", "bot-admin.css", "code-block.css", "files.css", "google.css", "composio.css", "usage-dashboard.css", "voice-calls.css",
+  "living-avatars.css", "feedback.css",
 ];
 
 type Sheet = { name: string; css: string };

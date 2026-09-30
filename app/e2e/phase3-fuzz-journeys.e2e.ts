@@ -75,7 +75,7 @@ test("computer: card + banner + preview + glyph → view (Exit fullscreen, monit
 
   // Right-panel preview and the header glyph both open the computer view; Exit fullscreen closes it without handing back.
   await win.getByRole("button", { name: "Open computer" }).click();
-  const view = win.getByRole("dialog", { name: "Bots' Computer" });
+  const view = win.getByRole("dialog", { name: "Bots' computer" });
   await expect(view).toBeVisible();
   await expect(view.getByRole("status")).toContainText("Sign in to Northwind Air");
   await view.getByRole("button", { name: "Exit fullscreen" }).click();
@@ -114,7 +114,7 @@ test("computer: card + banner + preview + glyph → view (Exit fullscreen, monit
   // out this journey at step 4; the spec was never updated with the copy (bug 39 (5)).
   await view.getByRole("application", { name: "Scout's screen" }).click();
   for (const k of ["Meta+c", "Meta+v", "Meta+a", "Meta+k", "Meta+n"]) await win.keyboard.press(k);
-  await expect(win.getByRole("dialog", { name: "Bots' Computer" })).toBeVisible();
+  await expect(win.getByRole("dialog", { name: "Bots' computer" })).toBeVisible();
 
   await view.getByRole("button", { name: "I'm done" }).click();
   await expect(view).toBeHidden();
@@ -185,7 +185,7 @@ test("Settings → Updates: Update in FUZZ fails cleanly; Reset asks twice and C
   await api("snapshotBoxStoreNow", { reason: "manual" }); // a backup exists, so Reset is offered
   await win.keyboard.press("Meta+,");
   await win.getByRole("button", { name: "Updates" }).click();
-  await expect(win.getByRole("heading", { name: "Update Bots' Computer" })).toBeVisible();
+  await expect(win.getByRole("heading", { name: "Update Bots' computer" })).toBeVisible();
   const update = win.getByRole("button", { name: "Update", exact: true });
   if (await update.isVisible()) {
     await update.click();

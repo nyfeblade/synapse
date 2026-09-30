@@ -39,7 +39,7 @@ test("Teach a task from the computer view: the form is reachable, and the record
   await expect(card.getByText("Action needed")).toBeVisible({ timeout: 30_000 });
   await card.getByRole("button", { name: "Take over" }).click();
 
-  const view = win.getByRole("dialog", { name: "Bots' Computer" });
+  const view = win.getByRole("dialog", { name: "Bots' computer" });
   await expect(view).toBeVisible();
 
   // Bug 42: this click used to set a flag whose only reader was mounted behind this very view.

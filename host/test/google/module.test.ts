@@ -120,7 +120,7 @@ describe("built-in Google connector (gateway level, FUZZ fake Google)", () => {
     const { trays } = await s.api<{ trays: Tray[] }>("getTrays");
     const t = trays.filter((x) => x.dedupeKey === "google-reconnect");
     expect(t).toHaveLength(1);
-    expect(t[0]!.buttons).toEqual([{ label: "Reconnect Google", action: "reconnect-google" }]);
+    expect(t[0]!.buttons).toEqual([{ label: "Reconnect Google", action: "reconnect-google" }, { label: "Let a Bot click through", action: "reconnect-google-bot" }]);
     expect((await s.api<GoogleStatusView>("getGoogleStatus")).state).toBe("needs-reconnect");
     s.fake().state.refreshInvalid = false;
     await s.connect();

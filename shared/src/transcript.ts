@@ -3,7 +3,7 @@ import type { B2BKind, ResultStatus } from "./b2b";
 import type { CardPayload } from "./phase5";
 
 export type Surface = "box_shell" | "host_shell" | "computer" | "mcp" | "subagent" | "cloud_agent" | "automation_write" | "control_plane";
-export type ApprovalStatus = "pending" | "approved" | "always" | "denied" | "expired";
+export type ApprovalStatus = "pending" | "approved" | "always" | "denied" | "expired" | "stopped";
 
 export interface ApprovalItemView { toolUseId: string; summary: string; status: ApprovalStatus }
 export interface ApprovalVerdictView { reason: string; tier: number | null; matchedRuleIds: string[]; floorCategory: string | null; stage: string }
@@ -139,7 +139,8 @@ export interface ToolCallEntry {
   step: string;                  // CHAT-05 expanded line, e.g. "Edited math.ts +14 −10"
   icon: ActivityIcon;
   metric: ActivityMetric | null; // null = counts as a step but gets no summary row
-  status: "running" | "done" | "error";
+  /** "stopped": cut off by the user's Stop before it ran (new-user walk, finding 3). */
+  status: "running" | "done" | "error" | "stopped";
   startedAt: number;
   endedAt?: number;
   /** bug 198: the step's expanded card content, lazily rendered by ActivityGroup only once the row is opened. */

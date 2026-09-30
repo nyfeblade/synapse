@@ -5,6 +5,7 @@ import { STR, STR_AUTH, type AuthView, type KeyCheckView } from "@synapse/shared
 import { AccountPanel } from "../../src/renderer/components/settings/AccountSection";
 
 const KEY = "sk-ant-api03-" + "R".repeat(80) + "abcd";
+const WRONG = "sk-ant-api03-wrong" + "R".repeat(80);
 let view: AuthView;
 const NOT_CHECKED: KeyCheckView = { checkedAt: null, checking: false, works: null, problem: null, model: null, models: [], longContext: null, webSearch: null };
 let checked: KeyCheckView;
@@ -12,13 +13,17 @@ let lastCheck: KeyCheckView;
 const calls: [string, unknown][] = [];
 const saveKey = vi.fn();
 const testKey = vi.fn();
+let pinChanged = false;
+let trustYes = true;
 beforeEach(() => {
   calls.length = 0;
+  pinChanged = false;
+  trustYes = true;
   view = { apiKey: null, boxPublicKey: "PK" };
   lastCheck = NOT_CHECKED;
   checked = { checkedAt: 2, checking: false, works: true, problem: null, model: "claude-haiku-4-5-20251001", models: ["claude-sonnet-5", "claude-haiku-4-5-20251001"], longContext: true, webSearch: true };
   saveKey.mockReset().mockImplementation(async () => { view = { ...view, apiKey: { masked: "sk-ant-…abcd", savedAt: 1 } }; return view; });
-  testKey.mockReset().mockResolvedValue({ ok: false, reached: true, kind: "invalid-key", status: 401, title: STR_AUTH.keyRejected, detail: STR_AUTH.keyRejectedDetail });
+  testKey.mockReset().mockImplementation(async (k: string) => (k === WRONG ? { ok: false, reached: true, kind: "invalid-key", status: 401, title: STR_AUTH.keyRejected, detail: STR_AUTH.keyRejectedDetail } : { ok: true, reached: true, kind: "ok", status: 200, title: STR_AUTH.ok, detail: "" }));
   (window as unknown as { synapse: unknown }).synapse = {
     call: vi.fn(async (c: string, a: unknown) => {
       calls.push([c, a]);
@@ -27,7 +32,7 @@ beforeEach(() => {
       if (c === "checkApiKey") return { ok: true, result: (a as { refresh?: boolean }).refresh ? (lastCheck = checked) : lastCheck };
       return { ok: true, result: view };
     }),
-    auth: { saveKey, testKey, removeKey: vi.fn(async () => { calls.push(["clearApiKey", {}]); view = { ...view, apiKey: null }; return view; }), hasMacKey: vi.fn(async () => true) },
+    auth: { saveKey, testKey, removeKey: vi.fn(async () => { calls.push(["clearApiKey", {}]); view = { ...view, apiKey: null }; return view; }), hasMacKey: vi.fn(async () => true), pinChanged: vi.fn(async () => pinChanged), trustComputer: vi.fn(async () => { calls.push(["trust", {}]); if (!trustYes) return { trusted: false }; pinChanged = false; return { trusted: true }; }) },
     native: { invoke: vi.fn(async (n: string, a: unknown) => { calls.push([`native:${n}`, a]); return { ok: true, result: {} }; }), on: () => () => {} },
     onEvent: () => () => {}, onConnection: () => () => {}, retry: () => {}, appInfo: async () => ({ userName: "u" }),
   };
@@ -70,13 +75,13 @@ describe("Settings → Account: the Anthropic API key is the only sign-in", () =
     expect(saveKey).not.toHaveBeenCalled();
   });
 
-  it("Test connection with a typed key: \"Reached Anthropic ✓ — key rejected\"", async () => {
+  it("Test connection with a typed key: \"Key rejected\"", async () => {
     render(<AccountPanel />);
     await pickApiKey();
-    fireEvent.change(await screen.findByLabelText(STR_AUTH.keyLabel), { target: { value: KEY } });
+    fireEvent.change(await screen.findByLabelText(STR_AUTH.keyLabel), { target: { value: WRONG } });
     fireEvent.click(screen.getByRole("button", { name: STR_AUTH.testConnection }));
     expect(await screen.findByText(STR_AUTH.keyRejected)).toBeTruthy();
-    expect(testKey).toHaveBeenCalledWith(KEY);
+    expect(testKey).toHaveBeenCalledWith(WRONG);
   });
 
   it("bug 281: with a saved key, Check runs the key check on the host (not an unmetered Test connection)", async () => {
@@ -122,10 +127,10 @@ describe("Settings → Account: the Anthropic API key is the only sign-in", () =
     view = { ...view, apiKey: { masked: "sk-ant-…abcd", savedAt: 1 } };
     render(<AccountPanel />);
     await pickApiKey();
-    fireEvent.change(await screen.findByLabelText(STR_AUTH.keyLabel), { target: { value: KEY } });
+    fireEvent.change(await screen.findByLabelText(STR_AUTH.keyLabel), { target: { value: WRONG } });
     fireEvent.click(screen.getByRole("button", { name: STR_AUTH.testConnection }));
     expect(await screen.findByText(STR_AUTH.keyRejected)).toBeTruthy();
-    expect(testKey).toHaveBeenCalledWith(KEY);
+    expect(testKey).toHaveBeenCalledWith(WRONG);
   });
 
   it("removing the key leaves no sign-in: the panel asks for a key again (nothing falls back)", async () => {
@@ -224,5 +229,67 @@ describe("Settings → Account: the Anthropic API key is the only sign-in", () =
     expect(screen.getByRole("button", { name: STR_AUTH.testConnection })).toBeTruthy();
     fireEvent.click(screen.getByRole("link", { name: STR_AUTH.createKey }));
     await vi.waitFor(() => expect(calls).toContainEqual(["native:openExternal", { url: "https://console.anthropic.com/settings/keys" }]));
+  });
+});
+
+describe("new-user walk finding 2: a changed Bots' computer is trusted right here, not in a section that doesn't exist", () => {
+  it("a save refused for a changed identity offers Trust this computer; trusting never sends the key — Save does, again", async () => {
+    saveKey.mockImplementationOnce(async () => { throw new Error(`Error invoking remote method 'auth:save-key': Error: ${STR_AUTH.pinMismatch}`); });
+    render(<AccountPanel />);
+    await pickApiKey();
+    fireEvent.change(screen.getByLabelText(STR_AUTH.keyLabel), { target: { value: KEY } });
+    fireEvent.click(screen.getByRole("button", { name: STR_AUTH.saveKey }));
+    const trust = await screen.findByRole("button", { name: STR_AUTH.trustComputer });
+    expect(document.body.textContent).not.toMatch(/Settings → Updates/);
+    fireEvent.click(trust);
+    expect(await screen.findByText(STR_AUTH.trusted)).toBeTruthy();
+    expect(calls.map((c) => c[0])).toContain("trust");
+    expect(saveKey).toHaveBeenCalledTimes(1); // review: no chained save
+    fireEvent.click(screen.getByRole("button", { name: STR_AUTH.saveKey }));
+    await screen.findByText(STR_AUTH.savedKey("sk-ant-…abcd"));
+    expect(saveKey).toHaveBeenCalledTimes(2);
+  });
+
+  it("Cancel in the main-process dialog leaves the Trust button and saves nothing", async () => {
+    trustYes = false;
+    pinChanged = true;
+    render(<AccountPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: STR_AUTH.trustComputer }));
+    await vi.waitFor(() => expect(calls.map((c) => c[0])).toContain("trust"));
+    expect(screen.getByRole("button", { name: STR_AUTH.trustComputer })).toBeTruthy();
+    expect(saveKey).not.toHaveBeenCalled();
+  });
+
+  it("opening the panel with a changed identity shows the Trust button straight away", async () => {
+    pinChanged = true;
+    render(<AccountPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: STR_AUTH.trustComputer }));
+    await vi.waitFor(() => expect(screen.queryByRole("button", { name: STR_AUTH.trustComputer })).toBeNull());
+    expect(calls.map((c) => c[0])).toContain("trust");
+  });
+});
+
+describe("new-user walk finding 9: a rejected key says so plainly, and Save checks the key first", () => {
+  it("the rejected line has no check mark", () => {
+    expect(STR_AUTH.keyRejected).not.toMatch(/✓/);
+    expect(STR_AUTH.ok).not.toMatch(/✓/);
+  });
+
+  it("Save refuses a key Anthropic rejects, before it is saved", async () => {
+    render(<AccountPanel />);
+    await pickApiKey();
+    fireEvent.change(screen.getByLabelText(STR_AUTH.keyLabel), { target: { value: WRONG } });
+    fireEvent.click(screen.getByRole("button", { name: STR_AUTH.saveKey }));
+    expect((await screen.findByRole("alert")).textContent).toContain(STR_AUTH.keyRejected);
+    expect(saveKey).not.toHaveBeenCalled();
+  });
+
+  it("Save goes ahead when Anthropic can't be reached (a check that can't answer never blocks)", async () => {
+    testKey.mockResolvedValue({ ok: false, reached: false, kind: "network", status: null, title: STR_AUTH.network, detail: "" });
+    render(<AccountPanel />);
+    await pickApiKey();
+    fireEvent.change(screen.getByLabelText(STR_AUTH.keyLabel), { target: { value: KEY } });
+    fireEvent.click(screen.getByRole("button", { name: STR_AUTH.saveKey }));
+    await vi.waitFor(() => expect(saveKey).toHaveBeenCalled());
   });
 });

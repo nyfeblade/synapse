@@ -55,13 +55,17 @@ export function SchedulesSection() {
               <label htmlFor="standup-time" style={{ flexGrow: 1 }}>{STRS.standupTime}</label>
               <input id="standup-time" type="time" className="text-input" value={st.time} onChange={(e) => e.target.value && void standup.update({ time: e.target.value })} />
             </div>
+            {/* UI-controls pass (2026-09-29): an on/off setting in a Settings row is a switch, right-aligned,
+                like every other row here — these two were the only checkboxes in a Settings row. */}
             <div className="settings-row">
-              <label htmlFor="standup-weekdays" style={{ flexGrow: 1 }}>{STRS.standupWeekdays}</label>
-              <input id="standup-weekdays" type="checkbox" checked={st.weekdaysOnly} onChange={(e) => void standup.update({ weekdaysOnly: e.target.checked })} />
+              <span id="standup-weekdays-label" style={{ flexGrow: 1 }}>{STRS.standupWeekdays}</span>
+              <button type="button" role="switch" aria-checked={st.weekdaysOnly} aria-labelledby="standup-weekdays-label" className={st.weekdaysOnly ? "switch on" : "switch"}
+                onClick={() => void standup.update({ weekdaysOnly: !st.weekdaysOnly })} />
             </div>
             <div className="settings-row">
-              <label htmlFor="standup-spoken" style={{ flexGrow: 1 }}>{STRS.standupSpoken}</label>
-              <input id="standup-spoken" type="checkbox" checked={st.spoken} onChange={(e) => void standup.update({ spoken: e.target.checked })} />
+              <span id="standup-spoken-label" style={{ flexGrow: 1 }}>{STRS.standupSpoken}</span>
+              <button type="button" role="switch" aria-checked={st.spoken} aria-labelledby="standup-spoken-label" className={st.spoken ? "switch on" : "switch"}
+                onClick={() => void standup.update({ spoken: !st.spoken })} />
             </div>
           </>
         )}

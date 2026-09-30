@@ -83,7 +83,9 @@ recording and accessibility only when you first use a feature that needs them.
   goes past the limit you set.
 - **A closed gateway.** The app talks to the VM over a gateway bound to 127.0.0.1, with a bearer token.
 
-To report a security issue, see [`SECURITY.md`](SECURITY.md).
+To report a security issue, see [`SECURITY.md`](SECURITY.md). The website's
+[Privacy Policy](https://synapse-site-virid.vercel.app/privacy) and
+[Terms of Use](https://synapse-site-virid.vercel.app/terms) have the details.
 
 ## Building from source
 You need Node 24.20 or later and full Xcode (not only the Command Line Tools: the native helpers are built
@@ -129,7 +131,9 @@ for personal data and third-party material; the test suite runs the same check.
 Some internal names still use the working name "Bots" (package names, the data folder, some service names).
 
 ## Licence
-MIT, see [`LICENSE`](LICENSE). The app bundles third-party components under their own licences, including the
+Apache-2.0, see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Versions up to 0.1.2 were released under the MIT
+licence and stay under it. The name "Synapse" and the Synapse Bot logo and icon aren't covered by the licence:
+see [`TRADEMARKS.md`](TRADEMARKS.md) for what forks can and can't do with them. The app bundles third-party components under their own licences, including the
 GPL-3.0 espeak-ng and phonemizer used by the Kokoro voice, whose source archives are attached to every release: see
 [`app/build/THIRD-PARTY-NOTICES.txt`](app/build/THIRD-PARTY-NOTICES.txt).
 

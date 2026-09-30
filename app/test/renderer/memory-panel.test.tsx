@@ -91,10 +91,10 @@ describe("memory screen: what the Bot remembers, by scope and tier", () => {
     expect(within(notes).queryByText("Booked the dentist")).toBeNull();
   });
 
-  it("'about you' says it is shared by all Bots, and which Bot learned each line", async () => {
+  it("'about you' says which Bot learned each line, under its title alone (UI-controls pass: no explanatory subtitle)", async () => {
     render(<MemoryPanel botId="a" />);
     const s = section(STRM.scopeUser);
-    expect(within(s).getByText(STRM.scopeUserHint)).toBeTruthy();
+    expect(within(s).queryByText(STRM.scopeUserHint)).toBeNull();
     expect(await within(s).findByText("Lives in Denver")).toBeTruthy();
     expect(within(s).getByText(STRM.via("Otto"))).toBeTruthy();
   });
@@ -257,7 +257,7 @@ describe("memory screen: secrets and the refresh", () => {
 
   it("Refresh now compacts the conversation and says what happened", async () => {
     render(<MemoryPanel botId="a" />);
-    expect(screen.getByText(STRM.refreshHint)).toBeTruthy();
+    expect(screen.queryByText(STRM.refreshHint), "the button is the label; no explanatory second line (UI-controls pass)").toBeNull();
     fireEvent.click(screen.getByRole("button", { name: STRM.refreshNow }));
     expect(await screen.findByText(STRM.refreshScheduled)).toBeTruthy();
     expect(mutations()).toEqual([["compactAgentNow", { id: "a" }]]);
@@ -309,7 +309,7 @@ describe("memory screen: provenance (who learned it, when, from where, and what 
     db.team = [fact("t1", "Releases ship on Thursdays.", { owner: "b", ownerName: "Otto" })];
     render(<MemoryPanel botId="a" />);
     const s = section(STRM.scopeTeam);
-    expect(within(s).getByText(STRM.scopeTeamHint)).toBeTruthy();
+    expect(within(s).queryByText(STRM.scopeTeamHint)).toBeNull();
     expect(await within(s).findByText("Releases ship on Thursdays.")).toBeTruthy();
     fireEvent.click(within(s).getByRole("button", { name: STRM.clear }));
     expect(within(s).getByText(STRM.clearAskTeam)).toBeTruthy();

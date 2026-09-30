@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { DEFAULT_BOT_MODEL, STR, STR5, STRL, modelLabel, type BotSummary, type PermMode } from "@synapse/shared";
+import { DEFAULT_BOT_MODEL, STR, STR5, STRL, STRV, modelLabel, type BotSummary, type PermMode } from "@synapse/shared";
 import { useUi } from "../store";
 import type { UiState } from "../reducer";
 import { BotAvatar } from "../avatar/BotAvatar";
@@ -18,8 +18,10 @@ const PERM_LABEL: Record<PermMode, string> = { ask: STR5.permModeAsk, "accept-ed
 const short = (s: string, n: number) => { const t = s.replace(/\s+/g, " ").trim(); return t.length <= n ? t : `${t.slice(0, n - 1).trimEnd()}…`; };
 
 /** The header's live chip: what the Bot is doing right now, from its current activity. Idle: none. */
-export function liveStatus(bot: BotSummary, onCall: boolean): { label: string; kind: "on-call" | "working" } | null {
+export function liveStatus(bot: BotSummary, onCall: boolean): { label: string; kind: "on-call" | "waiting" | "working" } | null {
   if (onCall) return { label: STRL.onCall, kind: "on-call" };
+  // New-user walk, finding 6: nothing runs while an approval card waits; it waits on the user.
+  if (bot.awaiting) return { label: STRV.presenceWaiting, kind: "waiting" };
   if (!bot.running && (!bot.presence || bot.presence === "idle")) return null;
   const task = bot.activity?.detail ?? bot.activity?.tool ?? "";
   const verb = bot.activity?.thinking && !task ? STRL.thinking : STR.working;
@@ -37,7 +39,7 @@ export function headerSubline(bot: BotSummary, bots: Record<string, BotSummary>)
 /**
  * The three columns collapse from the outside in (app.css): under ~1180px the right column closes on
  * its own, and comes back when there is room again — unless the user closed it themselves. Opened
- * again while narrow, it lies over the conversation's edge.
+ * again while narrow, it takes its place in the row and the chat column gives way (new-user walk, finding 24).
  *
  * The panel now starts closed by default (smooth pass, Task 5), so "comes back" has to mean whatever
  * the user last had open, not a hardcoded tab — a Bot with Files open before the window narrowed gets

@@ -33,4 +33,13 @@ describe("installAppMenu (fix round 1, finding 3)", () => {
     expect(labels.indexOf("Call")).toBe(labels.indexOf("windowMenu") - 1);
     expect(built!.find((i) => i.label === "Call")!.submenu!.map((i) => i.label)).toEqual(["Call Nova", "Call Ledger"]);
   });
+
+  it("Help → Send Feedback… opens the feedback sheet", () => {
+    const emit = vi.fn();
+    installAppMenu(emit);
+    const help = built!.find((i) => i.role === "help")!;
+    const item = help.submenu!.find((i) => i.label === "Send Feedback…") as { click(): void };
+    item.click();
+    expect(emit).toHaveBeenCalledWith("feedback");
+  });
 });

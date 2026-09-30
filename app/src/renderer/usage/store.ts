@@ -15,7 +15,7 @@ export function formatTokens(n: number): string {
   return String(n);
 }
 
-interface UsageState { view: UsageView | null; error: string | null; load(): Promise<void>; setBudget(usd: number | null): Promise<void> }
+interface UsageState { view: UsageView | null; error: string | null; load(): Promise<void> }
 
 export const useUsage = create<UsageState>((set) => ({
   view: null,
@@ -30,17 +30,6 @@ export const useUsage = create<UsageState>((set) => ({
       set({ view: await call("getUsage", {}) });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
-    }
-  },
-  // Fix round 1, finding 2: same pattern as store.ts's deleteBot/setPinned and
-  // bot-actions.ts — catch and set `actionError` (rendered as a role="alert" banner by
-  // Sidebar.tsx) instead of letting a rejected gateway call become a silent unhandled
-  // promise rejection with no user-facing feedback.
-  setBudget: async (usd) => {
-    try {
-      set({ view: await call("setWeeklyBudget", { usd }) });
-    } catch (e) {
-      useUi.setState({ actionError: e instanceof Error ? e.message : String(e) });
     }
   },
 }));

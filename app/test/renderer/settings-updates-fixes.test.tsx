@@ -8,6 +8,7 @@ import { UpdatesSection as BoxUpdatesSection } from "../../src/renderer/componen
 import { UpdatesSection as AppUpdatesSection } from "../../src/renderer/components/settings/UpdatesSection";
 import { useComputer } from "../../src/renderer/computer-state";
 import { useUpdates } from "../../src/renderer/updates/store";
+import { useUi } from "../../src/renderer/store";
 import { COPY, baseUpdate, boxStatus, installBridge } from "./settings-fixtures";
 
 let h: ReturnType<typeof installBridge>;
@@ -86,12 +87,14 @@ describe("Settings → Updates → the app card", () => {
   });
 
   it("shows the configured update source in the field", async () => {
+    useUi.setState({ settings: { ...(useUi.getState().settings ?? {}), advancedEnabled: true } as never }); // new-user walk finding 8: advanced controls
     h.nativeReply = () => ({ ...baseUpdate, feed: "alex/bots", status: "none" });
     render(<AppUpdatesSection />);
     expect(((await screen.findByLabelText(/Updates from GitHub/)) as HTMLInputElement).value).toBe("alex/bots");
   });
 
   it("lets a wrong update source be cleared", async () => {
+    useUi.setState({ settings: { ...(useUi.getState().settings ?? {}), advancedEnabled: true } as never }); // new-user walk finding 8: advanced controls
     const sent: unknown[] = [];
     h.nativeReply = (name, args) => { if (name === "updates.setSource") sent.push(args); return { ...baseUpdate, feed: "alex/bots", status: "none" }; };
     render(<AppUpdatesSection />);

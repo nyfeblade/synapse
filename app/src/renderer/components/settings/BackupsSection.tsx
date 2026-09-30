@@ -113,8 +113,8 @@ export function BackupsSection() {
             <div className="row-actions">
               <label htmlFor="backup-code" className="muted">{STRO.enterRecoveryCode}</label>
               <input id="backup-code" className="text-input" autoComplete="off" spellCheck={false} placeholder="SYN-…" value={codeInput} onChange={(e) => setCodeInput(e.target.value)} />
+              <button type="button" className="btn-secondary" onClick={cancel}>{STR.cancel}</button>
               <button type="button" className="btn-outline small" disabled={!codeInput.trim()} onClick={() => void open(target, codeInput.trim())}>{STRO.open}</button>
-              <button type="button" className="btn-outline" onClick={cancel}>{STR.cancel}</button>
             </div>
           )}
           {preview && (
@@ -124,8 +124,8 @@ export function BackupsSection() {
               <p className="muted">{STRO.restoreWarning}</p>
               {restoring ? <span className="muted" role="status">{STRO.restoring}</span> : (
                 <div className="row-actions">
+                  <button type="button" className="btn-secondary" onClick={cancel}>{STR.cancel}</button>
                   <button type="button" className="btn-danger" onClick={() => void restore()}>{STRO.restoreConfirm}</button>
-                  <button type="button" className="btn-outline" onClick={cancel}>{STR.cancel}</button>
                 </div>
               )}
             </>

@@ -61,6 +61,9 @@ export const RUNTIME_PATHS = [
   "Contents/Resources/kokoro/manifest.json",
   // The licences of what the app bundles.
   "Contents/Resources/THIRD-PARTY-NOTICES.txt",
+  // Synapse's own licence and NOTICE (Apache-2.0 §4).
+  "Contents/Resources/LICENSE",
+  "Contents/Resources/NOTICE",
   // voice-packs.ts installs the optional packs from these pinned locks (next to the sidecars).
   "Contents/Resources/app.asar.unpacked/dist/native/qwen-requirements.lock",
   "Contents/Resources/app.asar.unpacked/dist/native/f5-requirements.lock",

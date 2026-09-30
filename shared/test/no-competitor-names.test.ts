@@ -15,7 +15,12 @@ function strings(v: unknown, seen = new Set<unknown>(), out: string[] = [], dept
   if (typeof v === "string") { out.push(v); return out; }
   if (typeof v === "function") {
     for (const args of [["X", 2, 3], [["X", "Y"]], [{}], []]) {
-      try { const r = (v as (...a: unknown[]) => unknown)(...args); if (typeof r === "string") out.push(r); } catch { /* not copy */ }
+      try {
+        const r = (v as (...a: unknown[]) => unknown)(...args);
+        if (typeof r === "string") out.push(r);
+        // An async export (e.g. the Bot-link decoder) rejects on placeholder input: not copy, and must not surface as unhandled.
+        else if (r && typeof (r as Promise<unknown>).then === "function") (r as Promise<unknown>).catch(() => {});
+      } catch { /* not copy */ }
     }
     return out;
   }

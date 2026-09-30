@@ -58,20 +58,21 @@ export class GoogleAuth {
     return {
       state, clientId: a.client?.clientId ?? null, email: a.tokens ? a.email ?? null : null,
       services: a.tokens ? servicesOf(a.tokens.scope) : [], redirectUri: this.redirect(), error: state === "connected" ? null : this.lastError,
+      testing: a.tokens?.refreshExpiresAt ? true : a.publishing ? a.publishing === "testing" : null,
     };
   }
 
   isConnected(): boolean { return !!this.d.store.read().tokens; }
   email(): string | null { const a = this.d.store.read(); return a.tokens ? a.email ?? null : null; }
 
-  setClient(clientId: string, clientSecret: string): GoogleStatusView {
+  setClient(clientId: string, clientSecret: string, o: { inProduction?: boolean } = {}): GoogleStatusView {
     const id = clientId.trim();
     const secret = clientSecret.trim();
     if (!id || !secret || /\s/.test(id) || /\s/.test(secret) || id.length > 300 || secret.length > 300) throw new GatewayError("BAD_ARGS", "Paste both the Client ID and the Client secret from Google Cloud.");
     const cur = this.d.store.read();
     // Tokens belong to the client that issued them.
     if (cur.client?.clientId !== id) this.d.store.write({ tokens: undefined, email: undefined, needsReconnect: undefined });
-    this.d.store.write({ client: { clientId: id, clientSecret: secret } });
+    this.d.store.write({ client: { clientId: id, clientSecret: secret }, ...(typeof o.inProduction === "boolean" ? { publishing: o.inProduction ? "production" as const : "testing" as const } : {}) });
     this.pending.clear();
     this.lastError = null;
     this.d.onChange?.();
@@ -114,7 +115,7 @@ export class GoogleAuth {
     const r = await this.tokenCall({ grant_type: "authorization_code", code: a.code, code_verifier: p.verifier, redirect_uri: p.redirect, client_id: client.clientId, client_secret: client.clientSecret });
     if (!r.ok || !r.body.access_token) return fail(`Google didn't accept the sign-in (${r.body.error ?? r.status}).`);
     if (!r.body.refresh_token) return fail("Google didn't return a refresh token. Remove Bots' access in your Google account settings and connect again.");
-    const tokens: GoogleTokens = { accessToken: r.body.access_token, refreshToken: r.body.refresh_token, expiresAt: this.d.now() + Number(r.body.expires_in ?? 3600) * 1000, scope: r.body.scope ?? GOOGLE_SCOPES.join(" ") };
+    const tokens: GoogleTokens = { accessToken: r.body.access_token, refreshToken: r.body.refresh_token, expiresAt: this.d.now() + Number(r.body.expires_in ?? 3600) * 1000, scope: r.body.scope ?? GOOGLE_SCOPES.join(" "), ...this.refreshExpiry(r.body) };
     this.d.store.write({ tokens, needsReconnect: undefined });
     const email = await this.profileEmail(tokens.accessToken);
     this.d.store.write({ email: email ?? undefined });
@@ -133,6 +134,9 @@ export class GoogleAuth {
     this.refreshing ??= this.refresh().finally(() => { this.refreshing = null; });
     return this.refreshing;
   }
+
+  /** google-setup: the saved client secret, for the secret scanner (host-side only). */
+  clientSecret(): string | null { return this.d.store.read().client?.clientSecret ?? null; }
 
   /** Every token value currently stored, so callers can scrub them from anything that leaves the host. */
   secrets(): string[] {
@@ -165,15 +169,21 @@ export class GoogleAuth {
       throw new GoogleAuthError("needs-reconnect", STRG.toolNeedsReconnect);
     }
     if (!r.ok || !r.body.access_token) throw new GoogleAuthError("failed", `Google sign-in refresh failed (${r.body.error ?? r.status}). Try again in a minute.`);
-    const tokens: GoogleTokens = { ...a.tokens, accessToken: r.body.access_token, expiresAt: this.d.now() + Number(r.body.expires_in ?? 3600) * 1000, ...(r.body.refresh_token ? { refreshToken: r.body.refresh_token } : {}), ...(r.body.scope ? { scope: r.body.scope } : {}) };
+    const tokens: GoogleTokens = { ...a.tokens, accessToken: r.body.access_token, expiresAt: this.d.now() + Number(r.body.expires_in ?? 3600) * 1000, ...(r.body.refresh_token ? { refreshToken: r.body.refresh_token } : {}), ...(r.body.scope ? { scope: r.body.scope } : {}), ...this.refreshExpiry(r.body) };
     this.d.store.write({ tokens });
     return tokens.accessToken;
   }
 
-  private async tokenCall(form: Record<string, string>): Promise<{ ok: boolean; status: number; body: { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; error?: string } }> {
+  /** google-setup: a Testing app's refresh token comes with refresh_token_expires_in (Google ends it after 7 days). */
+  private refreshExpiry(b: { refresh_token_expires_in?: number }): { refreshExpiresAt?: number } {
+    const n = Number(b.refresh_token_expires_in);
+    return Number.isFinite(n) && n > 0 ? { refreshExpiresAt: this.d.now() + n * 1000 } : {};
+  }
+
+  private async tokenCall(form: Record<string, string>): Promise<{ ok: boolean; status: number; body: { access_token?: string; refresh_token?: string; expires_in?: number; refresh_token_expires_in?: number; scope?: string; error?: string } }> {
     try {
       const r = await this.fetch(this.d.endpoints().tokenUrl, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form).toString(), signal: AbortSignal.timeout(20_000) });
-      const body = (await r.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; error?: string };
+      const body = (await r.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number; refresh_token_expires_in?: number; scope?: string; error?: string };
       return { ok: r.ok, status: r.status, body: { ...body, error: typeof body.error === "string" ? body.error.slice(0, 60) : undefined } };
     } catch {
       return { ok: false, status: 0, body: { error: "network error" } };

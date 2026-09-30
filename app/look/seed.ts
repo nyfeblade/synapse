@@ -118,7 +118,7 @@ const FACTS: MemoryFactView[] = [
 
 const USAGE: UsageView = {
   source: "metering",
-  budgetUsd: 50, budgetPct: 38, level: "ok" as UsageView["level"], limitedUntil: null,
+  budgetPct: 38, level: "ok" as UsageView["level"], limitedUntil: null,
   weekStart: NOW - min(5000), rows: [], efficiency: {} as UsageView["efficiency"],
 };
 

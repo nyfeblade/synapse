@@ -40,7 +40,8 @@ describe("Marketplace modal (Marketplace.dc.html)", () => {
     expect(within(dlg).getByRole("link", { name: "Your plugins, 6 installed" }).textContent).toContain("Your plugins · 6 installed");
     expect(within(dlg).getByRole("region", { name: "Featured Bots" }).textContent).toContain("Ana's");
     expect(within(dlg).getByRole("region", { name: "For you" }).textContent).toContain("Because you use GitHub");
-    expect(within(dlg).getByRole("region", { name: "From Synapse Team" }).textContent).toContain("by Synapse Team");
+    // New-user walk, nit 29: the section already says who made them; the rows don't repeat "by Synapse Team".
+    expect(within(dlg).getByRole("region", { name: "From Synapse Team" }).textContent).not.toContain("by Synapse Team");
     expect(within(dlg).getByRole("button", { name: "Add Linear" }).textContent).toBe("Add");
     // UI polish pass: one verb per row (Add | Authorize | Manage); the state is a quiet word beside it.
     expect(within(dlg).getByRole("button", { name: "Manage Vercel" }).textContent).toBe("Manage");

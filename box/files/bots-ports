@@ -4,9 +4,10 @@
 # and renders the rule (`load`), and bots-auth-proxy.service runs `load` at every boot, so the loaded rule always
 # follows the port in the host's drop-in. 47802 stays covered too, so a host still on it before its restart is never
 # left open. The rule is loaded (nft -f replaces the table atomically) BEFORE the drop-in moves the host, and on every
-# run, so a load that failed once is fixed by the next run. R/SYSTEMCTL/NFT exist for tests only.
+# run, so a load that failed once is fixed by the next run. R/SYSTEMCTL/NFT/GETENT exist for tests only.
+# Bug 362: the same three callers also load the Mac guard (guard below), so the Bots can't reach the Mac's private services.
 set -euo pipefail
-R="${R:-}"; SYSTEMCTL="${SYSTEMCTL:-systemctl}"; NFT="${NFT:-/usr/sbin/nft}"
+R="${R:-}"; SYSTEMCTL="${SYSTEMCTL:-systemctl}"; NFT="${NFT:-/usr/sbin/nft}"; GETENT="${GETENT:-getent}"; VISUDO="${VISUDO:-/usr/sbin/visudo}"
 DROPIN="$R/etc/systemd/system/bothost.service.d/20-ports.conf"
 RULE="$R/etc/bots/auth-proxy.nft"
 TEMPLATE="$R/etc/bots/auth-proxy.nft.in"
@@ -21,12 +22,212 @@ rule() {
   mv "$RULE.new" "$RULE"
   sh -c "$NFT -f '$RULE'"
 }
+# Bug 362: OrbStack forwards the Mac's own addresses as seen from the box (host.orb.internal, host.docker.internal,
+# 0.250.250.254 and the host's IPv6 ULA) to ANY port on the Mac's 127.0.0.1: Ollama, dev servers, and Synapse's own
+# loopback listeners (OAuth callback, VNC proxy, the Mac key proxy, the Mac browser's DevTools port). Nothing in the box
+# needs the Mac except the host (bothost: owner-set endpoints such as an IMAP bridge or an MCP URL on the Mac), so:
+#  - the Mac's addresses: every account but root and bothost is refused, on every port, IPv4 and IPv6;
+#  - private and local ranges (the LAN, other OrbStack machines, link-local, CGNAT/Tailscale, NAT64, multicast): box
+#    (Bot Chrome, git hooks, and every Bot on a box not yet migrated) and the Bot accounts (60200-61099) are refused,
+#    except DNS to the box's own nameservers. The public internet is untouched, and so is the box's own loopback and
+#    own addresses (the auth proxy keeps its own rule, above). Replies on connections made TO a Bot are let out.
+# The Mac's names are resolved on every run (cached in /etc/bots/mac-hosts for a boot before DNS is up); the fixed
+# ranges already cover what OrbStack uses today, so a failed lookup never leaves the Mac open.
+MAC_NAMES="host.orb.internal host.docker.internal host.internal"
+MAC4_FIXED="0.250.250.254"
+# Bug 366: OrbStack's host ULA is fixed too, so it is denied even when the lookup fails and nothing is cached.
+MAC6_FIXED="fd07:b51a:cc66:f0::fe"
+# Bug 366: OrbStack's own service addresses (0.250.250.0/24: the Mac .254, DNS .200; the machines' gateway
+# 198.19.249.1; the host services' ULA net) are denied to every account but root and bothost; DNS is let through first.
+ORB4="0.250.250.0/24, 198.19.249.1"
+ORB6="fd07:b51a:cc66:f0::/64"
+# Bug 367 (product call): what box and the Bots are kept off is driven by net-guard.conf (LAN_BLOCK, LAN4, LAN6),
+# so an owner opt-in ("Let Bots reach my local network") can later flip LAN_BLOCK=off without touching this script.
+# Everything stays blocked by default. These are the defaults written into the config when it lacks them.
+LAN4_DEFAULT="0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4"
+LAN6_DEFAULT="64:ff9b::/96 64:ff9b:1::/48 fc00::/7 fe80::/10 ff00::/8"
+GUARD="$R/etc/bots/mac-guard.nft"
+MACHOSTS="$R/etc/bots/mac-hosts"
+# Bug 365: the box's one network-guard config. MAC_NETS: the Mac's own global IPv6 prefixes and any LAN IPv4 outside
+# RFC 1918, passed in by the Mac (deploy, and the app on every network change: `bots-ports mac-nets LIST`). The host's
+# guarded fetch (host/net/guarded-fetch.ts) reads the same line.
+CONF="$R/etc/bots/net-guard.conf"
+# Bug 364: strict address parsing (a partial or malformed address never reaches the rule).
+is_ipv4() {
+  local ip="$1" o parts
+  case "$ip" in ''|*[!0-9.]*|.*|*.|*..*) return 1 ;; esac
+  IFS=. read -r -a parts <<<"$ip"
+  [ "${#parts[@]}" -eq 4 ] || return 1
+  for o in "${parts[@]}"; do
+    case "$o" in 0) ;; 0*|????*) return 1 ;; esac
+    [ "$o" -le 255 ] || return 1
+  done
+}
+is_ipv6() {
+  local ip="$1" head tail g n=0 parts
+  case "$ip" in ''|*[!0-9A-Fa-f:.]*|*:::*) return 1 ;; esac
+  if [[ "$ip" == *.* ]]; then
+    local v4="${ip##*:}"; is_ipv4 "$v4" || return 1
+    ip="${ip%"$v4"}0:0"
+  fi
+  case "$ip" in *:) [[ "$ip" == *:: ]] || return 1 ;; esac
+  case "$ip" in :*) [[ "$ip" == ::* ]] || return 1 ;; esac
+  if [[ "$ip" == *::* ]]; then
+    head="${ip%%::*}"; tail="${ip#*::}"
+    [[ "$tail" == *::* ]] && return 1
+  else head="$ip"; tail=""; fi
+  for g in "$head" "$tail"; do
+    [ -n "$g" ] || continue
+    IFS=: read -r -a parts <<<"$g"
+    for g in "${parts[@]}"; do case "$g" in ''|?????*) return 1 ;; esac; n=$((n + 1)); done
+  done
+  if [[ "$ip" == *::* ]]; then [ "$n" -le 7 ]; else [ "$n" -eq 8 ]; fi
+}
+is_addr() { is_ipv4 "$1" || is_ipv6 "$1"; }
+# A CIDR (address/prefix), strictly; printed as its network (host bits cleared) when python3 is there.
+is_cidr() {
+  local a="${1%/*}" p="${1##*/}"
+  [ "$a/$p" = "$1" ] || return 1
+  case "$p" in ''|*[!0-9]*|0?*) return 1 ;; esac
+  if is_ipv4 "$a"; then [ "$p" -le 32 ]; elif is_ipv6 "$a"; then [ "$p" -le 128 ]; else return 1; fi
+}
+norm_cidr() {
+  if command -v python3 >/dev/null 2>&1; then python3 -c 'import ipaddress,sys; print(ipaddress.ip_network(sys.argv[1], strict=False))' "$1"; else echo "$1"; fi
+}
+conf_get() { if [ -f "$CONF" ]; then sed -n "s/^$1=//p" "$CONF" | tail -n 1; fi; }
+conf_set() {
+  install -d -m 0755 "$(dirname "$CONF")"
+  { if [ -f "$CONF" ]; then grep -v "^$1=" "$CONF" || true; else echo "# Synapse: the Bots' network guard (bugs 362-366). bots-ports reads it on every run."; fi; echo "$1=$2"; } > "$CONF.new"
+  mv "$CONF.new" "$CONF"
+}
+# mac_nets "LIST": keep only well-formed CIDRs (space or comma separated), normalized, unique.
+set_mac_nets() {
+  local c out=""
+  for c in $(printf '%s' "$1" | tr ',' ' '); do if is_cidr "$c"; then out="$out $(norm_cidr "$c")"; else echo "bots-ports: ignoring '$c' (not a network)" >&2; fi; done
+  conf_set MAC_NETS "$(printf '%s\n' $out | sort -u | paste -sd' ' -)"
+}
+# join ADDR... -> "a, b, c" (sorted, unique, only well-formed addresses).
+join() { printf '%s\n' "$@" | while read -r a; do if is_addr "$a"; then echo "$a"; fi; done | sort -u | paste -sd, - | sed 's/,/, /g'; }
+set_line() { if [ -n "$3" ]; then printf '  set %s { type %s; elements = { %s } }\n' "$1" "$2" "$3"; else printf '  set %s { type %s; }\n' "$1" "$2"; fi; }
+# The Mac's name -> its addresses, one per line; nothing when it doesn't resolve within 3 seconds.
+lookup() {
+  if command -v timeout >/dev/null 2>&1; then timeout 3 $GETENT ahosts "$1" 2>/dev/null; else $GETENT ahosts "$1" 2>/dev/null; fi | awk '{print $1}' | sort -u
+}
+guard() {
+  local found="" n a mac4 mac6 dns4 dns6
+  for n in $MAC_NAMES; do found="$found $(lookup "$n" || true)"; done
+  # Bug 366: merged with the cache, never replacing it: an address seen once stays denied.
+  if [ -f "$MACHOSTS" ]; then found="$found $(cat "$MACHOSTS")"; fi
+  found="$(for a in $found; do if is_addr "$a"; then echo "$a"; fi; done | sort -u)"
+  if [ -n "$found" ]; then install -d -m 0755 "$(dirname "$MACHOSTS")"; printf '%s\n' "$found" > "$MACHOSTS.new"; mv "$MACHOSTS.new" "$MACHOSTS"; fi
+  # shellcheck disable=SC2086
+  mac4="$(join $MAC4_FIXED $(for a in $found; do if is_ipv4 "$a"; then echo "$a"; fi; done))"
+  # shellcheck disable=SC2046
+  mac6="$(join $MAC6_FIXED $(for a in $found; do if is_ipv6 "$a"; then echo "$a"; fi; done))"
+  local ns; ns="$(sed -n 's/^[[:space:]]*nameserver[[:space:]]\{1,\}\([^[:space:]%]*\).*/\1/p' "$R/etc/resolv.conf" 2>/dev/null || true)"
+  # shellcheck disable=SC2046
+  dns4="$(join $(for a in $ns; do if is_ipv4 "$a"; then echo "$a"; fi; done))"
+  # shellcheck disable=SC2046
+  dns6="$(join $(for a in $ns; do if is_ipv6 "$a"; then echo "$a"; fi; done))"
+  # Bug 367: the LAN list and switch come from the config (defaults written once, an owner's edit kept). Anything but
+  # LAN_BLOCK=off blocks; a list with no valid entry falls back to the default (never to "nothing blocked").
+  [ -n "$(conf_get LAN_BLOCK)" ] || conf_set LAN_BLOCK on
+  [ -n "$(conf_get LAN4)" ] || conf_set LAN4 "$LAN4_DEFAULT"
+  [ -n "$(conf_get LAN6)" ] || conf_set LAN6 "$LAN6_DEFAULT"
+  local lanblock lan4 lan6 c
+  lanblock="$(conf_get LAN_BLOCK)"
+  lan4="$(for c in $(conf_get LAN4); do if is_cidr "$c" && is_ipv4 "${c%/*}"; then echo "$c"; fi; done | paste -sd, - | sed 's/,/, /g')"
+  lan6="$(for c in $(conf_get LAN6); do if is_cidr "$c" && is_ipv6 "${c%/*}"; then echo "$c"; fi; done | paste -sd, - | sed 's/,/, /g')"
+  [ -n "$lan4" ] || lan4="$(echo "$LAN4_DEFAULT" | sed 's/ /, /g')"
+  [ -n "$lan6" ] || lan6="$(echo "$LAN6_DEFAULT" | sed 's/ /, /g')"
+  local nets macnet4 macnet6; nets="$(conf_get MAC_NETS)"
+  # shellcheck disable=SC2046
+  macnet4="$(printf '%s\n' $(for c in $nets; do if is_cidr "$c" && is_ipv4 "${c%/*}"; then echo "$c"; fi; done) | sort -u | paste -sd, - | sed 's/,/, /g')"
+  # shellcheck disable=SC2046
+  macnet6="$(printf '%s\n' $(for c in $nets; do if is_cidr "$c" && is_ipv6 "${c%/*}"; then echo "$c"; fi; done) | sort -u | paste -sd, - | sed 's/,/, /g')"
+  install -d -m 0755 "$(dirname "$GUARD")"
+  {
+    echo "#!/usr/sbin/nft -f"
+    echo "# Rendered by /usr/local/lib/bots/bots-ports (bug 362): Bots can't reach the Mac's private services or the LAN."
+    echo "table inet bots_mac_guard"
+    echo "delete table inet bots_mac_guard"
+    echo "table inet bots_mac_guard {"
+    set_line mac4 ipv4_addr "$mac4"
+    set_line mac6 ipv6_addr "$mac6"
+    set_line dns4 ipv4_addr "$dns4"
+    set_line dns6 ipv6_addr "$dns6"
+    echo "  set orb4 { type ipv4_addr; flags interval; elements = { $ORB4 } }"
+    echo "  set orb6 { type ipv6_addr; flags interval; elements = { $ORB6 } }"
+    set_line macnet4 "ipv4_addr; flags interval" "$macnet4"
+    set_line macnet6 "ipv6_addr; flags interval" "$macnet6"
+    echo "  set lan4 { type ipv4_addr; flags interval; elements = { $lan4 } }"
+    echo "  set lan6 { type ipv6_addr; flags interval; elements = { $lan6 } }"
+    echo "  chain output {"
+    echo "    type filter hook output priority 0; policy accept;"
+    echo "    ct state established,related accept"
+    echo '    meta skuid { "root", "bothost" } accept'
+    echo "    fib daddr type local accept"
+    echo "    ip daddr @dns4 meta l4proto { tcp, udp } th dport 53 accept"
+    echo "    ip6 daddr @dns6 meta l4proto { tcp, udp } th dport 53 accept"
+    echo "    ip daddr @mac4 goto deny"
+    echo "    ip6 daddr @mac6 goto deny"
+    echo "    ip daddr @orb4 goto deny"
+    echo "    ip6 daddr @orb6 goto deny"
+    echo "    ip daddr @macnet4 goto deny"
+    echo "    ip6 daddr @macnet6 goto deny"
+    echo '    meta skuid "box" goto bots'
+    echo "    meta skuid 60200-61099 goto bots"
+    echo "  }"
+    echo "  chain bots {"
+    if [ "$lanblock" = off ]; then
+      echo "    # LAN_BLOCK=off in /etc/bots/net-guard.conf: the owner let the Bots reach the local network."
+    else
+      echo "    ip daddr @lan4 goto deny"
+      echo "    ip6 daddr @lan6 goto deny"
+    fi
+    echo "  }"
+    echo "  chain deny {"
+    echo "    meta l4proto tcp counter reject with tcp reset"
+    echo "    counter reject with icmpx type admin-prohibited"
+    echo "  }"
+    echo "}"
+  } > "$GUARD.new"
+  mv "$GUARD.new" "$GUARD"
+  sh -c "$NFT -f '$GUARD'"
+}
+# Bug 364: the host (bothost) asks `bots-ports check` through sudo whether the firewall is loaded, at start and every
+# minute, and refuses Bot turns without it. Only that exact command; installed on every run so a deploy brings it.
+SUDOERS="$R/etc/sudoers.d/bots-ports-check"
+BOTHOST_FW_DROPIN="$R/etc/systemd/system/bothost.service.d/05-firewall.conf"
+sudoers() {
+  install -d -m 0750 "$(dirname "$SUDOERS")"
+  printf 'Defaults!/usr/local/lib/bots/bots-ports !use_pty\nbothost ALL=(root) NOPASSWD: /usr/local/lib/bots/bots-ports check\n' > "$SUDOERS.new"
+  chmod 0440 "$SUDOERS.new"
+  if sh -c "$VISUDO -cf '$SUDOERS.new'" >/dev/null; then mv "$SUDOERS.new" "$SUDOERS"; else rm -f "$SUDOERS.new"; echo "bots-ports: the sudoers line didn't validate" >&2; exit 1; fi
+}
 case "${1:-}" in
+  mac-nets)
+    # Bug 365: the app, when the Mac's networks change. Only the guard reloads.
+    [ $# -ge 2 ] || { echo "usage: bots-ports mac-nets LIST" >&2; exit 2; }
+    set_mac_nets "$2"
+    guard
+    ;;
+  check)
+    # Both tables must be there: the auth proxy's rule and the Mac guard.
+    sh -c "$NFT list table inet bots_auth_proxy" >/dev/null 2>&1 && sh -c "$NFT list table inet bots_mac_guard" >/dev/null 2>&1
+    ;;
   apply)
     gw="${2:-}"; wh="${3:-}"; px="${4:-}"
     num "$gw"; num "$wh"; num "$px"
+    # Bug 365: a 5th argument (even empty) is the Mac's networks from the Mac; without it the saved list stays.
+    if [ $# -ge 5 ]; then set_mac_nets "$5"; fi
     rule "$px"
+    guard
+    sudoers
     install -d -m 0755 "$(dirname "$DROPIN")"
+    # Bug 364: the host never runs without the firewall service (a box provisioned before this gets it here).
+    printf '[Unit]\nRequires=bots-auth-proxy.service\nAfter=bots-auth-proxy.service\n' > "$BOTHOST_FW_DROPIN.new"
+    mv "$BOTHOST_FW_DROPIN.new" "$BOTHOST_FW_DROPIN"
     printf '[Service]\nEnvironment=HOST_PORT=%s\nEnvironment=WEBHOOK_PORT=%s\nEnvironment=SYNAPSE_AUTH_PROXY_PORT=%s\n' "$gw" "$wh" "$px" > "$DROPIN.new"
     mv "$DROPIN.new" "$DROPIN"
     sh -c "$SYSTEMCTL daemon-reload"
@@ -38,6 +239,8 @@ case "${1:-}" in
     px="${px:-47802}"
     num "$px"
     rule "$px"
+    guard
+    sudoers
     ;;
-  *) echo "usage: bots-ports apply GATEWAY WEBHOOK AUTH_PROXY | bots-ports load" >&2; exit 2 ;;
+  *) echo "usage: bots-ports apply GATEWAY WEBHOOK AUTH_PROXY | bots-ports load | bots-ports mac-nets LIST | bots-ports check" >&2; exit 2 ;;
 esac

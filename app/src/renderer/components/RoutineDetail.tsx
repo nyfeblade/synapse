@@ -165,7 +165,7 @@ export function RoutineDetail({ botId, routineId, onBack }: { botId: string; rou
         <button type="button" className="icon-btn" aria-label="Back to details" onClick={onBack}><BackIcon /></button>
         <span className="panel-title">{STR.routines}</span>
       </div>
-      <input className="routine-title-input" aria-label="Routine name" value={nameDraft ?? r.name} maxLength={80}
+      <input className="routine-title-input" aria-label="Routine name" title={r.name} value={nameDraft ?? r.name} maxLength={80}
         onChange={(e) => setNameDraft(e.target.value)} onBlur={saveOnBlur("name", r.name, () => setNameDraft(null))} />
       <label className="field-label" htmlFor="routine-prompt">{STR.instruction}</label>
       <textarea id="routine-prompt" aria-label={STR.instruction} value={promptDraft ?? r.prompt} rows={4}

@@ -19,8 +19,8 @@ beforeEach(() => {
   calls.length = 0;
   (window as unknown as { synapse: unknown }).synapse = {
     call: vi.fn(async (cmd: string, args: Record<string, unknown>) => {
-      // FollowupsToggle's, GoogleToggle's, GitHubRow's, BrowserRow's and MacAppRow's mount-time reads; not under test here
-      if (cmd !== "getModelAccess" && cmd !== "getPhase5Settings" && cmd !== "getGoogleStatus" && cmd !== "getGitHubStatus" && cmd !== "getLocalBrowserAllowed" && cmd !== "getLocalMacAppAllowed") calls.push([cmd, args]);
+      // FollowupsToggle's, GoogleToggle's, GitHubRow's, BrowserRow's, MacAppRow's and the Composio row's mount-time reads; not under test here
+      if (cmd !== "getModelAccess" && cmd !== "getPhase5Settings" && cmd !== "getGoogleStatus" && cmd !== "getGitHubStatus" && cmd !== "getLocalBrowserAllowed" && cmd !== "getLocalMacAppAllowed" && cmd !== "getComposioStatus") calls.push([cmd, args]);
       if (cmd === "setHostSettings") return { ok: true, result: { ...useUi.getState().settings, ...args } };
       return { ok: true, result: { agent: bot } };
     }),
@@ -72,6 +72,7 @@ describe("Bot settings panel (SET-15, BOT-25, BOT-18)", () => {
   });
 
   it("Engineering mode calls setAgentEngineeringMode and says what it loads and what it costs", async () => {
+    useUi.setState({ settings: { ...(useUi.getState().settings ?? {}), advancedEnabled: true } as never }); // new-user walk finding 8: advanced controls
     render(<BotSettingsPanel botId="a" />);
     const n = ENGINEERING_MODE_EXTRA_TOKENS.toLocaleString("en-US");
     // UI polish pass: the cost is a quiet value beside the switch (real data), not a sentence under it.
@@ -116,6 +117,7 @@ describe("Settings nav and close (T1)", () => {
 
 describe("Settings → General → Auto-review (SET-05, SET-06)", () => {
   it("toggles Auto-review, adds, edits and deletes rules", async () => {
+    useUi.setState({ settingsFocus: "auto-review" }); // new-user walk finding 22: its own section
     render(<SettingsModal />);
     fireEvent.click(screen.getByRole("switch", { name: "Auto-review" }));
     const input = screen.getByLabelText("When a Bot wants to:");

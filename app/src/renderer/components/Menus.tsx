@@ -1,9 +1,11 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { sanitizeExitClone, scheduleExitRemoval } from "../exit-clone";
 import { useOverlayLayer } from "./Dialog";
+import { CheckIcon, ChevronRightIcon } from "./Icons";
 
 export type MenuItem =
-  | { label: string; danger?: boolean; disabled?: boolean; title?: string; onSelect(): void }
+  /** `checked`: one of a set of choices (a small picker); drawn as a menuitemradio with a check on the chosen one. */
+  | { label: string; danger?: boolean; disabled?: boolean; title?: string; checked?: boolean; submenu?: boolean; onSelect(): void }
   /** A hairline divider between two groups of items (the account menu, Marketplace ahead of Settings).
    *  Not a button: it carries no label and no onSelect, so it is invisible to `enabled()`'s roving
    *  focus below and to `focusables()` (Dialog.tsx) — arrow keys, Tab and autofocus all skip it the
@@ -80,7 +82,7 @@ export function Menu({ items, x, y, label, onClose, anchor = "top" }: { items: M
   // there is still something connected to clone.
   useLayoutEffect(() => () => beginMenuExit(ref.current), []);
 
-  const enabled = (): HTMLButtonElement[] => [...(ref.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])].filter((b) => !b.disabled);
+  const enabled = (): HTMLButtonElement[] => [...(ref.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem], [role=menuitemradio]") ?? [])].filter((b) => !b.disabled);
   const move = (delta: number, to?: "first" | "last") => {
     const list = enabled();
     if (!list.length) return;
@@ -102,8 +104,14 @@ export function Menu({ items, x, y, label, onClose, anchor = "top" }: { items: M
   closeRef.current = onClose;
   useLayoutEffect(() => {
     const onDown = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) closeRef.current(); };
+    // UI-controls pass (2026-09-29): the menu is placed once, in window coordinates, when it opens. A
+    // window resized under it (dragged, zoomed, the 1024 floor) left it at the old coordinates — measured
+    // wholly outside a 1024x680 window after opening at 1440x900. A macOS menu closes when its window
+    // resizes; so does this one, which keeps every open menu inside the window it belongs to.
+    const onResize = () => closeRef.current();
     window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
+    window.addEventListener("resize", onResize);
+    return () => { window.removeEventListener("mousedown", onDown); window.removeEventListener("resize", onResize); };
   }, []);
 
   return (
@@ -111,8 +119,8 @@ export function Menu({ items, x, y, label, onClose, anchor = "top" }: { items: M
       {items.map((it, i) => "separator" in it
         ? <div key={`separator-${i}`} role="separator" className="menu-separator" />
         : (
-          <button key={it.label} type="button" role="menuitem" disabled={it.disabled} title={it.title} className={it.danger ? "menu-item danger" : "menu-item"} onClick={() => { if (it.disabled) return; it.onSelect(); onClose(); }}>
-            {it.label}
+          <button key={it.label} type="button" role={it.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={it.checked} aria-haspopup={it.submenu ? "menu" : undefined} disabled={it.disabled} title={it.title} className={it.danger ? "menu-item danger" : "menu-item"} onClick={() => { if (it.disabled) return; it.onSelect(); onClose(); }}>
+            {it.label}{it.checked && <CheckIcon className="menu-check" />}{it.submenu && <ChevronRightIcon size={12} className="menu-check" />}
           </button>
         ))}
     </div>

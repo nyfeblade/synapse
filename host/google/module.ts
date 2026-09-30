@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { McpSdkServerConfigWithInstance, McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
-import { GOOGLE_SERVER_ID, STRG, type GoogleBotStatusView, type GoogleStatusView } from "@synapse/shared";
+import { GOOGLE_SERVER_ID, STRG, STRGS, type GoogleBotStatusView, type GoogleStatusView } from "@synapse/shared";
 import { toNamedMcpServer } from "../brain/sdk-wiring";
 import { markBuiltinServer } from "../mcp/reserved";
 import type { BotToolDef } from "../brain/types";
@@ -14,6 +14,8 @@ import { GoogleAuth, GoogleAuthError } from "./oauth";
 import { GoogleStore } from "./store";
 import { googleCardFacts, type GoogleCardFacts } from "./card-facts";
 import { createGoogleTools, fetchDraftPreview, type DraftPreview } from "./tools";
+import { GoogleSetupTasks } from "./setup-task";
+import { GoogleReconnectCheck } from "./reconnect-check";
 
 export type GoogleDraftFetchResult = { preview: DraftPreview } | { error: string };
 
@@ -23,6 +25,10 @@ const RECONNECT_KEY = "google-reconnect";
 export interface GoogleServices {
   auth: GoogleAuth;
   api: GoogleApi;
+  /** google-setup: the "Let a Bot do it" task (SaveGoogleClient, the host-side capture of the client). */
+  setup: GoogleSetupTasks;
+  /** google-setup: the weekly sign-in check and the one "Reconnect Google" notification per expiry. */
+  reconnect: GoogleReconnectCheck;
   /** FUZZ/E2E: the local stub standing in for Google (null for the real thing). */
   readonly fake: FakeGoogle | null;
   status(): GoogleStatusView;
@@ -36,6 +42,8 @@ export interface GoogleServices {
   /** ORIG-GOOGLE draft-send card: the draft's current To/Cc/Bcc/Subject/body/attachments, host-side, with the
    *  user's token — for the approval gate to build the card from before it's ever raised. */
   draftPreview(draftId: string): Promise<GoogleDraftFetchResult>;
+  /** Bug 420: whether the owner has sent mail to this address (their Sent folder); null when it can't be checked. */
+  sentTo(address: string): Promise<boolean | null>;
   /** Final secfix item 9: host-side facts for a Google write's approval card. */
   cardFacts(tool: string, input: Record<string, unknown>): Promise<GoogleCardFacts | { error: string }>;
   onChange(fn: () => void): void;
@@ -55,19 +63,25 @@ export function createGoogleServices(ctx: ModuleContext, o: { fake: boolean; end
   const listeners = new Set<() => void>();
   const enabledFor = (botId: string) => ctx.bots.has(botId) && ctx.bots.summary(botId).settings.google === true;
   let auth: GoogleAuth;
+  let setup: GoogleSetupTasks | null = null;
+  let reconnect: GoogleReconnectCheck | null = null;
+  const view = (): GoogleStatusView => ({ ...auth.status(), setupTask: setup?.view() ?? null });
   // The tools are handed to a Bot at spawn time, so a Bot whose session is already warm keeps the old, Google-less
   // tool list until it respawns. Waking it is what makes the respawn happen: runTurn() sees the changed spawnKey,
   // cools the process and starts a new one with the Google server mounted. Without this the Bot can only tell the
   // user "message me again", which is exactly what it did.
   let lastAccount: GoogleStatusView["state"] | null = null;
   const publish = () => {
-    const st = auth.status();
+    const st = view();
     ctx.hub.publish({ channel: "google", payload: st });
     if (st.state === "connected") for (const t of ctx.trays.list().filter((x) => x.dedupeKey === RECONNECT_KEY)) ctx.trays.dismiss(t.id);
     const became = st.state === "connected" && lastAccount !== "connected";
     lastAccount = st.state;
+    reconnect?.onStatus(st);
     if (became) for (const id of ctx.bots.ids()) if (enabledFor(id)) wakeForGoogle(id);
     for (const fn of listeners) fn();
+    // The setup (or reconnect) task's goal is a connected account: it ends there, and SaveGoogleClient goes with it.
+    if (became && st.setupTask) setup?.end();
   };
   const wakeForGoogle = (botId: string) => ctx.enqueueHidden(botId, {
     source: "mcp-auth", lane: "background", silenceAllowed: true, text: STRG.botWakeReady(auth.email()),
@@ -76,9 +90,31 @@ export function createGoogleServices(ctx: ModuleContext, o: { fake: boolean; end
     // Final secfix item 6: sealed with the HKDF subkey "bots/google/v1" (legacy raw-vault-key files still open).
     store: (() => { const vk = vaultKeySync(ctx.cfg.hostPrivate); return new GoogleStore(path.join(ctx.cfg.hostPrivate, "google", "account.json"), subkey(vk, "bots/google/v1"), vk); })(),
     endpoints, now: ctx.now, fetch: o.fetch, onChange: publish, ...(o.redirectUri ? { redirectUri: o.redirectUri } : {}),
-    onNeedsReconnect: () => ctx.trays.add({ botId: null, title: STRG.reconnectTray, detail: STRG.reconnectTrayDetail, dedupeKey: RECONNECT_KEY, buttons: [{ label: STRG.reconnect, action: "reconnect-google" }] }),
+    // One notification per expired sign-in, whoever notices first (a Bot's Google call or the weekly check).
+    onNeedsReconnect: () => { reconnect?.notifyIfNeeded(); },
   });
   const api = new GoogleApi({ auth, endpoints, fetch: o.fetch });
+  setup = new GoogleSetupTasks({
+    now: ctx.now,
+    botName: (id) => (ctx.bots.has(id) ? ctx.bots.summary(id).profile.name : null),
+    sendPrompt: (id, text, nonce) => { ctx.sendPrompt(id, text, nonce); },
+    setClient: (id, secret) => {
+      if (fakeBlocked) throw new GatewayError("BAD_ARGS", "Google can't be connected on a test host.");
+      auth.setClient(id, secret);
+    },
+    onChange: publish,
+  });
+  const tasks = setup;
+  const check = reconnect = new GoogleReconnectCheck({
+    hostPrivate: ctx.cfg.hostPrivate, now: ctx.now, tz: () => ctx.settings.timeZone(), status: view,
+    probe: async () => { await auth.accessToken(true); },
+    notify: () => ctx.trays.add({
+      botId: null, title: STRG.reconnectTray, detail: STRG.reconnectTrayDetail, dedupeKey: RECONNECT_KEY,
+      buttons: [{ label: STRG.reconnect, action: "reconnect-google" }, { label: STRGS.letABotClick, action: "reconnect-google-bot" }],
+    }),
+    setTimer: (fn, ms) => { const t = setTimeout(fn, ms); t.unref?.(); return t; },
+    clearTimer: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
+  });
   lastAccount = auth.status().state; // a host that boots already connected must not wake every Bot
   // `ready` is the same predicate the spawn set uses (enabledFor && auth.isConnected()), so the Bot's status check
   // and its actual tool list can never tell the user different stories again. See googleToolsMounted().
@@ -92,9 +128,9 @@ export function createGoogleServices(ctx: ModuleContext, o: { fake: boolean; end
     return { state: account, enabled, account, email };
   };
   return {
-    auth, api,
+    auth, api, setup: tasks, reconnect: check,
     get fake() { return fake; },
-    status: () => auth.status(),
+    status: view,
     enabledFor,
     botStatus,
     wake: wakeForGoogle,
@@ -115,6 +151,14 @@ export function createGoogleServices(ctx: ModuleContext, o: { fake: boolean; end
         return { error: scrub(`Google call failed: ${String((e as Error).message ?? e).slice(0, 300)}`, auth.secrets()) };
       }
     },
+    sentTo: async (address) => {
+      // Bug 420: has the owner sent mail to this address? (null: Google isn't connected or the check failed)
+      if (!auth.isConnected() || !/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(address)) return null;
+      try {
+        const r = await api.call<{ messages?: unknown[] }>(`${api.endpoints.gmail}/users/me/messages`, { query: { q: `in:sent to:${address}`, maxResults: 1 } });
+        return (r.messages ?? []).length > 0;
+      } catch { return null; }
+    },
     cardFacts: async (tool, input) => {
       if (!auth.isConnected()) return { error: STRG.toolNotConnected };
       try { return await googleCardFacts(api, tool, input); }
@@ -126,8 +170,8 @@ export function createGoogleServices(ctx: ModuleContext, o: { fake: boolean; end
     },
     onChange: (fn) => { listeners.add(fn); },
     fakeBlocked,
-    start: async () => { if (o.fake && fuzz && !o.endpoints && !fake) fake = await startFakeGoogle(); },
-    stop: async () => { await fake?.close(); fake = null; },
+    start: async () => { if (o.fake && fuzz && !o.endpoints && !fake) fake = await startFakeGoogle(); check.start(); },
+    stop: async () => { check.stop(); await fake?.close(); fake = null; },
   };
 }
 
@@ -144,6 +188,8 @@ export function createGoogleModule(ctx: ModuleContext, g: GoogleServices): HostM
     name: "google",
     start: () => g.start(),
     stop: () => g.stop(),
+    // google-setup: SaveGoogleClient, only for the Bot running the setup task the user started.
+    botTools: (botId) => g.setup.toolsFor(botId),
     mcpServers: (botId): Record<string, McpServerConfig> => {
       const tools = g.toolsFor(botId);
       return tools ? { [GOOGLE_SERVER]: googleMcpServer(tools) } : {};
@@ -161,9 +207,16 @@ export function createGoogleModule(ctx: ModuleContext, g: GoogleServices): HostM
       getGoogleStatus: () => g.status(),
       setGoogleClient: (a) => {
         if (g.fakeBlocked) throw new GatewayError("BAD_ARGS", "Google can't be connected on a test host.");
-        return g.auth.setClient(String(a.clientId ?? ""), String(a.clientSecret ?? ""));
+        return g.auth.setClient(String(a.clientId ?? ""), String(a.clientSecret ?? ""), typeof a.inProduction === "boolean" ? { inProduction: a.inProduction } : {});
       },
       startGoogleAuth: () => ({ authorizationUrl: g.auth.start() }),
+      startGoogleSetupTask: (a) => {
+        g.setup.start(String(a.botId ?? ""), a.mode === "reconnect" ? "reconnect" : "setup", { projectId: typeof a.projectId === "string" ? a.projectId : null });
+        return g.status();
+      },
+      cancelGoogleSetupTask: () => { g.setup.end(); return g.status(); },
+      getGoogleReconnectCheck: () => g.reconnect.view(),
+      setGoogleReconnectCheck: (a) => g.reconnect.set(a.enabled === true),
       disconnectGoogle: () => g.auth.disconnect(),
       setAgentGoogle: (a) => {
         const on = a.enabled === true;

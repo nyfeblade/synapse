@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type sodiumType from "libsodium-wrappers";
-import { validateSecretName } from "@synapse/shared";
+import { STR_AUTH, validateSecretName } from "@synapse/shared";
 import { describe, expect, it } from "vitest";
 import { BoxPin } from "../../src/main/box-pin";
 import { MacSecretVault } from "../../src/main/secret-vault";
@@ -86,7 +86,7 @@ describe("SecretSync", () => {
     pin.repin("some-other-key");
     const sync = new SecretSync({ vault: new MacSecretVault(path.join(dir(), "v.json"), crypt, () => Buffer.alloc(32)), pin, seal: sealWith,
       call: (async (cmd: string) => (cmd === "getBotSecretsStatus" ? { boxPublicKey: box.pub, status: [] } : {})) as never });
-    await expect(sync.save("b", "K", "", "value-1234")).rejects.toThrow("The computer's identity changed. Confirm it in Settings → Updates before sending secrets.");
+    await expect(sync.save("b", "K", "", "value-1234")).rejects.toThrow(STR_AUTH.pinMismatch);
   });
 });
 

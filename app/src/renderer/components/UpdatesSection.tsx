@@ -117,8 +117,8 @@ export function UpdatesSection({ heading = true }: { heading?: boolean } = {}) {
         {confirmReset ? (
           <div className="row-actions">
             <label className="check"><input type="checkbox" checked={alsoBots} onChange={(e) => setAlsoBots(e.target.checked)} />{STRC.alsoRestoreBots}</label>
+            <button type="button" className="btn-secondary" disabled={resetting} onClick={() => setConfirmReset(false)}>{STR.cancel}</button>
             <button type="button" className="btn-danger" disabled={resetting} onClick={() => void doReset()}>{STRC.resetConfirm}</button>
-            <button type="button" className="btn-outline" disabled={resetting} onClick={() => setConfirmReset(false)}>{STR.cancel}</button>
           </div>
         ) : (
           <>

@@ -87,6 +87,8 @@ contextBridge.exposeInMainWorld("synapse", {
     testKey: (value: string) => ipcRenderer.invoke("auth:test-key", value),
     removeKey: () => ipcRenderer.invoke("auth:remove-key"),
     hasMacKey: () => ipcRenderer.invoke("auth:has-mac-key"),
+    pinChanged: () => ipcRenderer.invoke("auth:pin-changed"),
+    trustComputer: () => ipcRenderer.invoke("auth:trust-computer"),
   },
   box: {
     update: (force: boolean) => ipcRenderer.invoke("box:update", force),

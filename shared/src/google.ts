@@ -1,4 +1,5 @@
 import type { BotSummary } from "./bots";
+import type { GoogleReconnectCheckView, GoogleSetupMode, GoogleSetupTaskView } from "./google-setup";
 
 type None = Record<string, never>;
 
@@ -43,6 +44,10 @@ export interface GoogleStatusView {
   services: GoogleService[];
   redirectUri: string;
   error: string | null;
+  /** google-setup: Google marked this sign-in's refresh token as expiring (the app is in Testing). Null before one. */
+  testing?: boolean | null;
+  /** google-setup: the "Let a Bot do it" task, while one runs. */
+  setupTask?: GoogleSetupTaskView | null;
 }
 
 /** The reserved MCP server id the built-in Google connector mounts under. */
@@ -76,31 +81,17 @@ export const googleToolsMounted = (v: GoogleBotStatusView): boolean => v.state =
 
 export type GoogleSseEvent = { channel: "google"; payload: GoogleStatusView };
 
-/** The numbered setup guide, shown in the Connect Google sheet and in docs/google-setup.md. */
-export const GOOGLE_SETUP_STEPS: readonly string[] = [
-  "Go to console.cloud.google.com and create a project (free).",
-  "APIs & Services → Library: enable Gmail API, Google Calendar API, Google Drive API.",
-  "OAuth consent screen: User type External (or Internal if you have Google Workspace; then no weekly re-sign-in). App name \"Bots\", your email as support/developer contact. Add the scopes listed below. Add yourself under Test users. Leave it in Testing.",
-  "Credentials → Create credentials → OAuth client ID → Application type \"Desktop app\" → Create → copy the Client ID and Client secret.",
-  "In Bots: Marketplace → Gmail (or Settings → Connected accounts → Google) → paste both → Connect → approve in the browser. Google will warn that the app isn't verified: choose Continue (it's your own app).",
-  "In each Bot's settings, turn on Google for the Bots that should use it.",
-];
-
 const TOOL_NEEDS_RECONNECT = "The user's Google sign-in expired. They were shown a \"Reconnect Google\" notification; tell them to reconnect, then try again. Don't work around it.";
 
 export const STRG = {
   connectGoogle: "Connect Google",
   google: "Google",
   connectedAccounts: "Connected accounts",
-  setupTitle: "Set up your own Google client",
-  scopesLabel: "Scopes to add",
-  redirectLabel: "Redirect URI",
   copy: "Copy",
   copied: "Copied",
   clientId: "Client ID",
   clientSecret: "Client secret",
   connect: "Connect",
-  saveAndConnect: "Save and connect",
   waiting: "Waiting for you to approve in the browser…",
   reopen: "Reopen",
   connectedAs: (email: string) => `Connected as ${email}`,
@@ -110,8 +101,6 @@ export const STRG = {
   needsReconnect: "Google needs you to sign in again.",
   notConnected: "Not connected",
   manage: "Manage",
-  testingNote: "Apps left in Testing need a re-sign-in about every 7 days (Bots will prompt you). Google Workspace with an Internal app avoids it.",
-  secretStored: "Your client secret and Google tokens stay on the host; Bots never see them.",
   botToggle: "Google",
   botToggleSub: "Let this Bot use your connected Gmail, Calendar and Drive",
   botToggleNeedsConnect: "Connect Google first (Settings → Connected accounts)",
@@ -160,7 +149,6 @@ export const STRG = {
     `The user turned Google on for you${email ? ` (${email})` : ""}. Your mcp__google__ tools (Gmail, Calendar, Drive) are loaded and callable from this turn on. If they were waiting on Google work, pick it up now; if nothing is outstanding, don't send a message.`,
   perBotNote: "Connecting your account is only half of it: each Bot has its own Google switch in its settings, and a Bot with the switch off has no Gmail, Calendar or Drive tools.",
   cardLocation: "Acts on your Google account",
-  unverifiedHint: "Google will say the app isn't verified: choose Continue (it's your own app).",
   // Draft-send card (ORIG-GOOGLE follow-up): the card must show what a gmail_send(draft_id) call actually sends.
   cardFactsFailed: (reason: string) => `Couldn't look this up in your Google account before showing it to you, so nothing was changed: ${reason}`,
   draftFetchFailed: (reason: string) => `Couldn't check the Gmail draft before showing it to you, so it wasn't sent: ${reason}`,
@@ -171,9 +159,14 @@ export const STRG = {
 declare module "./gateway" {
   interface GatewayCommands {
     getGoogleStatus: { args: None; result: GoogleStatusView };
-    setGoogleClient: { args: { clientId: string; clientSecret: string }; result: GoogleStatusView };
+    /** inProduction: the guided sheet's "Publishing status: In production" tick, when the user made one. */
+    setGoogleClient: { args: { clientId: string; clientSecret: string; inProduction?: boolean }; result: GoogleStatusView };
     startGoogleAuth: { args: None; result: { authorizationUrl: string } };
     disconnectGoogle: { args: None; result: GoogleStatusView };
     setAgentGoogle: { args: { id: string; enabled: boolean }; result: { agent: BotSummary } };
+    startGoogleSetupTask: { args: { botId: string; mode: GoogleSetupMode; projectId?: string | null }; result: GoogleStatusView };
+    cancelGoogleSetupTask: { args: None; result: GoogleStatusView };
+    getGoogleReconnectCheck: { args: None; result: GoogleReconnectCheckView };
+    setGoogleReconnectCheck: { args: { enabled: boolean }; result: GoogleReconnectCheckView };
   }
 }

@@ -3,7 +3,7 @@ import { SPEECH_RATES, STR5, engineOfVoice, isVoiceMode, voiceBlockedByMode, typ
 import { call } from "../bridge";
 import { nativeCall } from "../native";
 import { acceptAgent, useUi } from "../store";
-import { byQuality, voiceLabel, type NaturalVoiceView, type VoiceView } from "./audio-devices";
+import { byQuality, speechVoices, voiceLabel, type NaturalVoiceView, type VoiceView } from "./audio-devices";
 import { assignVoices } from "./call-voices";
 import { languageOptions, listVoices } from "./tts";
 import { useClonedVoices, type ClonedVoiceView } from "./cloned-voices";
@@ -11,6 +11,8 @@ import { useClonedVoices, type ClonedVoiceView } from "./cloned-voices";
 export function VoiceSettings({ botId }: { botId: string }) {
   const bots = useUi((s) => s.bots);
   const me = bots[botId];
+  // New-user walk, finding 8: each engine's memory size is plumbing, shown only with advanced controls.
+  const advanced = useUi((s) => s.settings?.advancedEnabled ?? false);
   // The page's own voices: the language list, and the fallback list while the helper hasn't answered.
   const [browser, setBrowser] = useState(listVoices());
   // Bug 157: the Apple voices a CALL can speak with are the HELPER's, not the page's. The page's
@@ -66,14 +68,15 @@ export function VoiceSettings({ botId }: { botId: string }) {
    */
   const resolve = (v: string) => installed.find((x) => x.id === v)?.id ?? installed.find((x) => x.name === v)?.id ?? v;
   const usedBy = (v: string) => Object.values(bots).find((b) => b.id !== botId && b.settings.voice && resolve(b.settings.voice) === v)?.profile.name;
-  const byLang = st.spokenLanguage ? installed.filter((v) => v.lang === st.spokenLanguage) : installed;
+  const speech = speechVoices(installed, st.voice);
+  const byLang = st.spokenLanguage ? speech.filter((v) => v.lang === st.spokenLanguage) : speech;
   // The helper lists the voices for its own locale, so a language with none of its own still gets
   // the full list rather than an empty picker.
-  const shown = byQuality(byLang.length ? byLang : installed);
+  const shown = byQuality(byLang.length ? byLang : speech);
   const appleOpts = shown.length
     ? shown.map((v) => ({ value: v.id, label: voiceLabel(v) }))
     // No helper list (it is loading, failed, or this isn't a Mac build): the page's own names, as before.
-    : (st.spokenLanguage ? browser.filter((v) => v.lang === st.spokenLanguage) : browser).map((v) => ({ value: v.name, label: v.name }));
+    : speechVoices(st.spokenLanguage ? browser.filter((v) => v.lang === st.spokenLanguage) : browser, st.voice).map((v) => ({ value: v.name, label: v.name }));
   const value = st.voice ? resolve(st.voice) : "";
   const chosen = installed.find((v) => v.id === value);
   // A saved voice from another language stays in the list, named the same way as the rest.
@@ -128,6 +131,7 @@ export function VoiceSettings({ botId }: { botId: string }) {
         <span className={previewError ? "error" : "muted"} style={{ flexGrow: 1 }} role={previewError ? "alert" : undefined}>
           {previewError ?? (blockedEngine ? STR5.voiceModeBlocked(blockedEngine) : null)}
         </span>
+        {!advanced && <button type="button" className="link-btn" onClick={() => void nativeCall("audio.voices.openDownloads").catch(() => {})}>{STR5.downloadVoices}</button>}
         <button type="button" className="btn-outline small" disabled={previewing} onClick={preview}>{previewing ? STR5.previewingVoice : STR5.previewVoice}</button>
       </div>
       <div className="settings-row"><label htmlFor="speed" style={{ flexGrow: 1 }}>{STR5.speed}</label>
@@ -142,6 +146,7 @@ export function VoiceSettings({ botId }: { botId: string }) {
     </div>
     {/* UI polish pass (brief 2): what each engine costs, as label and value — the facts the old
         paragraph held, without the paragraph. */}
+    {advanced && (<>
     <h3 className="voice-memory-head">{STR5.voiceMemory}</h3>
     <div className="settings-card voice-memory" role="group" aria-label={STR5.voiceMemory}>
       <div className="settings-row"><span style={{ flexGrow: 1 }} title={STR5.naturalEngineNote}>{STR5.naturalVoices}</span><span className="muted">{STR5.memoryNatural}</span></div>
@@ -152,6 +157,7 @@ export function VoiceSettings({ botId }: { botId: string }) {
         <button type="button" className="link-btn" onClick={() => void nativeCall("audio.voices.openDownloads").catch(() => {})}>{STR5.downloadVoices}</button>
         <span className="muted">{STR5.memoryApple}</span></div>
     </div>
+    </>)}
     </>
   );
 }

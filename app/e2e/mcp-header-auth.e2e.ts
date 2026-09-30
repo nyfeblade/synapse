@@ -28,7 +28,7 @@ test("a header-authenticated remote MCP server: added from the form, shown as se
   const KEY = "e2e-canary-key-do-not-persist";
 
   // Onboarding, the same opening as phase5.e2e.ts.
-  await page.getByRole("button", { name: "Input API Key →" }).click();
+  await page.getByRole("button", { name: "Add API key" }).click();
   // synapse-public: the Anthropic API key is the only sign-in (a stand-in key; the fake brain never calls out).
   await page.getByLabel("Anthropic API key").fill(E2E_TEST_API_KEY);
   await page.getByRole("button", { name: "Save key" }).click();

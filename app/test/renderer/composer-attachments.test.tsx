@@ -43,7 +43,7 @@ describe("attachments in the composer (CHAT-09)", () => {
     expect(screen.getByRole("menuitem", { name: STR.attachFiles })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: STR.photoFromClipboard })).toBeTruthy();
     expect((screen.getByRole("menuitem", { name: STR.teachATask }) as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(screen.getByRole("menuitem", { name: `${STR.useASkill} ▸` }));
+    fireEvent.click(screen.getByRole("menuitem", { name: STR.useASkill }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Weekly report" }));
     await waitFor(() => expect(useComposer.getState().byBot.b!.skillIds).toEqual(["weekly-report"]));
   });
@@ -64,7 +64,7 @@ describe("attachments in the composer (CHAT-09)", () => {
     });
     render(<ComposerPlusMenu botId="b" />);
     fireEvent.click(screen.getByRole("button", { name: STR.attachFile }));
-    fireEvent.click(screen.getByRole("menuitem", { name: `${STR.useASkill} ▸` }));
+    fireEvent.click(screen.getByRole("menuitem", { name: STR.useASkill }));
     expect(await screen.findByRole("menuitem", { name: "Error: network down" })).toBeTruthy();
   });
 

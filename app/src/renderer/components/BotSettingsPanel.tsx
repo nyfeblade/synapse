@@ -14,6 +14,7 @@ import { AvatarEditor } from "./AvatarEditor";
 import { FollowupsToggle } from "./FollowupsToggle";
 import { MemoryEntry } from "./MemoryPanel";
 import { GoogleToggle } from "../google/GoogleToggle";
+import { ComposioBotRows } from "../composio/ComposioBotRows";
 import { GitHubRow } from "../github/GitHubRow";
 import { askConfirm } from "./ConfirmDialog";
 import { BackIcon, CheckIcon, ChevronDownIcon, CloseIcon } from "./Icons";
@@ -22,6 +23,7 @@ import { SettingLinksLayer } from "./settings/SettingLinksLayer";
 import { overlaysOpen } from "../overlay-stack";
 import { usePopOrigin } from "../pop-origin";
 import { pickableModels, startModelAccessSync, useModelAccess } from "../model-access";
+import { RatingsRow } from "../feedback/Ratings";
 
 /** feat-mac-access-parity: the per-Bot permission mode (Ask / Auto-accept edits / Full auto), with a clear warning
  *  on Full auto. Neutral copy; the guard chip stays green via the existing switch/select styling. */
@@ -64,7 +66,6 @@ function PermModeRow({ botId, onError }: { botId: string; onError(m: string): vo
     <div className="settings-row" data-setting="perm-mode" style={{ alignItems: "flex-start" }}>
       <span style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: 2 }}>
         <span>{STR5.permMode}</span>
-        {chosen.help && <span className="muted">{chosen.help}</span>}
         {choice === "full-auto" && <span className="error" role="note" style={{ marginTop: 4 }}>{STR5.permModeFullAutoWarning}</span>}
         {notOnMac && (
           <span className="muted" style={{ marginTop: 4, display: "flex", gap: 8, alignItems: "center" }}>
@@ -73,7 +74,8 @@ function PermModeRow({ botId, onError }: { botId: string; onError(m: string): vo
           </span>
         )}
       </span>
-      <select className="dropdown" aria-label={STR5.permMode} value={choice} onChange={(e) => choose(e.target.value as ModeChoice)}>
+      {/* New-user walk, finding 21: the mode's explanation is the tooltip, not a subtitle. */}
+      <select className="dropdown" aria-label={STR5.permMode} title={chosen.help ?? undefined} value={choice} onChange={(e) => choose(e.target.value as ModeChoice)}>
         {PERM_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
       </select>
     </div>
@@ -100,6 +102,17 @@ function SaveUsageRow({ botId, onError }: { botId: string; onError(m: string): v
 export function BotSettingsPanel({ botId }: { botId: string }) {
   const bot = useUi((s) => s.bots[botId]);
   const setPanel = useUi((s) => s.setPanel);
+  // New-user walk, nit 27: Escape closes this panel, as it closes the computer view (an open picker or overlay first).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || overlaysOpen() || document.querySelector("[data-bot-settings] .listbox")) return;
+      setPanel("closed");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setPanel]);
+  // New-user walk, finding 8: token counts are plumbing, shown only with advanced controls.
+  const advanced = useUi((s) => s.settings?.advancedEnabled ?? false);
   const [name, setName] = useState(bot?.profile.name ?? "");
   const [desc, setDesc] = useState(bot?.profile.description ?? "");
   const [editing, setEditing] = useState(false);
@@ -171,13 +184,13 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
           onBlur={() => { if (name.trim() && name !== bot.profile.name) save({ name }); else setName(bot.profile.name); }} />
       </div>
       <div className="field">
-        <label htmlFor="bot-desc">{STR.description}</label>
-        <textarea id="bot-desc" aria-label="Bot description" rows={4} value={desc} onChange={(e) => setDesc(e.target.value)}
+        <label htmlFor="bot-desc">{STR.instructions}</label>
+        <textarea id="bot-desc" aria-label="Bot instructions" rows={4} value={desc} onChange={(e) => setDesc(e.target.value)}
           onBlur={() => { if (desc !== bot.profile.description) save({ description: desc }); }} />
       </div>
       <div className="field model-field" ref={modelRef}>
         <span id="model-label">{STR.model}</span>
-        <button type="button" aria-haspopup="listbox" aria-expanded={modelOpen} aria-label={`Model: ${modelLabel(model)}`} className={modelOpen ? "select open" : "select"} onClick={() => setModelOpen(!modelOpen)}>
+        <button type="button" aria-haspopup="listbox" aria-expanded={modelOpen} aria-label={`Model: ${modelLabel(model)}`} className={modelOpen ? "dropdown select open" : "dropdown select"} onClick={() => setModelOpen(!modelOpen)}>
           <span>{modelLabel(model)}</span><ChevronDownIcon />
         </button>
         {modelOpen && (
@@ -192,7 +205,7 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
       </div>
       <div className="field model-field" ref={effortRef}>
         <span id="effort-label">{STR.effort}</span>
-        <button type="button" aria-haspopup="listbox" aria-expanded={effortOpen} aria-label={`${STR.effort}: ${EFFORT_LABELS[effort]}`} className={effortOpen ? "select open" : "select"} onClick={() => setEffortOpen(!effortOpen)}>
+        <button type="button" aria-haspopup="listbox" aria-expanded={effortOpen} aria-label={`${STR.effort}: ${EFFORT_LABELS[effort]}`} className={effortOpen ? "dropdown select open" : "dropdown select"} onClick={() => setEffortOpen(!effortOpen)}>
           <span>{EFFORT_LABELS[effort]}</span><ChevronDownIcon />
         </button>
         {effortOpen && (
@@ -214,7 +227,7 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
         </div>
         <div className="settings-row" data-setting="engineering-mode">
           <span style={{ flexGrow: 1 }} title={STR5.engineeringModeHint}>{STR5.engineeringMode}</span>
-          <span className="muted">{STR5.engineeringModeCost}</span>
+          {advanced && <span className="muted">{STR5.engineeringModeCost}</span>}
           <button type="button" role="switch" aria-checked={!!bot.settings.engineeringMode} aria-label={STR5.engineeringMode}
             className={bot.settings.engineeringMode ? "switch on" : "switch"}
             onClick={() => void call("setAgentEngineeringMode", { id: bot.id, enabled: !bot.settings.engineeringMode })
@@ -225,10 +238,12 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
         <SaveUsageRow botId={botId} onError={setError} />
         <BrowserRow botId={botId} />
         <MacAppRow botId={botId} />
+        <RatingsRow botId={botId} />
         {/* No "Computer perception" row: Live is shelved (decisions.md 2026-09-21); every Bot runs Screenshots. */}
       </div>
       <MemoryEntry onOpen={() => setPanel("memory")} />
       <GoogleToggle botId={botId} />
+      <ComposioBotRows botId={botId} />
       <GitHubRow botId={botId} />
       <SecretsSection botId={botId} />
       <FollowupsToggle botId={botId} />

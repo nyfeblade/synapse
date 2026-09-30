@@ -28,7 +28,8 @@ describe("the chat-pane grid", () => {
     }
   });
   it("puts the transcript, the composer and every Bot-side block on those tokens", () => {
-    expect(bodies(app, ".transcript")).toMatch(/padding-inline:\s*var\(--chat-inset\)/);
+    // The new-user walk (bug 354) wraps the inset in a centred 760px reading width; it stays the floor.
+    expect(bodies(app, ".transcript")).toMatch(/padding-inline:\s*max\(var\(--chat-inset\),/);
     expect(bodies(app, ".composer-wrap")).toMatch(/var\(--chat-inset\)/);
     expect(bodies(app, ".composer")).toMatch(/padding:[^;]*var\(--bot-indent\)/);
     for (const sel of [".card", ".activity"]) {

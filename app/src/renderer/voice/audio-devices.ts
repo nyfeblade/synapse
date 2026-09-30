@@ -49,6 +49,23 @@ export function voiceLabel(v: VoiceView): string { return `${voiceName(v)} · ${
 
 const QUALITY_ORDER: Record<VoiceView["quality"], number> = { premium: 0, enhanced: 1, default: 2 };
 /** Premium first, then Enhanced, then the rest — keeping the helper's own ranking within a quality. */
+/** macOS's novelty voices (sound effects and gags), by name. */
+const NOVELTY = new Set(["albert", "bad news", "bahh", "bells", "boing", "bubbles", "cellos", "deranged", "good news", "hysterical", "jester", "organ", "pipe organ", "superstar", "trinoids", "whisper", "wobble", "zarvox"]);
+/** The Eloquence character voices, one per locale each ("Eddy (English (US))", …). */
+const ELOQUENCE = new Set(["eddy", "flo", "grandma", "grandpa", "reed", "rocko", "sandy", "shelley"]);
+
+/**
+ * New-user walk, finding 21: a Bot's voice list holds real speech voices only — not the novelty voices or the
+ * Eloquence character set (about 150 entries otherwise). `keep` is the Bot's saved voice, which always stays listed.
+ */
+export function speechVoices<T extends { id?: string; name: string }>(voices: readonly T[], keep?: string | null): T[] {
+  return voices.filter((v) => {
+    if (keep && (v.id === keep || v.name === keep)) return true;
+    const n = v.name.replace(/\s*\(.*\)\s*$/, "").trim().toLowerCase();
+    return !NOVELTY.has(n) && !ELOQUENCE.has(n) && !/eloquence/i.test(v.id ?? "");
+  });
+}
+
 export function byQuality(voices: readonly VoiceView[]): VoiceView[] {
   return voices.map((v, i) => [v, i] as const)
     .sort((a, b) => QUALITY_ORDER[a[0].quality] - QUALITY_ORDER[b[0].quality] || a[1] - b[1]).map(([v]) => v);

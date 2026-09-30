@@ -8,7 +8,7 @@ const ctx = (theme: "system" | "light" | "dark"): PaletteCtx => ({
   bots: {}, pinned: [], currentBotId: null, theme,
   actions: {
     openBot: () => {}, openChatSettings: () => {}, openSettings: () => {}, cycleTheme: async () => {},
-    newBot: () => {}, showHidden: () => {}, jumpTo: () => {}, startCall: () => {},
+    newBot: () => {}, showHidden: () => {}, jumpTo: () => {}, startCall: () => {}, exportBot: () => {}, importBot: () => {},
   },
 });
 

@@ -14,6 +14,7 @@ const idOf = (systemAppend: string, name: string) => new RegExp(`- ${name.replac
  *   run: <cmd>                                  → Bash through the real hooks and review pipeline (Phase 1)
  *   remember: <fact> · save skill: <name> · ask: <question>|<opt>|<opt> · send back: <workspace path>
  *   react please · card: table|link|form|email  → Phase 2 memory / skills / widgets / files / reactions / cards
+ *   say link: <url>                             → a reply with that link (Bot sharing: a share link in a chat)
  *   computer: · bg: · task: · secret:           → Phase 3 (demo-phase3.ts, consulted first for user turns)
  *   ask <Name>: <text>                          → SendToAgent kind:"request" to that teammate (B2B-01)
  *   routine: <name> | <schedule> | <prompt>     → update_state target:"routine" action:"create" (RTN-02)
@@ -86,6 +87,8 @@ export function demoScriptFor(workspace: string): FakeScript {
       };
       return [{ tool: "mcp__bot__SendMessage", input: { type: "card", card: cards[m[1]!.toLowerCase()] } }];
     }
+    // Bot sharing e2e: a reply carrying a link (e.g. a synapse://import link), rendered as a markdown link.
+    if ((m = /say link:\s*(\S+)/i.exec(text))) return [send(`[Add this Bot](${m[1]})`)];
     if ((m = /send back:\s*(\S+)/i.exec(text))) return [{ tool: "mcp__bot__SendMessage", input: { type: "attachment", url: `file://${path.join(workspace, m[1]!)}`, content: "Here it is." } }];
     if (/react please/i.test(text)) return [{ tool: "mcp__bot__ReactToMessage", input: { message_address: /\[(t\d+u)\]/.exec(text)?.[1] ?? "t1u", emoji: "👍" } }];
 

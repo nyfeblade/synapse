@@ -9,6 +9,7 @@ import "../styles/palette.css";
 import { useComputer } from "../computer-state";
 import { useUi } from "../store";
 import { cycleTheme } from "../theme";
+import { useTemplates } from "../templates/store";
 import { useVoice } from "../voice/VoiceOverlay";
 import { Dialog } from "./Dialog";
 import { SearchIcon } from "./Icons";
@@ -52,6 +53,8 @@ export function CommandPalette() {
       cycleTheme: async () => { await cycleTheme(); },
       newBot: () => useUi.getState().openNewChat(),
       showHidden: () => useOverlays.getState().openOverlay("hidden-bots"),
+      exportBot: (id) => void useTemplates.getState().openExport(id),
+      importBot: () => void useTemplates.getState().importFromFile(),
       jumpTo: (b, e) => { useComputer.getState().closeComputer(); void useUi.getState().jumpTo(b, e); },
       // Phase 2 (bug 213): the call opens with the first Bot; the others join as soon as it connects.
       startCall: (ids) => {
@@ -129,9 +132,8 @@ export function CommandPalette() {
                   <span className="palette-title">{r.title}{b?.profile.title && r.icon === "bot" ? <span className="chip">{b.profile.title}</span> : null}</span>
                   {r.subtitle && <span className="palette-sub"><Snippet text={r.subtitle} /></span>}
                 </span>
-                {r.shortcut && (i === sel
-                  ? <span className="kbds"><kbd>⌘</kbd><kbd>{r.shortcut.slice(1)}</kbd></span>
-                  : <span className="palette-key">{r.shortcut}</span>)}
+                {/* New-user walk, nit 28: one style of shortcut hint on every row (it switched to boxed keys on the selected one). */}
+                {r.shortcut && <span className="palette-key">{r.shortcut}</span>}
               </li>
             );
           })}

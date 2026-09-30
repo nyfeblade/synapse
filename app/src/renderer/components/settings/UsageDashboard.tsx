@@ -4,6 +4,7 @@ import { useUi } from "../../store";
 import { barLayout, bucketLabel } from "../../usage/chart";
 import { useDashboard } from "../../usage/dashboard-store";
 import { formatTokens, useUsage } from "../../usage/store";
+import { MoneyInput, formatMoney, parseMoney } from "../MoneyInput";
 
 const money = STR_COST.money;
 const RANGES: { id: UsageRange; label: string }[] = [{ id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "month", label: "Month" }];
@@ -22,6 +23,23 @@ const CHART_H = 120;
  * hosted-agent comparison (an estimate) and budgets. Plain SVG; the only motion is the bars settling on the
  * glide spring when the data changes.
  */
+/** A stored limit as its field shows it: dollars as "1,234.50", tokens as a plain whole number. */
+const limitText = (l: BudgetLimit): string => (l.unit === "usd" ? formatMoney(l.limit) : String(Math.round(l.limit)));
+/** A typed limit, or null when it is not a number: dollars through parseMoney, tokens as a whole number ("12,000" allowed). */
+function parseLimit(unit: BudgetUnit, text: string): number | null {
+  if (unit === "usd") return parseMoney(text);
+  const t = text.trim().replace(/,/g, "");
+  return /^\d+$/.test(t) ? Number(t) : null;
+}
+/** The advanced grid's limit field: a MoneyInput while the unit is $, a whole-number field while it is tokens. */
+function LimitInput({ id, unit, value, onChange, invalid }: { id: string; unit: BudgetUnit; value: string; onChange(v: string): void; invalid: boolean }) {
+  const described = invalid ? "budget-error" : undefined;
+  return unit === "usd"
+    ? <MoneyInput id={id} className="narrow" placeholder="None" value={value} onChange={onChange} invalid={invalid} aria-describedby={described} />
+    : <input id={id} className="text-input narrow" inputMode="numeric" placeholder="None" value={value} onChange={(e) => onChange(e.target.value)}
+        aria-invalid={invalid || undefined} aria-describedby={described} />;
+}
+
 export function UsageDashboard() {
   const { range, botId, view, error, load, setRange, setBot } = useDashboard();
   const bots = useUi((s) => s.bots);
@@ -184,7 +202,7 @@ function Table({ label, head, rows }: { label: string; head: string[]; rows: { k
       <div role="table" aria-label={label} className="settings-card usage-table dash-table">
         <div role="row" className="usage-head">{head.map((h) => <span key={h} role="columnheader">{h}</span>)}</div>
         {rows.map((r) => (
-          <div role="row" key={r.key} className="usage-row">{r.cells.map((c, i) => <span key={i} role="cell">{c}</span>)}</div>
+          <div role="row" key={r.key} className="usage-row">{r.cells.map((c, i) => <span key={i} role="cell" title={i === 0 ? c : undefined}>{c}</span>)}</div>
         ))}
       </div>
     </>
@@ -197,6 +215,9 @@ function limitOf(p: BudgetPolicy | null | undefined, period: "day" | "month"): B
 
 function BudgetEditor({ budgets, botId, name }: { budgets: BudgetsView; botId: string | null; name: string }) {
   const { setBudget, clearTaskAlert } = useDashboard();
+  // New-user walk, finding 7: one budget — the account's monthly $ limit. Daily limits, tokens, the warning point, the
+  // action at the limit and per-Bot budgets are advanced controls.
+  const advanced = useUi((s) => s.settings?.advancedEnabled ?? false);
   const policy = botId ? budgets.config.bots[botId] ?? null : budgets.config.account;
   const [day, setDay] = useState("");
   const [dayUnit, setDayUnit] = useState<BudgetUnit>("usd");
@@ -205,28 +226,49 @@ function BudgetEditor({ budgets, botId, name }: { budgets: BudgetsView; botId: s
   const [warn, setWarn] = useState("80");
   const [action, setAction] = useState<BudgetAction>("ask");
   const [invalid, setInvalid] = useState(false);
+  // Review of finding 7: the simple view edits the monthly $ limit only, and shows every other limit that is set.
+  const [monthUsd, setMonthUsd] = useState("");
+  const botsById = useUi((s) => s.bots);
   const sig = JSON.stringify(policy);
   useEffect(() => {
     const d = limitOf(policy, "day");
     const m = limitOf(policy, "month");
-    setDay(d ? String(d.limit) : ""); setDayUnit(d?.unit ?? "usd");
-    setMonth(m ? String(m.limit) : ""); setMonthUnit(m?.unit ?? "usd");
+    setDay(d ? limitText(d) : ""); setDayUnit(d?.unit ?? "usd");
+    setMonth(m ? limitText(m) : ""); setMonthUnit(m?.unit ?? "usd");
     setWarn(String(policy?.warnPct ?? 80)); setAction(policy?.onLimit ?? "ask");
+    setMonthUsd(m && m.unit === "usd" ? formatMoney(m.limit) : "");
     setInvalid(false);
   }, [sig, botId]);
   const save = () => {
     const limits: BudgetLimit[] = [];
     for (const [period, v, unit] of [["day", day, dayUnit], ["month", month, monthUnit]] as const) {
       if (!v.trim()) continue;
-      const n = Number(v.trim());
-      if (!Number.isFinite(n) || n <= 0) { setInvalid(true); return; }
+      const n = parseLimit(unit, v);
+      if (n === null || n <= 0) { setInvalid(true); return; }
       limits.push({ period, unit, limit: n });
     }
-    const w = Number(warn);
+    const w = /^\s*\d+\s*%?\s*$/.test(warn) ? Number(warn.replace("%", "")) : NaN;
     if (!Number.isFinite(w) || w < 1 || w > 100) { setInvalid(true); return; }
     setInvalid(false);
     void setBudget(botId, limits.length ? { limits, warnPct: Math.round(w), onLimit: action } : null);
   };
+  const isMonthUsd = (l: BudgetLimit) => l.period === "month" && l.unit === "usd";
+  const others = (policy?.limits ?? []).filter((l) => !isMonthUsd(l));
+  const saveMonthly = () => {
+    const n = parseMoney(monthUsd);
+    if (n === null || n <= 0) { setInvalid(true); return; }
+    setInvalid(false);
+    // A monthly limit in tokens is replaced by the dollar one the user typed (it was shown above as tokens).
+    const kept = others.filter((l) => l.period !== "month");
+    void setBudget(botId, { limits: [...kept, { period: "month", unit: "usd", limit: n }], warnPct: policy?.warnPct ?? 80, onLimit: policy?.onLimit ?? "ask" });
+  };
+  const removeMonthly = () => void setBudget(botId, others.length ? { limits: others, warnPct: policy?.warnPct ?? 80, onLimit: policy?.onLimit ?? "ask" } : null);
+  const periodLabel = (l: BudgetLimit) => (l.period === "day" ? "Daily limit" : "Monthly limit");
+  const plainRows = others.map((l) => (
+    <div key={`${l.period}:${l.unit}`} className="settings-row"><span className="grow">{periodLabel(l)}</span><span className="muted">{STR_COST.amount(l.unit, l.limit)}</span></div>
+  ));
+  const botLines = botId ? [] : Object.entries(budgets.config.bots).filter(([, p]) => p?.limits.length).map(([id, p]) =>
+    `${botsById[id]?.profile.name ?? "A Bot"}: ${p!.limits.map((l) => `${STR_COST.amount(l.unit, l.limit)} a ${l.period === "day" ? "day" : "month"}`).join(", ")}`);
   const status = budgets.status.filter((s) => (botId ? s.scope === "bot" && s.botId === botId : s.scope === "account"));
   const unitSelect = (label: string, v: BudgetUnit, set: (u: BudgetUnit) => void) => (
     <select className="dropdown" aria-label={label} value={v} onChange={(e) => set(e.target.value as BudgetUnit)}>
@@ -234,9 +276,20 @@ function BudgetEditor({ budgets, botId, name }: { budgets: BudgetsView; botId: s
       <option value="tokens">tokens</option>
     </select>
   );
+  if (botId && !advanced) return (
+    <>
+      {policy?.limits.length ? (
+        <>
+          <h4 className="dash-sub">{`Budget for ${name}`}</h4>
+          <div className="settings-card">{policy.limits.map((l) => <div key={`${l.period}:${l.unit}`} className="settings-row"><span className="grow">{periodLabel(l)}</span><span className="muted">{STR_COST.amount(l.unit, l.limit)}</span></div>)}</div>
+        </>
+      ) : null}
+      <TaskAlerts alerts={budgets.taskAlerts} clear={clearTaskAlert} />
+    </>
+  );
   return (
     <>
-      <h4 className="dash-sub">{botId ? `Budget for ${name}` : "Account budget (all Bots)"}</h4>
+      <h4 className="dash-sub">{botId ? `Budget for ${name}` : STR_COST.monthlyBudget}</h4>
       <div className="settings-card dash-budget">
         {status.map((s) => (
           <div key={`${s.period}:${s.unit}`} className="usage-bar-row">
@@ -246,43 +299,62 @@ function BudgetEditor({ budgets, botId, name }: { budgets: BudgetsView; botId: s
             <span className="usage-meta"><span>{`${STR_COST.amount(s.unit, s.spent)} of ${STR_COST.amount(s.unit, s.limit)}`}</span></span>
           </div>
         ))}
-        <div className="dash-budget-grid">
-          <label htmlFor="budget-day">Daily limit</label>
-          <input id="budget-day" className="text-input narrow" inputMode="decimal" placeholder="None" value={day} onChange={(e) => setDay(e.target.value)} />
-          {unitSelect("Daily unit", dayUnit, setDayUnit)}
-          <label htmlFor="budget-month">Monthly limit</label>
-          <input id="budget-month" className="text-input narrow" inputMode="decimal" placeholder="None" value={month} onChange={(e) => setMonth(e.target.value)} />
-          {unitSelect("Monthly unit", monthUnit, setMonthUnit)}
-          <label htmlFor="budget-warn">Warn at (%)</label>
-          <input id="budget-warn" className="text-input narrow" inputMode="numeric" value={warn} onChange={(e) => setWarn(e.target.value)} />
-          <span />
-          <label htmlFor="budget-action">At the limit</label>
-          <select id="budget-action" className="dropdown" value={action} onChange={(e) => setAction(e.target.value as BudgetAction)}>
-            <option value="ask">Ask before continuing</option>
-            <option value="pause">Pause until it resets</option>
-          </select>
-          <span />
-        </div>
-        {invalid && <span className="error" role="alert">Enter positive numbers, and a warning between 1 and 100%.</span>}
-        <span className="muted usage-note">Applies to chats, scheduled and triggered runs. Work estimated to pass a limit asks first.</span>
+        {advanced ? (
+          <div className="dash-budget-grid">
+            <label htmlFor="budget-day">Daily limit</label>
+            <LimitInput id="budget-day" unit={dayUnit} value={day} onChange={setDay} invalid={invalid} />
+            {unitSelect("Daily unit", dayUnit, setDayUnit)}
+            <label htmlFor="budget-month">Monthly limit</label>
+            <LimitInput id="budget-month" unit={monthUnit} value={month} onChange={setMonth} invalid={invalid} />
+            {unitSelect("Monthly unit", monthUnit, setMonthUnit)}
+            <label htmlFor="budget-warn">Warn at (%)</label>
+            <input id="budget-warn" className="text-input narrow" inputMode="numeric" value={warn} onChange={(e) => setWarn(e.target.value)}
+              aria-invalid={invalid || undefined} aria-describedby={invalid ? "budget-error" : undefined} />
+            <span />
+            <label htmlFor="budget-action">At the limit</label>
+            <select id="budget-action" className="dropdown" value={action} onChange={(e) => setAction(e.target.value as BudgetAction)}>
+              <option value="ask">Ask before continuing</option>
+              <option value="pause">Pause until it resets</option>
+            </select>
+            <span />
+          </div>
+        ) : (
+          <>
+            {plainRows}
+            {botLines.map((t) => <div key={t} className="settings-row"><span className="grow">{t}</span></div>)}
+            <div className="settings-row">
+              <label htmlFor="budget-month" className="grow">{STR_COST.monthlyBudget}</label>
+              <MoneyInput id="budget-month" className="narrow" placeholder="None" value={monthUsd} onChange={setMonthUsd}
+                invalid={invalid} aria-describedby={invalid ? "budget-error" : undefined} />
+            </div>
+          </>
+        )}
+        {invalid && <span id="budget-error" className="error field-error" role="alert">{advanced ? "Enter positive numbers, and a warning between 1 and 100%." : STR_COST.amountInvalid}</span>}
         <div className="dash-budget-actions">
-          {policy && <button type="button" className="btn-outline small" onClick={() => void setBudget(botId, null)}>Remove budget</button>}
-          <button type="button" className="btn-primary" onClick={save}>Save budget</button>
+          {advanced
+            ? policy && <button type="button" className="btn-outline small" onClick={() => void setBudget(botId, null)}>Remove all limits</button>
+            : policy?.limits.some(isMonthUsd) && <button type="button" className="btn-outline small" onClick={removeMonthly}>Remove monthly budget</button>}
+          <button type="button" className="btn-primary" onClick={advanced ? save : saveMonthly}>Save budget</button>
         </div>
       </div>
-      {budgets.taskAlerts.length > 0 && (
-        <>
-          <h4 className="dash-sub">Task alerts</h4>
-          <ul className="settings-card dash-alerts">
-            {budgets.taskAlerts.map((a) => (
-              <li key={a.botId} className="settings-row">
-                <span style={{ flexGrow: 1 }}>{`${a.name}: tell me before ${money(a.limitUsd)} · ${money(a.spentUsd)} spent so far`}</span>
-                <button type="button" className="btn-outline small" aria-label={`Clear alert for ${a.name}`} onClick={() => void clearTaskAlert(a.botId)}>Clear</button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      <TaskAlerts alerts={budgets.taskAlerts} clear={clearTaskAlert} />
+    </>
+  );
+}
+
+function TaskAlerts({ alerts, clear }: { alerts: BudgetsView["taskAlerts"]; clear(botId: string): Promise<void> | void }) {
+  if (!alerts.length) return null;
+  return (
+    <>
+      <h4 className="dash-sub">Task alerts</h4>
+      <ul className="settings-card dash-alerts">
+        {alerts.map((a) => (
+          <li key={a.botId} className="settings-row">
+            <span style={{ flexGrow: 1 }}>{`${a.name}: tell me before ${money(a.limitUsd)} · ${money(a.spentUsd)} spent so far`}</span>
+            <button type="button" className="btn-outline small" aria-label={`Clear alert for ${a.name}`} onClick={() => void clear(a.botId)}>Clear</button>
+          </li>
+        ))}
+      </ul>
     </>
   );
 }

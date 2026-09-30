@@ -78,6 +78,8 @@ export function silencedCalls(src: string): { cmd: string; line: number }[] {
  * "and what does the user see instead?".
  */
 const SILENT_BY_DESIGN: Record<string, string> = {
+  listStarterTemplates:
+    "new-user walk finding 16: New chat's few template suggestions under Create new Bot. Without them the screen is exactly what it was before (Create, groups and your Bots); the Marketplace, one click away in the sidebar, reports its own failures.",
   checkApiKey:
     "bug 281: the read of the LAST key check when Settings → Account opens. Without it the panel shows no result, which is also what 'not checked yet' shows, and the Check button right there runs a new check whose failure is shown in the panel's error line.",
   dismissLocalPolicyReset:

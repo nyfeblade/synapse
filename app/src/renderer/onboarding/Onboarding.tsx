@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { STR_AUTH, APP_NAME, AVATAR_COLOR_NAMES, AVATAR_COLORS, DEFAULT_AVATAR_COLOR, AVATAR_EDITOR_SHAPES, AVATAR_SHAPE_LABELS, STR, STR5, type AvatarShape, type StarterView } from "@synapse/shared";
+import { STRSH, STR_AUTH, APP_NAME, AVATAR_COLOR_NAMES, AVATAR_COLORS, DEFAULT_AVATAR_COLOR, AVATAR_EDITOR_SHAPES, AVATAR_SHAPE_LABELS, STR, STR5, STRC, type AvatarShape, type StarterView } from "@synapse/shared";
 import { useAsync } from "../async-resource";
 import { call, callQuiet } from "../bridge";
 import { Async } from "../components/Async";
 import { ShapeAvatar } from "../components/ShapeAvatar";
 import { AccountPanel } from "../components/settings/AccountSection";
 import { ONBOARDING_TOOLS } from "./tools";
+import { nativeCall } from "../native";
+import { useTemplates } from "../templates/store";
 import { noteIfSlow, SIGN_IN_TIMEOUT_MS } from "../within-time";
 import mark from "../assets/synapse-mark.png";
 
@@ -24,6 +26,8 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
   const [name, setName] = useState("");
   const [shape, setShape] = useState<AvatarShape>("pebble");
   const [color, setColor] = useState<string>(DEFAULT_AVATAR_COLOR);
+  // New-user walk, finding 5: a suggestion card selects a teammate (filling in the Bot below); Get started is the only commit.
+  const [picked, setPicked] = useState<StarterView | null>(null);
   // Creating a Bot (or importing a starter) is a round trip: without a guard a second click before the first
   // one lands ran the whole thing again and left two Bots behind. A ref, because two clicks in the same tick
   // both read the pre-render state value.
@@ -64,7 +68,29 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
   const meet = async (s: StarterView) => {
     const { token } = await call("previewTemplateImport", { starterId: s.id });
     const { id } = await call("importTemplate", { token });
+    const edits = {
+      ...(name.trim() && name.trim() !== s.name ? { name: name.trim() } : {}),
+      ...(shape !== s.avatarShape ? { avatarShape: shape } : {}),
+      ...(color !== s.avatarColor ? { avatarColor: color } : {}),
+    };
+    if (Object.keys(edits).length) await call("updateAgent", { id, ...edits });
     await finish(id);
+  };
+  // Bot sharing (no app installed yet): the website copied the Bot's link on Download. The clipboard is read only
+  // here, on this click, and only a Bot link comes back; the Bot is added through the same confirm sheet, and adding
+  // it finishes onboarding with it.
+  const pasteLink = async () => {
+    const { fragment } = await nativeCall<{ fragment: string | null }>("clipboard.botLink");
+    if (!fragment) { setError(STRSH.noBotLink); return; }
+    useTemplates.setState({ afterAdd: (id) => void once(() => finish(id)) });
+    await useTemplates.getState().importShare(fragment, { now: true });
+  };
+  const pick = (s: StarterView) => {
+    if (picked?.id === s.id) { setPicked(null); setName(""); setShape("pebble"); setColor(DEFAULT_AVATAR_COLOR); return; }
+    setPicked(s);
+    setName(s.name);
+    setShape(s.avatarShape);
+    setColor(s.avatarColor);
   };
 
   if (step === "splash") return (
@@ -80,10 +106,11 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
     </main>
   );
   if (step === "setup") return (
-    <main className="onb"><h1>{STR5.setupTitle}</h1><p className="muted">{STR5.startingComputer}</p>
-      {/* First run: the Anthropic API key, the only sign-in. */}
-      <h2>{STR_AUTH.firstRunTitle}</h2>
-      <AccountPanel onReady={() => { setTokenOk(true); setStep("tour"); }} />
+    <main className="onb">
+      {/* First run: the Anthropic API key, the only sign-in. New-user walk, finding 17: one heading, no status line
+          that never moved ("Starting your computer…"), and the panel without its "No API key saved yet". */}
+      <h1>{STR_AUTH.firstRunTitle}</h1>
+      <AccountPanel firstRun onReady={() => { setTokenOk(true); setStep("tour"); }} />
       <div className="onb-nav"><button type="button" className="btn-outline" onClick={() => setStep("splash")}>{STR5.back}</button></div>
     </main>
   );
@@ -109,33 +136,32 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
       <div className="tool-grid">
         {shown.map((t) => (
           <label key={t} className={tools.includes(t) ? "tool-cell on" : "tool-cell"}>
-            <input type="checkbox" checked={tools.includes(t)} onChange={() => setTools(tools.includes(t) ? tools.filter((x) => x !== t) : [...tools, t])} />{t}
+            <input type="checkbox" aria-label={t} checked={tools.includes(t)} onChange={() => setTools(tools.includes(t) ? tools.filter((x) => x !== t) : [...tools, t])} />{t}
           </label>
         ))}
       </div>
-      <div className="onb-nav"><button type="button" className="btn-secondary" onClick={() => setStep("tour")}>{STR5.back}</button><button type="button" className="btn-primary" onClick={() => setStep("new-bot")}>{STR5.next}</button></div>
+      {/* New-user walk, finding 18: an explicit way on with no tools picked. */}
+      <div className="onb-nav"><button type="button" className="btn-secondary" onClick={() => setStep("tour")}>{STR5.back}</button><button type="button" className="btn-outline" onClick={() => { setTools([]); setStep("new-bot"); }}>{STRC.skip}</button><button type="button" className="btn-primary" onClick={() => setStep("new-bot")}>{STR5.next}</button></div>
     </main>
   );
   return (
     <main className="onb">
-      {/* The <h2> used to be a child of .carousel, i.e. a flex item of the horizontally scrolling row:
-          it rendered as a ~100x138px three-line column wedged between the left edge of the screen and
-          the first card. The labelled region is now the outer .onb-suggest (so the Async failure state
-          still reports inside the region a screen reader finds by name) and .carousel is only the row. */}
+      {/* New-user walk, findings 5 and 19: a grid of six picks (no sideways scroller), each a radio that
+          fills in the Bot below. The labelled region keeps the Async failure state inside it. */}
       <section aria-label={STR5.suggestions} className="onb-suggest">
         <h2>{STR5.meetTeammate}</h2>
-        <div className="carousel">
-          <Async resource={starters} label={STR5.suggestions}>{(list) => (<>
-            {list.map((s) => (
-              <button key={s.id} type="button" className="starter-card" aria-label={`Meet ${s.name}`} disabled={busy} onClick={() => void once(() => meet(s))}>
-                <ShapeAvatar shape={s.avatarShape} color={s.avatarColor} size={40} /><span>{s.name}</span><span className="muted">{s.blurb}</span>
+        <Async resource={starters} label={STR5.suggestions}>{(list) => (
+          <div role="radiogroup" aria-label={STR5.suggestions} className="starter-grid">
+            {list.slice(0, 6).map((s) => (
+              <button key={s.id} type="button" role="radio" aria-checked={picked?.id === s.id} aria-label={s.name} className="starter-card" disabled={busy} onClick={() => pick(s)}>
+                <ShapeAvatar shape={s.avatarShape} color={s.avatarColor} size={32} still /><span className="starter-name">{s.name}</span><span className="muted">{s.blurb}</span>
                 <span className="chips">{s.tools.map((t) => <span key={t} className="chip">{t}</span>)}</span>
               </button>
             ))}
-          </>)}</Async>
-        </div>
+          </div>
+        )}</Async>
       </section>
-      <h1>{STR5.createYourOwn}</h1>
+      <h1>{picked ? picked.name : STR5.createYourOwn}</h1>
       <ShapeAvatar shape={shape} color={color} size={120} />
       <div role="radiogroup" aria-label="Color" className="onb-swatches">
         {AVATAR_COLORS.slice(1).map((c, i) => <button key={c} type="button" role="radio" aria-checked={c === color} aria-label={AVATAR_COLOR_NAMES[i + 1]} className="onb-swatch" style={{ background: c }} onClick={() => setColor(c)} />)}
@@ -146,7 +172,11 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
       <label htmlFor="onb-name">{STR.name}</label>
       <input id="onb-name" className="text-input" value={name} placeholder={STR.newBotName} onChange={(e) => setName(e.target.value)} />
       {error && <span className="error" role="alert">{error}</span>}
-      <button type="button" className="btn-primary" disabled={busy} onClick={() => void once(create)}>{STR5.getStarted}</button>
+      <div className="onb-nav">
+        <button type="button" className="btn-outline" disabled={busy} onClick={() => setStep("tools")}>{STR5.back}</button>
+        <button type="button" className="btn-outline" disabled={busy} onClick={() => void once(pasteLink)}>{STRSH.pasteBotLink}</button>
+        <button type="button" className="btn-primary" disabled={busy} onClick={() => void once(() => (picked ? meet(picked) : create()))}>{STR5.getStarted}</button>
+      </div>
     </main>
   );
 }

@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { LIMITS, STR } from "@synapse/shared";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { LIMITS, STR, STR5, type CatalogEntry, type StarterView } from "@synapse/shared";
+import { callQuiet } from "../bridge";
+import { useTemplates } from "../templates/store";
+import { ShapeAvatar } from "./ShapeAvatar";
 import { useUi } from "../store";
 import { sortedBotIds } from "../reducer";
 import { AttachFileButton, VoiceInputButton } from "./ComposerActionButtons";
@@ -8,7 +11,7 @@ import { BotAvatar } from "./GroupAvatarStack";
 import { overlaysOpen } from "../overlay-stack";
 import { HomeStandup } from "../standup/HomeStandup";
 
-interface Option { key: string; label: string; disabled?: boolean; run(): void; botId?: string }
+interface Option { key: string; label: string; disabled?: boolean; run(): void; botId?: string; starter?: StarterView; head?: string }
 
 export function NewChat() {
   const { bots, createBot, createGroup, openBot, activeBotId } = useUi();
@@ -24,7 +27,12 @@ export function NewChat() {
   // summary ever stored under a mismatched key (a store bug — see store.ts's openBot/setGroupMembers)
   // would hand back an id `bots[id]` can't resolve. Tolerate that here too: skip what can't be
   // resolved rather than crash the whole pane over one late or inconsistent summary.
-  const recent = useMemo(() => sortedBotIds(bots).filter((id) => bots[id] && !bots[id].settings.hiddenFromSidebar), [bots]);
+  // New-user walk, finding 16: a typed name filters the Bots too (it used to change only the Create label).
+  const recent = useMemo(() => sortedBotIds(bots).filter((id) => bots[id] && !bots[id].settings.hiddenFromSidebar && bots[id].profile.name.toLowerCase().includes(name.toLowerCase())), [bots, name]);
+  // …and a few starter templates are offered under Create new Bot (each opens its preview).
+  const [starters, setStarters] = useState<StarterView[]>([]);
+  useEffect(() => { void callQuiet("listStarterTemplates", {}).then((r) => setStarters(r.starters ?? [])).catch(() => {}); }, []);
+  const templates = starters.filter((t) => t.name.toLowerCase().includes(name.toLowerCase())).slice(0, 4);
   const matches = useMemo(
     () => sortedBotIds(bots).filter((id) => bots[id] && !bots[id].group && !bots[id].settings.hiddenFromSidebar && bots[id].profile.name.toLowerCase().includes(name.toLowerCase())),
     [bots, name],
@@ -51,7 +59,8 @@ export function NewChat() {
     ? matches.flatMap((id) => { const b = bots[id]; return b ? [{ key: id, label: b.profile.name, run: () => toggle(id), botId: id }] : []; })
     : [
         { key: "create", label: name ? STR.createNamedBot(name) : STR.createNewBot, disabled: creating, run: () => once(() => createBot(name || undefined)) },
-        { key: "group", label: STR.createGroupChat, run: () => { setGrouping(true); setSel(0); setTo(""); } },
+        ...(!name || STR.createGroupChat.toLowerCase().includes(name.toLowerCase()) ? [{ key: "group", label: STR.createGroupChat, run: () => { setGrouping(true); setSel(0); setTo(""); } }] : []),
+        ...templates.map((t, i) => ({ key: t.id, label: t.name, starter: t, ...(i === 0 ? { head: STR5.templatesHead } : {}), run: () => void useTemplates.getState().importEntry({ id: t.id, source: "starter", name: t.name, kind: "bot-template" } as CatalogEntry) })),
         ...recent.slice(0, 7).flatMap((id) => { const b = bots[id]; return b ? [{ key: id, label: b.profile.name, run: () => void openBot(id), botId: id }] : []; }),
       ];
 
@@ -101,12 +110,15 @@ export function NewChat() {
           const checked = grouping && o.botId ? picked.includes(o.botId) : undefined;
           const bot = o.botId ? bots[o.botId] : undefined;
           return (
-            <li key={o.key} role="option" aria-selected={grouping ? Boolean(checked) : i === sel} className={i === sel ? "pick selected" : "pick"}
+            <Fragment key={o.key}>
+            {o.head && <li role="presentation" className="pick-head">{o.head}</li>}
+            <li role="option" title={o.starter?.blurb} aria-selected={grouping ? Boolean(checked) : i === sel} className={i === sel ? "pick selected" : "pick"}
               onMouseEnter={() => setSel(i)} onClick={() => !o.disabled && o.run()}>
-              <span className="pick-icon">{bot ? <BotAvatar bot={bot} size={bot.group ? 36 : 20} /> : <PlusIcon />}</span>
+              <span className="pick-icon">{bot ? <BotAvatar bot={bot} size={bot.group ? 36 : 20} /> : o.starter ? <ShapeAvatar shape={o.starter.avatarShape} color={o.starter.avatarColor} size={20} still /> : <PlusIcon />}</span>
               <span className="pick-label">{o.label}</span>
               {grouping ? (checked && <CheckIcon />) : i < 9 && <span className="kbds"><kbd>⌘</kbd><kbd>{i + 1}</kbd></span>}
             </li>
+            </Fragment>
           );
         })}
       </ul>

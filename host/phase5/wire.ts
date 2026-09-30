@@ -36,6 +36,7 @@ import { createMcpModule, createMcpServices } from "../mcp/module";
 import { mcpReadOnly } from "../mcp/registry";
 import { mergeMcpServers } from "../mcp/reserved";
 import { createGoogleModule, createGoogleServices, runGoogleToolForFake, type GoogleDraftFetchResult, type GoogleServices } from "../google/module";
+import { createComposioModule, createComposioServices, runComposioToolForFake, type ComposioServices } from "../composio/module";
 import { Dreamer } from "../memory/dreaming/dreamer";
 import { DreamMemoryPort } from "../memory/dreaming/port";
 import { SdkDreamLlm } from "../memory/dreaming/sdk-llm";
@@ -82,6 +83,12 @@ export interface Phase5 {
   wrapReviewer(r: ReviewerLike): ReviewerLike; wrapGate(g: ApprovalGateLike): ApprovalGateLike;
   /** P5 review I6: whether a connector tool may skip Auto-review as read-only. */
   mcpReadOnly(serverId: string, tool: string): boolean;
+  /** Bug 403: a registry MCP server's URL host. */
+  mcpServerHost(serverId: string): string | null;
+  /** Bug 404: a registry server whose command, args or URL mention Composio. */
+  mcpServerComposio(serverId: string): boolean;
+  /** Bug 402: this Bot's composio_apps server is the built-in one. */
+  composioBuiltin(botId: string): boolean;
   /** feat-mac-access-parity: the connected Mac's home and project dirs (auto-run roots) for the fixed-rules engine. */
   macEnv(): { home: string; projectDirs: readonly string[] } | null;
   /** I12: Phase 5's step in the canonical delete order. */
@@ -95,6 +102,8 @@ export interface Phase5 {
   recordUnreported(botId: string | null, model: string, u: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; cacheWrite1hTokens: number; webSearchRequests: number }, source?: string): void;
   /** ORIG-GOOGLE: the app-level Google account and its per-Bot tools. */
   google: GoogleServices;
+  /** Apps through Composio (the user's own key; per-Bot grants). */
+  composio: ComposioServices;
   /** The connected Google address (the gate lets a Gmail draft only to the user through without a card). */
   googleEmail(): string | null;
   /** Final secfix item 4: the built-in Google server is mounted for this Bot (the merge never mounts another under "google"). */
@@ -161,6 +170,8 @@ export function wirePhase5(ctx: ModuleContext, o: {
   // Final secfix item 5: the Google redirect follows the loopback port the Mac actually bound (like OAUTH_REDIRECT).
   const google = createGoogleServices(fullCtx, { fake: o.fake, redirectUri: () => mcp.oauth.redirectUrl });
   google.onChange(() => catalog.refresh());
+  // Apps through Composio: the user's own key, straight from the host to Composio's API (guarded fetch).
+  const composio = createComposioServices(fullCtx, { fake: o.fake });
   const packager = new TemplatePackager({ cfg: ctx.cfg, bots: ctx.bots, drafter: o.fake ? new StubTemplateDrafter() : new SdkTemplateDrafter(helperEnv("template-draft")), now: ctx.now,
     plugins: () => catalog.entries().filter((e) => e.kind === "plugin" && e.state !== "available" && e.source !== "marketplace").map((e) => ({ catalogId: e.id, name: e.name })), author: () => undefined,
     onChange: () => catalog.refresh(), ladder: () => ladder });
@@ -210,10 +221,11 @@ export function wirePhase5(ctx: ModuleContext, o: {
     createBudgetModule(fullCtx, { usage, budgets, dashboard }),
     createMcpModule(fullCtx, mcp),
     createGoogleModule(fullCtx, google),
+    createComposioModule(fullCtx, composio),
     createMarketplaceModule(fullCtx, catalog),
     createPluginMarketplacesModule(fullCtx, plugins, catalog),
     createConnectorToolsModule(fullCtx, { catalog, mcp, google }),
-    createLocalModule(fullCtx, { bridge, asks, egress: new EgressCounter(), browserCards }),
+    createLocalModule(fullCtx, { bridge, asks, egress: new EgressCounter(), browserCards, browserFilter: { refuse: (b, a) => google.setup.refuseBrowser(b, a), text: (b, t, url, editable) => google.setup.browserText(b, t, url, editable) } }),
     createPhase5SettingsModule(fullCtx),
     createTemplatesModule(fullCtx, packager, importHandlers(importer)),
     createOnboardingModule(fullCtx, { tokenConfigured: () => credentialsReady() }),
@@ -258,6 +270,9 @@ export function wirePhase5(ctx: ModuleContext, o: {
     disallowedTools: () => modules.flatMap((m) => m.disallowedTools?.() ?? []),
     cliPlugins: () => plugins.cliPlugins(),
     systemAppendExtra: (botId) => modules.map((m) => m.systemAppendExtra?.(botId) ?? "").filter(Boolean).join("\n\n"),
+    mcpServerHost: (sid) => { const u = mcp.registry.get(sid)?.url; try { return u ? new URL(u).hostname : null; } catch { return null; } },
+    mcpServerComposio: (sid) => { const r = mcp.registry.get(sid); return !!r && /composio/i.test([r.url ?? "", r.command ?? "", ...(r.args ?? [])].join(" ")); },
+    composioBuiltin: (botId) => composio.grantedApps(botId).length > 0,
     mcpReadOnly: (() => { const ro = mcpReadOnly(mcp.registry, (sid, t) => mcp.pool.readOnlyHint(sid, t)); return (sid: string, t: string) => ro(sid, t); })(),
     macEnv: () => { const c = bridge.computer(); return c ? { home: c.home ?? c.localRoot, projectDirs: c.autoRunRoots ?? [] } : null; },
     removeBot: (botId) => {
@@ -298,7 +313,8 @@ export function wirePhase5(ctx: ModuleContext, o: {
     googleBuiltin: (botId) => google.enabledFor(botId) && google.auth.isConnected(),
     googleDraftPreview: (draftId) => google.draftPreview(draftId),
     googleCardFacts: (tool, input) => google.cardFacts(tool, input),
-    runFakeTool: (botId, toolName, input) => runGoogleToolForFake(google, botId, toolName, input),
+    composio,
+    runFakeTool: async (botId, toolName, input) => (await runGoogleToolForFake(google, botId, toolName, input)) ?? runComposioToolForFake(composio, botId, toolName, input),
     macList: async (folder, botId) => {
       const c = bridge.computer();
       if (!c || !bridge.available()) return null;

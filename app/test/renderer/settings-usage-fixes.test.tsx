@@ -22,38 +22,6 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Settings → Usage & Billing", () => {
-  const pickFixed = () => fireEvent.change(screen.getByRole("combobox", { name: /^Weekly budget/ }), { target: { value: "fixed" } });
-
-  it("rejects a non-numeric weekly budget instead of silently storing 'no budget'", async () => {
-    useUsage.setState({ view: { ...usageView, budgetUsd: null } });
-    render(<UsageSection />);
-    pickFixed();
-    fireEvent.change(screen.getByLabelText(AMOUNT), { target: { value: "abc" } });
-    fireEvent.blur(screen.getByLabelText(AMOUNT));
-    expect(await screen.findByText(COPY.budgetInvalid)).toBeTruthy();
-    expect(h.calls.filter(([c]) => c === "setWeeklyBudget")).toEqual([]);
-  });
-
-  it("commits the typed budget on Enter", async () => {
-    h.gateway = (_cmd, args) => ({ ...usageView, budgetUsd: (args.usd as number | null) ?? null });
-    useUsage.setState({ view: { ...usageView, budgetUsd: null } });
-    render(<UsageSection />);
-    pickFixed();
-    fireEvent.change(screen.getByLabelText(AMOUNT), { target: { value: "250" } });
-    fireEvent.keyDown(screen.getByLabelText(AMOUNT), { key: "Enter" });
-    await waitFor(() => expect(h.calls).toContainEqual(["setWeeklyBudget", { usd: 250 }]));
-  });
-
-  it("does not drop a typed budget when Settings is closed with Escape", async () => {
-    h.gateway = (_cmd, args) => ({ ...usageView, budgetUsd: (args.usd as number | null) ?? null });
-    useUsage.setState({ view: { ...usageView, budgetUsd: null } });
-    const view = render(<UsageSection />);
-    pickFixed();
-    fireEvent.change(screen.getByLabelText(AMOUNT), { target: { value: "250" } });
-    view.unmount(); // Escape / a scrim click unmounts the modal without ever firing blur
-    await waitFor(() => expect(h.calls).toContainEqual(["setWeeklyBudget", { usd: 250 }]));
-  });
-
   it("shows an error and a Retry when usage cannot be loaded, not a bare heading", async () => {
     useUsage.setState({ view: null, error: null });
     h.gateway = () => new Error("the box is restarting");

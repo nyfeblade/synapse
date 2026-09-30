@@ -34,7 +34,7 @@ test("a custom MCP server that needs signing in can be signed in to from Manage 
   watchPageErrors(app, page, "custom server authorize", { console: true });
 
   // Onboarding, the same opening as mcp-header-auth.e2e.ts.
-  await page.getByRole("button", { name: "Input API Key →" }).click();
+  await page.getByRole("button", { name: "Add API key" }).click();
   // synapse-public: the Anthropic API key is the only sign-in (a stand-in key; the fake brain never calls out).
   await page.getByLabel("Anthropic API key").fill(E2E_TEST_API_KEY);
   await page.getByRole("button", { name: "Save key" }).click();

@@ -31,4 +31,4 @@ export function MemoryBlock() {
   );
 }
 
-registerGeneralBlock("memory", 20, MemoryBlock);
+registerGeneralBlock("memory", 1, MemoryBlock); // under the Bot heading, with the time zone

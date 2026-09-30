@@ -265,6 +265,62 @@ if as_host_q sudo -n $BU ensure verify-walls-a >/dev/null 2>&1 && as_host_q sudo
   check "a Bot account reaches the auth proxy"            orb -m $M -u root setpriv --reuid=$UB --regid=$UB --init-groups -- curl -sf -m 3 -I http://127.0.0.1:$SYNAPSE_AUTH_PROXY_PORT/api/hello
   check "another local user can't reach the auth proxy"   bash -c "! orb -m $M -u root setpriv --reuid=nobody --regid=nogroup --clear-groups -- curl -sf -m 3 -I http://127.0.0.1:$SYNAPSE_AUTH_PROXY_PORT/api/hello"
   check "the proxy refuses a made-up proxy token"         orb -m $M -u root sh -c "setpriv --reuid=box --regid=box --init-groups -- curl -s -m 3 -o /dev/null -w '%{http_code}' -H 'x-api-key: sk-ant-api03-synproxy-madeup' -d '{}' http://127.0.0.1:$SYNAPSE_AUTH_PROXY_PORT/v1/messages | grep -qx 401"
+  # Bug 362: OrbStack forwards the Mac's own addresses to any port on the Mac's 127.0.0.1. A throwaway listener there
+  # (killed below): root and bothost in the box reach it (so the path exists and these checks mean something); box, a
+  # Bot account and any other local user don't, on any of the Mac's addresses; box and the Bots can't reach the LAN.
+  MPF="$(mktemp)"
+  python3 -c 'import http.server,sys,threading
+s=http.server.HTTPServer(("127.0.0.1",0),http.server.SimpleHTTPRequestHandler)
+open(sys.argv[1],"w").write(str(s.server_address[1]));threading.Timer(300,s.shutdown).start();s.serve_forever()' "$MPF" </dev/null >/dev/null 2>&1 &
+  MPID=$!
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$MPF" ] && break; sleep 0.5; done
+  MP="$(cat "$MPF")"
+  macv6() { orb -m $M -u root sh -c 'getent ahostsv6 host.orb.internal | awk "NR==1{print \$1}"'; }
+  MV6="$(macv6)"
+  # Bug 366: a UDP listener on the Mac's 127.0.0.1 too (it writes what arrives), and the Mac's LAN gateway for a real
+  # LAN connection. A control that can't be proven prints SKIP, which two-account-sim counts as a failure.
+  MUF="$(mktemp)"; MUL="$(mktemp)"
+  python3 -c 'import socket,sys
+s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.bind(("127.0.0.1",0));open(sys.argv[1],"w").write(str(s.getsockname()[1]));s.settimeout(300)
+while True: d,_=s.recvfrom(64);open(sys.argv[2],"a").write(d.decode(errors="replace")+"\n")' "$MUF" "$MUL" </dev/null >/dev/null 2>&1 &
+  MUPID=$!
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$MUF" ] && break; sleep 0.5; done
+  MU="$(cat "$MUF")"
+  LANGW="$(route -n get default 2>/dev/null | awk '/gateway:/{print $2; exit}')"
+  udp_to_mac() { orb -m $M -u root setpriv --reuid="$1" --regid="$1" --clear-groups -- bash -c "echo $2 > /dev/udp/0.250.250.254/$MU" >/dev/null 2>&1; sleep 1; grep -qx "$2" "$MUL"; }
+  export -f udp_to_mac; export M MU MUL
+  check "the Mac guard is loaded"                         orb -m $M -u root sh -c 'systemctl is-active --quiet bots-auth-proxy.service && nft list table inet bots_mac_guard >/dev/null'
+  check "the host can confirm the firewall (bots-ports check)" orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/lib/bots/bots-ports check
+  check "the host requires the firewall service"         orb -m $M -u root sh -c 'systemctl show -p Requires bothost | grep -qw bots-auth-proxy.service'
+  check "root in the box reaches a Mac listener (control)" orb -m $M -u root curl -sf -m 3 -o /dev/null http://host.docker.internal:$MP/
+  check "bothost keeps the Mac (owner-set endpoints)"      orb -m $M -u root setpriv --reuid=bothost --regid=bothost --init-groups -- curl -sf -m 3 -o /dev/null http://host.docker.internal:$MP/
+  if [ -z "$MV6" ]; then echo "FAIL a Bot account can't reach the Mac (IPv6: host.orb.internal gave no IPv6 answer)"; fail=1; fi
+  MACADDRS="host.orb.internal host.docker.internal 0.250.250.254 fd07:b51a:cc66:f0::fe"
+  if [ -n "$MV6" ] && [ "$MV6" != fd07:b51a:cc66:f0::fe ]; then MACADDRS="$MACADDRS $MV6"; fi
+  for a in $MACADDRS; do
+    case "$a" in *:*) a="[$a]" ;; esac
+    check "a Bot account can't reach the Mac ($a)"        bash -c "! orb -m $M -u root setpriv --reuid=$UB --regid=$UB --init-groups -- curl -sg -m 3 -o /dev/null http://$a:$MP/"
+    check "box can't reach the Mac ($a)"                  bash -c "! orb -m $M -u root setpriv --reuid=box --regid=box --init-groups -- curl -sg -m 3 -o /dev/null http://$a:$MP/"
+  done
+  check "another local user can't reach the Mac"          bash -c "! orb -m $M -u root setpriv --reuid=nobody --regid=nogroup --clear-groups -- curl -sf -m 3 -o /dev/null http://host.docker.internal:$MP/"
+  check "boxmcp can't reach the Mac"                      bash -c "! orb -m $M -u root setpriv --reuid=boxmcp --regid=boxmcp --clear-groups -- curl -sf -m 3 -o /dev/null http://host.docker.internal:$MP/"
+  # UDP and ICMP, with root as the control.
+  if udp_to_mac 0 udp-root; then
+    check "a Bot account can't send UDP to the Mac"       bash -c "! udp_to_mac $(orb -m $M -u root id -u $UB) udp-bot"
+  else echo "SKIP a Bot account can't send UDP to the Mac (root's UDP didn't arrive either: nothing to prove against)"; fi
+  if orb -m $M -u root ping -c 1 -W 2 0.250.250.254 >/dev/null 2>&1; then
+    check "a Bot account can't ping the Mac"              bash -c "! orb -m $M -u root setpriv --reuid=$UB --regid=$UB --init-groups -- ping -c 1 -W 2 0.250.250.254"
+  else echo "SKIP a Bot account can't ping the Mac (root's ping got no answer either: nothing to prove against)"; fi
+  # A real LAN connection: the Mac's router, which root reaches.
+  lan_code() { orb -m $M -u root setpriv --reuid="$1" --regid="$1" --clear-groups -- curl -s -m 3 -o /dev/null -w '%{http_code}' "http://$LANGW/" 2>/dev/null; }
+  if [ -n "$LANGW" ] && [ "$(lan_code 0)" != 000 ]; then
+    check "a Bot account can't reach the LAN ($LANGW)"   bash -c "[ \"\$(orb -m $M -u root setpriv --reuid=$UB --regid=$UB --init-groups -- curl -s -m 3 -o /dev/null -w '%{http_code}' http://$LANGW/ 2>/dev/null)\" = 000 ]"
+    check "box can't reach the LAN ($LANGW)"             bash -c "[ \"\$(orb -m $M -u root setpriv --reuid=box --regid=box --init-groups -- curl -s -m 3 -o /dev/null -w '%{http_code}' http://$LANGW/ 2>/dev/null)\" = 000 ]"
+  else echo "SKIP a Bot account can't reach the LAN (no LAN router answering root to prove against)"; fi
+  check "box and the Bots are kept off the LAN (rule)"    orb -m $M -u root sh -c 'nft list set inet bots_mac_guard lan4 | grep -q 192.168.0.0/16 && nft list set inet bots_mac_guard lan4 | grep -q 10.0.0.0/8 && nft list set inet bots_mac_guard lan6 | grep -q fc00::/7'
+  check "a Bot account still resolves names (DNS allowed)" orb -m $M -u root setpriv --reuid=$UB --regid=$UB --init-groups -- getent hosts example.com
+  check "a Bot account still reaches its own box"         orb -m $M -u root setpriv --reuid=$UB --regid=$UB --init-groups -- curl -s -m 3 -o /dev/null http://127.0.0.1:$SYNAPSE_AUTH_PROXY_PORT/api/hello
+  kill "$MPID" "$MUPID" 2>/dev/null; rm -f "$MPF" "$MUF" "$MUL"
   # synapse-public: every Claude process runs on a proxy API-key token, and none holds a Claude login.
   check "every process's ANTHROPIC_API_KEY is a proxy token" orb -m $M -u root sh -c "! cat /proc/[0-9]*/environ 2>/dev/null | tr '\\0' '\\n' | grep -a '^ANTHROPIC_API_KEY=' | grep -av -- '-synproxy-' | grep -q ."
   check "no process holds a Claude login token"           orb -m $M -u root sh -c "! cat /proc/[0-9]*/environ 2>/dev/null | tr '\\0' '\\n' | grep -aq '^CLAUDE_CODE_OAUTH_TOKEN='"

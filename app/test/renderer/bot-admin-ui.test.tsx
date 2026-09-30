@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { STR } from "@synapse/shared";
+import { STR, STRSH } from "@synapse/shared";
 import { BotSettingsPanel } from "../../src/renderer/components/BotSettingsPanel";
 import { HiddenBotsDialog } from "../../src/renderer/components/HiddenBotsDialog";
 import { Sidebar } from "../../src/renderer/components/Sidebar";
@@ -40,7 +40,7 @@ describe("context menu (BOT-14) and Hidden Bots (BOT-10)", () => {
     fireEvent.contextMenu(screen.getByRole("link", { name: /Scout/ }));
     const menu = screen.getByRole("menu", { name: "Bot actions" });
     const labels = within(menu).getAllByRole("menuitem").map((m) => m.textContent);
-    expect(labels).toEqual([STR.pin, STR.markUnread, STR.editProfile, STR.duplicate, STR.copyConversationId, STR.shareAsTemplate, STR.hideFromSidebar, STR.deleteBot]);
+    expect(labels).toEqual([STR.pin, STR.markUnread, STR.editProfile, STR.duplicate, STR.copyConversationId, STRSH.shareBot, STR.shareAsTemplate, STR.hideFromSidebar, STR.deleteBot]);
     const openExport = vi.fn(async () => {});
     useTemplates.setState({ openExport });
     const item = within(menu).getByRole("menuitem", { name: STR.shareAsTemplate }) as HTMLButtonElement;

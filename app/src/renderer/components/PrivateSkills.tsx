@@ -77,9 +77,9 @@ export function PrivateSkills() {
         {mode.kind === "import" && (
           <form className="skill-editor" onSubmit={(e) => { e.preventDefault(); void run(() => (mode.how === "markdown" ? call("importWorkflowText", { markdown: text }) : call("importWorkflowUrl", { url: text.trim() }))); }}>
             {mode.how === "markdown"
-              ? <label className="form-field grow"><span>Markdown</span><textarea className="mono" rows={16} value={text} onChange={(e) => setText(e.target.value)} aria-label="Markdown" /></label>
-              : <label className="form-field"><span>URL</span><input type="url" value={text} onChange={(e) => setText(e.target.value)} aria-label="URL" /></label>}
-            <div className="card-actions"><button type="submit" className="btn-primary">Import skill</button><button type="button" className="btn-outline" onClick={() => setMode({ kind: "list" })}>{STR.cancel}</button></div>
+              ? <label className="form-field grow"><span>Markdown</span><textarea className="text-input mono" rows={16} value={text} onChange={(e) => setText(e.target.value)} aria-label="Markdown" /></label>
+              : <label className="form-field"><span>URL</span><input type="url" className="text-input" value={text} onChange={(e) => setText(e.target.value)} aria-label="URL" /></label>}
+            <div className="card-actions"><button type="button" className="btn-secondary" onClick={() => setMode({ kind: "list" })}>{STR.cancel}</button><button type="submit" className="btn-primary">Import skill</button></div>
           </form>
         )}
         {mode.kind === "list" && (

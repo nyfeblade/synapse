@@ -4,8 +4,10 @@ import path from "node:path";
 import { readJson, writeJsonAtomic } from "../util/atomic-json";
 
 export interface GoogleClient { clientId: string; clientSecret: string }
-export interface GoogleTokens { accessToken: string; refreshToken: string; expiresAt: number; scope: string }
-export interface GoogleAccount { client?: GoogleClient; tokens?: GoogleTokens; email?: string; needsReconnect?: boolean }
+/** refreshExpiresAt: Google said the refresh token expires (refresh_token_expires_in), as it does for a Testing app. */
+export interface GoogleTokens { accessToken: string; refreshToken: string; expiresAt: number; scope: string; refreshExpiresAt?: number }
+/** publishing: what the user ticked for "Publishing status: In production" in the guided sheet, when they did. */
+export interface GoogleAccount { client?: GoogleClient; tokens?: GoogleTokens; email?: string; needsReconnect?: boolean; publishing?: "testing" | "production" }
 
 interface Sealed { v: 1; iv: string; tag: string; ct: string }
 const isSealed = (x: unknown): x is Sealed => typeof x === "object" && x !== null && (x as Sealed).v === 1 && typeof (x as Sealed).ct === "string";

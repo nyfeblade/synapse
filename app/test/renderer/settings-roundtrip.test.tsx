@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STR, STR5, STRB, STRG, STRMA, STRS, STRV, type BotSummary, type HostSettingsView } from "@synapse/shared";
 import { BotSettingsPanel } from "../../src/renderer/components/BotSettingsPanel";
-import { GeneralSection } from "../../src/renderer/components/settings/GeneralSection";
+import { AutoReviewSection, GeneralSection } from "../../src/renderer/components/settings/GeneralSection";
 import { AppearanceBlock } from "../../src/renderer/components/settings/AppearanceBlock";
 import { MemoryBlock } from "../../src/renderer/components/settings/MemoryBlock";
 import { SchedulesSection } from "../../src/renderer/components/settings/SchedulesSection";
@@ -164,7 +164,7 @@ const panel = () => <BotSettingsPanel botId="b1" />;
 const ROWS: Row[] = [
   // Settings → General
   { control: "Timezone", ui: () => <GeneralSection />, change: () => pick(STR.timezone, "Europe/Paris"), stored: () => saved.settings.userTimeZoneOverride, want: "Europe/Paris", shows: () => selected(STR.timezone), showsWant: "Europe/Paris" },
-  { control: "Auto-review", ui: () => <GeneralSection />, change: () => flip(STR.autoReview), stored: () => saved.settings.autoReviewEnabled, want: false, shows: () => isOn(STR.autoReview), showsWant: "false" },
+  { control: "Auto-review", ui: () => <AutoReviewSection />, change: () => flip(STR.autoReview), stored: () => saved.settings.autoReviewEnabled, want: false, shows: () => isOn(STR.autoReview), showsWant: "false" },
   { control: "Save usage (account)", ui: () => <GeneralSection />, change: () => flip(`${STR.saveUsage}: ${STR.saveUsageHint.toLowerCase()}`), stored: () => saved.settings.saveUsage, want: true, shows: () => isOn(`${STR.saveUsage}: ${STR.saveUsageHint.toLowerCase()}`), showsWant: "true" },
   { control: "Show advanced controls", ui: () => <GeneralSection />, change: () => flip(STR.showAdvanced), stored: () => saved.settings.advancedEnabled, want: true, shows: () => isOn(STR.showAdvanced), showsWant: "true" },
   { control: "Per-turn recall", ui: () => <GeneralSection />, before: advancedOn, change: () => flip(STR.perTurnRecall), stored: () => saved.settings.memoryRecall, want: false, shows: () => isOn(STR.perTurnRecall), showsWant: "false" },

@@ -1,4 +1,5 @@
 import type { SseHub } from "../gateway/sse-hub";
+import { hostGuardedFetch } from "../net/guarded-fetch";
 import type { CommandHandlers } from "../gateway/server";
 import { GatewayError } from "../gateway/errors";
 import { fetchSkillText, markdownToSkill } from "./import";
@@ -37,7 +38,8 @@ export function createSkillCommands(d: { library: SkillLibrary; botIds(): string
       return { workflow: view(d.library.write(s).id) };
     },
     importWorkflowUrl: async (a) => {
-      const text = await fetchSkillText(a.url, d.fetchFn);
+      // Bug 368: the URL is someone else's choice; the host fetches it through the guarded fetch (never the Mac or LAN).
+      const text = await fetchSkillText(a.url, d.fetchFn ?? (hostGuardedFetch() as unknown as typeof fetch));
       const s = markdownToSkill(text, decodeURIComponent(a.url.split("/").pop() ?? "").replace(/\.md$/i, "") || "Imported skill");
       const existing = d.library.findBySource(a.url);
       return { workflow: view(d.library.write({ ...s, source: a.url, ...(existing ? { id: existing } : {}) }).id) };

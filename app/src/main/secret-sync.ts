@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { validateSecretName, type SecretStatusEntry } from "@synapse/shared";
+import { STR_AUTH, validateSecretName, type SecretStatusEntry } from "@synapse/shared";
 import type sodiumType from "libsodium-wrappers";
 import type { BoxPin } from "./box-pin";
 import type { Call } from "./gateway-call";
@@ -33,7 +33,7 @@ export async function sealWith(publicKey: string, value: string): Promise<string
   return sodium.to_base64(sodium.crypto_box_seal(sodium.from_string(value), sodium.from_base64(publicKey, V)), V);
 }
 
-const PIN_MISMATCH = "The computer's identity changed. Confirm it in Settings → Updates before sending secrets.";
+const PIN_MISMATCH = STR_AUTH.pinMismatch;
 
 /** A Secrets-section row. `boxOnly`: on the box, with no value on this Mac (bug 57). */
 export interface SecretListRow { name: string; description: string; updatedAt: number; unusable?: string; boxOnly?: true; kept?: true }

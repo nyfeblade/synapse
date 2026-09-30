@@ -1,5 +1,5 @@
 [Unit]
-Description=Bots: only bothost, box and the Bot uids may reach the auth proxy port (bug 117)
+Description=Bots: only bothost, box and the Bot uids may reach the auth proxy port (bug 117); the Bots can't reach the Mac or the LAN (bug 362)
 DefaultDependencies=no
 After=local-fs.target
 Before=bothost.service
@@ -8,5 +8,6 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/local/lib/bots/bots-ports load
 ExecStop=/usr/sbin/nft delete table inet bots_auth_proxy
+ExecStop=-/usr/sbin/nft delete table inet bots_mac_guard
 [Install]
 WantedBy=multi-user.target

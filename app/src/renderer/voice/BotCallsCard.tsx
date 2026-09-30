@@ -36,8 +36,8 @@ export function BotCallsCard() {
         <span style={{ flexGrow: 1 }}>{STRV.quietHours}</span>
         {quiet && (
           <>
-            <label>{STRV.quietFrom} <input type="time" aria-label={STRV.quietFrom} value={quiet.start} onChange={(e) => e.target.value && saveQuiet({ ...quiet, start: e.target.value })} /></label>
-            <label>{STRV.quietTo} <input type="time" aria-label={STRV.quietTo} value={quiet.end} onChange={(e) => e.target.value && saveQuiet({ ...quiet, end: e.target.value })} /></label>
+            <label>{STRV.quietFrom} <input className="text-input" type="time" aria-label={STRV.quietFrom} value={quiet.start} onChange={(e) => e.target.value && saveQuiet({ ...quiet, start: e.target.value })} /></label>
+            <label>{STRV.quietTo} <input className="text-input" type="time" aria-label={STRV.quietTo} value={quiet.end} onChange={(e) => e.target.value && saveQuiet({ ...quiet, end: e.target.value })} /></label>
           </>
         )}
         <button type="button" role="switch" aria-checked={quiet !== null} aria-label={STRV.quietHours} className={quiet ? "switch on" : "switch"} onClick={() => saveQuiet(quiet ? null : DEFAULT)} />

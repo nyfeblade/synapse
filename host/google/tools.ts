@@ -193,7 +193,7 @@ export function createGoogleTools(d: GoogleToolDeps): BotToolDef[] {
       const r = await api.call<{ id: string; message?: { threadId?: string } }>(`${gmail()}/drafts`, { method: "POST", json: { message: b } });
       return { text: `Draft saved. draft_id: ${r.id}. Send it with gmail_send {draft_id: "${r.id}"} once the user wants it sent.` };
     }),
-    tool("gmail_send", "Send email from the user's Gmail: either an existing draft (draft_id) or a new message (to, subject, body). Always needs the user's approval.", {
+    tool("gmail_send", "Send email from the user's Gmail: either an existing draft (draft_id) or a new message (to, subject, body). Asks the user first, except in Full auto when it matches their request.", {
       draft_id: z.string().optional().describe("Draft to send"),
       draft_hash: z.string().optional().describe("Set by the app when the user approves; leave it out"),
       to: z.union([z.string(), z.array(z.string())]).optional(),
@@ -233,13 +233,13 @@ export function createGoogleTools(d: GoogleToolDeps): BotToolDef[] {
       const lines = items.map((e) => `- id: ${e.id} · ${showWhen(e.start)} → ${showWhen(e.end)} · ${str(e.summary) || "(no title)"}${e.location ? ` · ${e.location}` : ""}`);
       return { text: `${items.length} event(s):\n${lines.join("\n")}${r.nextPageToken ? `\nMore: page_token: "${r.nextPageToken}"` : ""}` };
     }),
-    tool("calendar_create", "Create an event on the user's Google Calendar. start/end are ISO date-times, or YYYY-MM-DD for all-day. Always needs the user's approval.", {
+    tool("calendar_create", "Create an event on the user's Google Calendar. start/end are ISO date-times, or YYYY-MM-DD for all-day. Asks the user first, except in Full auto when it matches their request.", {
       summary: z.string(),
       start: z.string(),
       end: z.string(),
       description: z.string().optional(),
       location: z.string().optional(),
-      attendees: z.array(z.string()).optional().describe("Guest email addresses (Google may email them)"),
+      attendees: z.array(z.string()).optional().describe("Guest email addresses (Google emails them). Only people the user asked to invite."),
       time_zone: z.string().optional().describe("IANA zone for date-times without an offset"),
       calendar: z.string().optional(),
     }, false, async (a) => {
@@ -251,7 +251,7 @@ export function createGoogleTools(d: GoogleToolDeps): BotToolDef[] {
       const e = await api.call<CalEvent>(cal(a.calendar), { method: "POST", json: { summary: str(a.summary), start, end, ...(a.description ? { description: str(a.description) } : {}), ...(a.location ? { location: str(a.location) } : {}), ...(attendees.length ? { attendees: attendees.map((x) => ({ email: addressOf(x) })) } : {}) } });
       return { text: `Created. id: ${e.id} · ${showWhen(e.start)} → ${showWhen(e.end)} · ${str(e.summary)}` };
     }),
-    tool("calendar_update", "Change an event on the user's Google Calendar (only the fields given). Always needs the user's approval.", {
+    tool("calendar_update", "Change an event on the user's Google Calendar (only the fields given). Asks the user first, except in Full auto when it matches their request.", {
       id: z.string(),
       summary: z.string().optional(),
       start: z.string().optional(),
@@ -316,7 +316,7 @@ export function createGoogleTools(d: GoogleToolDeps): BotToolDef[] {
       const shown = text.length > max || body.truncated ? `${text.slice(0, max)}\n[truncated at ${Math.min(max, text.length)} chars; the file is longer]` : text;
       return { text: `${f.name} (${exportAs ? `exported as ${exportAs}` : f.mimeType})\n\n${shown}` };
     }),
-    tool("drive_upload", "Upload a file from /workspace to the user's Google Drive. Always needs the user's approval.", {
+    tool("drive_upload", "Upload a file from /workspace to the user's Google Drive. Asks the user first, except in Full auto.", {
       path: z.string().describe("A file inside /workspace"),
       name: z.string().optional().describe("Name in Drive (default: the file's name)"),
       folder: z.string().optional().describe("Drive folder id (default: My Drive)"),

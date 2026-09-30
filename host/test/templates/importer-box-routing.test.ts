@@ -56,7 +56,7 @@ describe("TemplateImporter routes skill files through the no-clobber box helpers
 
     expect(writeSkillFileNoClobber).toHaveBeenCalledTimes(1);
     const [id, content] = vi.mocked(writeSkillFileNoClobber).mock.calls[0]!;
-    expect(id).toBe("trip-desk--book-flights");
+    expect(id).toBe("trip-desk-book-flights");
     expect(content).toContain("source: template:Trip Desk");
 
     expect(writeSkillHelperFileNoClobber).toHaveBeenCalledTimes(1);
@@ -67,13 +67,13 @@ describe("TemplateImporter routes skill files through the no-clobber box helpers
     expect(skillWrites).toEqual([]);
   });
 
-  it("still picks a fresh directory name on a collision (a pre-existing 'trip-desk--book-flights') before ever writing", () => {
+  it("still picks a fresh directory name on a collision (a pre-existing 'trip-desk-book-flights') before ever writing", () => {
     const { cfg, importer } = setup("claude");
-    fs.mkdirSync(path.join(cfg.claudeConfigDir, "skills", "trip-desk--book-flights"), { recursive: true });
+    fs.mkdirSync(path.join(cfg.claudeConfigDir, "skills", "trip-desk-book-flights"), { recursive: true });
     const { token } = importer.preview({ bytesBase64: pack() });
     importer.import(token);
     const [id] = vi.mocked(writeSkillFileNoClobber).mock.calls[0]!;
-    expect(id).toBe("trip-desk--book-flights-2");
+    expect(id).toBe("trip-desk-book-flights-2");
   });
 });
 

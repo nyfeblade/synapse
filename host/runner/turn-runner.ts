@@ -1,3 +1,5 @@
+import { TEXT } from "../review/texts";
+import { outsideLog } from "../review/outside-log";
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -16,7 +18,7 @@ import { messageText, ZERO_USAGE } from "../brain/types";
 import type { HostConfig } from "../config";
 import { GatewayError } from "../gateway/errors";
 import type { Redactor } from "../history/archive";
-import { bodyFor, extractPartialContent, iconFor, isHiddenActivity, metricFor, stepText } from "../presence/activity";
+import { bodyFor, extractPartialContent, iconFor, isHiddenActivity, metricFor, stepTarget, stepText } from "../presence/activity";
 import type { PresenceTracker } from "../presence/presence";
 import type { HostSettingsStore } from "../store/host-settings";
 import type { Supervisor } from "../supervisor/supervisor";
@@ -48,7 +50,17 @@ import { isLean, TaskClock } from "../engineering/lean-profile";
 import { ttft } from "../util/ttft-trace";
 import { botCodeDir } from "../walls/bot-uid";
 
-export type ExpireCause = "user_redirect" | "quiesce" | "session_end" | "settings_change" | "ttl";
+/**
+ * Review of new-user walk finding 3: a call ends "stopped" only when Stop cut it short — its approval was withdrawn by
+ * Stop, or it was interrupted — never merely because it failed on its own while a Stop was pending.
+ */
+export function cutByStop(isError: boolean, stopRequested: boolean, output: unknown): boolean {
+  if (!isError || !stopRequested) return false;
+  const text = typeof output === "string" ? output : "";
+  return text.startsWith(TEXT.expired.stopped ?? "\u0000") || /\b(interrupt(ed)?|abort(ed)?|cancell?ed)\b/i.test(text);
+}
+
+export type ExpireCause = "user_redirect" | "quiesce" | "session_end" | "settings_change" | "ttl" | "stopped";
 
 export type { ApprovalGateLike } from "./bot-wiring";
 
@@ -66,6 +78,8 @@ export interface RunnerDeps {
   timings?: { ackRedriveIdleMs?: number; retryBaseMs?: number };
   /** Awaited before every turn; the host uses it to hold turns until first-boot conformance finishes (§13.1). */
   beforeTurn?: () => Promise<void>;
+  /** Bug 364: why no Bot turn may start right now (the box firewall is missing), or null. Refused turns are dropped with a tray. */
+  turnBlocked?: () => Promise<string | null>;
   /** Phase 3 (T28): appended after the base system prompt, inside the same promptSnapshot render so the epoch freeze (CTX-03) still applies. */
   extraSystemAppend?(botId: string): string;
   /** Phase 3 (T28): Bot tools beyond the Phase 1 four (Screenshot, request_box_help, Shell/AwaitShell, Task/…). */
@@ -788,6 +802,11 @@ export class TurnRunner {
     // (a routine fire holds a host-wide gate slot until it is told). onDropped is that one report.
     if (!this.d.bots.has(botId)) return spec.onDropped?.();
     await this.d.beforeTurn?.();
+    const blocked = await this.d.turnBlocked?.();
+    if (blocked) {
+      this.d.trays.add({ botId: null, title: blocked, dedupeKey: "box-firewall" });
+      return spec.onDropped?.();
+    }
     ttft.mark(botId, "beforeTurn gate passed");
     const lease = await this.sup().acquire(botId, spec.lane, spec.acceptedAtMs).catch(() => null);
     ttft.mark(botId, "supervisor lease");
@@ -801,7 +820,10 @@ export class TurnRunner {
     slot.replyTo = spec.replyTo ?? null;
     // coding-parity: an engineering-mode Bot works like the CLI (discipline.ts quietWork).
     slot.quietWork = isLean(this.d.bots.summary(botId).settings);
-    if (spec.source !== "user") slot.wakeText = spec.prompt.map(messageText).join("\n"); // I2: the reviewer's wake block
+    if (spec.source !== "user") {
+      slot.wakeText = spec.prompt.map(messageText).join("\n"); // I2: the reviewer's wake block
+      outsideLog.record(botId, slot.wakeText, this.now()); // bug 415: a wake's text is outside content for Full auto's checks
+    }
     r.slot = slot;
     for (const o of this.observers) o.onTurnStart?.(botId, slot);
     spec.onStart?.(slot);
@@ -942,7 +964,9 @@ export class TurnRunner {
         if (!entry) break;
         const input = slot.toolUses.get(e.toolUseId)?.input ?? {};
         const done: ToolCallEntry = {
-          ...entry, status: e.isError ? "error" : "done", endedAt: this.now(), step: stepText(e.name, input, e.output),
+          // New-user walk, finding 3: a call cut off by Stop never ran, so it says what it was, not "Ran …".
+          ...entry, status: e.isError ? (cutByStop(e.isError, !!slot.stopRequested, e.output) ? "stopped" : "error") : "done", endedAt: this.now(),
+          step: cutByStop(e.isError, !!slot.stopRequested, e.output) ? stepTarget(e.name, input) : stepText(e.name, input, e.output),
           metric: e.isError ? null : metricFor(e.name, input, e.output),
           // fix round 2, finding 1: fail closed — no `?? t` fallback. Without a real redactor this is
           // `undefined`, and `bodyFor` itself refuses to build a body at all rather than an unredacted one.
@@ -1087,7 +1111,8 @@ export class TurnRunner {
     if (r.slot) r.slot.stopRequested = true;
     if (r.redrive) clearTimeout(r.redrive);
     this.d.acks.drop(botId);
-    this.g().expireAll(botId, "session_end");
+    // New-user walk, finding 3: the user stopped it; the card says "Stopped by you", not "Approval expired".
+    this.g().expireAll(botId, "stopped");
     await this.interruptActive(botId, "stopped by the user");
   }
 

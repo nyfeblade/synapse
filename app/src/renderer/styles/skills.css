@@ -33,3 +33,10 @@
 .file-btn:hover { background-color: var(--fill-hover); border-color: var(--line-button-hover); }
 .file-btn:active { background-color: var(--fill-press); }
 .modal.market .tab:focus-visible, .file-btn:focus-within, .file-btn:focus-visible { outline: 3px solid var(--focus-ring-soft); outline-offset: 2px; }
+/* The custom MCP server form (UI-controls pass, 2026-09-29): labels read as the app's field labels
+   (small, muted, a step above their field) instead of body ink butted against the field above, and the
+   commit sits at the end of the form like every other form's. */
+.mcp-form { gap: 4px; padding: 12px 14px 14px; }
+.mcp-form > label { margin-top: 6px; font-size: var(--type-small); color: var(--ink-muted); }
+.mcp-form > label:first-child { margin-top: 0; }
+.mcp-form > .btn-primary { align-self: flex-end; margin-top: 8px; }

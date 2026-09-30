@@ -220,6 +220,8 @@ rm -f /etc/sudoers.d/box
 # Bug 117: only bothost, box and the Bot uids may connect to the host's auth proxy port (47802, or this Mac user's own
 # port from the host's ports drop-in: shared/src/user-ports.ts). The shipped rule is a template; bots-ports renders it for
 # the drop-in's port and loads it, here and at every boot, so a re-provision never puts back a rule for the wrong port.
+# Bug 362: bots-ports load also renders and loads the Mac guard (table inet bots_mac_guard): no account but root and
+# bothost reaches the Mac's own addresses, and box and the Bot accounts can't reach private/LAN ranges (DNS excepted).
 install -d -m 0755 /etc/bots
 install -m 0644 -o root -g root "$HERE/files/bots-auth-proxy.nft" /etc/bots/auth-proxy.nft.in
 install -m 0755 -o root -g root "$HERE/files/bots-ports" /usr/local/lib/bots/bots-ports

@@ -19,6 +19,9 @@
  *                   it — the reviewer layer owns natural-language rules — but the category exists so the log,
  *                   the card and the settings copy can name it.
  *
+ * Bug 410: a SEND on the user's connected accounts (Google, Composio, MCP) that the owner directly asked for in
+ * their own latest message runs with no card; the host decides that after this module (host/review/full-auto-intent.ts).
+ *
  * Everything else runs silently: reading, writing and editing files in a workspace, running commands and tests,
  * installing packages in a project, browsing and reading the web, filling non-payment forms, searching mail or
  * files, scheduling its own work.
@@ -40,7 +43,7 @@ export const FULL_AUTO_CATEGORIES: readonly FullAutoCategory[] = ["destruction",
 
 /** One short factual line for the Full auto option in settings. No marketing copy. */
 export const FULL_AUTO_SETTINGS_LINE =
-  "Still asks before: deleting your files, sending or posting, spending money, and security or access changes.";
+  "Still asks before: deleting, spending money, security or access changes, and sending anything you didn't ask for.";
 
 /**
  * Bug 258: the token the app's own No limits confirm sends. The Mac's coordinator (and the host) refuse to turn No
@@ -540,6 +543,14 @@ function toolAsk(action: string, args: Record<string, unknown>): FullAutoResult 
       return Array.isArray(guests) && guests.length > 0 ? R("send", "invite", "This invites other people to a calendar event.") : null;
     }
     return null; // a draft, a Drive upload: nothing leaves and nothing is destroyed
+  }
+  if (action === "composio_write") {
+    // Apps through Composio: the host only classifies a call as a write when it isn't a plain read, and a write
+    // in the user's own connected account asks in Full auto too (the owner's rule: every send or change asks).
+    const tool = snake(String(args.tool ?? "")).toLowerCase();
+    if (/(^|_)(delete|destroy|purge|wipe|trash|remove)(_|$)/.test(tool)) return R("destruction", "delete-record", "This deletes something in your connected app.");
+    if (/(^|_)(pay|purchase|checkout|charge|subscribe|invoice|refund)(_|$)/.test(tool)) return R("money", "purchase", "This spends money in your connected app.");
+    return R("send", "connected-app", "This sends or changes something in your connected app.");
   }
   if (action === "mcp") {
     const tool = snake(String(args.tool ?? ""));

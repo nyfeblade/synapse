@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { STR5, STR_AUTH } from "@synapse/shared";
 import { Onboarding } from "../../src/renderer/onboarding/Onboarding";
 import { ONBOARDING_TOOLS } from "../../src/renderer/onboarding/tools";
 
@@ -28,7 +29,7 @@ describe("onboarding flow (ONB-01…04)", () => {
     expect(screen.getByText(/Your team of always-on Bots that/)).toBeTruthy();
     expect(document.querySelector(".onb-mark")).toBeTruthy();
     await vi.waitFor(() => expect(calls.map((c) => c[0])).toContain("getOnboarding"));
-    fireEvent.click(screen.getByRole("button", { name: "Input API Key →" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add API key" }));
     expect(await screen.findByRole("heading", { name: "Meet Synapse" })).toBeTruthy();
     for (let i = 0; i < 3; i++) fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByRole("heading", { name: "What do you use every day?" })).toBeTruthy();
@@ -47,18 +48,66 @@ describe("onboarding flow (ONB-01…04)", () => {
     await vi.waitFor(() => expect(done).toHaveBeenCalledWith("new-bot"));
   });
 
-  it("a suggestion card imports its starter template (ONB-04)", async () => {
+  it("new-user walk finding 5: a suggestion card selects (fills in the Bot below); only Get started creates it", async () => {
     const done = vi.fn();
     render(<Onboarding onDone={done} initialStep="new-bot" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Meet Chief of Staff" }));
+    const card = await screen.findByRole("radio", { name: "Chief of Staff" });
+    fireEvent.click(card);
+    expect(card.getAttribute("aria-checked")).toBe("true");
+    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Chief of Staff");
+    expect(screen.getByRole("radio", { name: "Gem shape" }).getAttribute("aria-checked")).toBe("true");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls.map((c) => c[0])).not.toContain("importTemplate");
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
     await vi.waitFor(() => expect(calls).toContainEqual(["importTemplate", { token: "tk" }]));
     await vi.waitFor(() => expect(done).toHaveBeenCalledWith("starter-bot"));
+    expect(calls.map((c) => c[0])).not.toContain("createAgent");
+    expect(calls.map((c) => c[0])).not.toContain("updateAgent");
+  });
+
+  it("a picked teammate renamed before Get started keeps the new name; picking it again clears the pick", async () => {
+    const done = vi.fn();
+    render(<Onboarding onDone={done} initialStep="new-bot" />);
+    const card = await screen.findByRole("radio", { name: "Chief of Staff" });
+    fireEvent.click(card);
+    fireEvent.click(card);
+    expect(card.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(card);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Morgan" } });
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+    await vi.waitFor(() => expect(calls).toContainEqual(["updateAgent", { id: "starter-bot", name: "Morgan" }]));
+    await vi.waitFor(() => expect(done).toHaveBeenCalledWith("starter-bot"));
+  });
+
+  it("new-user walk finding 17: the key step has one heading, no stuck status line and no 'No API key saved yet'", async () => {
+    render(<Onboarding onDone={vi.fn()} initialStep="setup" />);
+    await screen.findByLabelText(STR_AUTH.keyLabel);
+    expect(screen.getAllByRole("heading").map((h) => h.textContent)).toEqual([STR_AUTH.firstRunTitle]);
+    expect(document.body.textContent).not.toContain(STR5.startingComputer);
+    expect(document.body.textContent).not.toContain(STR_AUTH.noKey);
+  });
+
+  it("new-user walk finding 18: tool checkboxes carry their names, and Skip goes on with none", async () => {
+    render(<Onboarding onDone={vi.fn()} initialStep="tools" />);
+    const box = screen.getByRole("checkbox", { name: "Slack" });
+    expect(box.getAttribute("aria-label")).toBe("Slack");
+    fireEvent.click(box);
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    expect(screen.getByRole("heading", { name: "Create your own" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+    await vi.waitFor(() => expect(calls.find((c) => c[0] === "createAgent")?.[1]).toMatchObject({ description: undefined }));
+  });
+
+  it("the new-Bot step has a Back to the tools step", async () => {
+    render(<Onboarding onDone={vi.fn()} initialStep="new-bot" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Back" }));
+    expect(screen.getByRole("heading", { name: "What do you use every day?" })).toBeTruthy();
   });
 
   it("the tour shows where you are, one dot per page, and its Back and Next line up", async () => {
     render(<Onboarding onDone={vi.fn()} />);
     await vi.waitFor(() => expect(calls.map((c) => c[0])).toContain("getOnboarding"));
-    fireEvent.click(screen.getByRole("button", { name: "Input API Key →" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add API key" }));
     await screen.findByRole("heading", { name: "Meet Synapse" });
     const dots = () => [...document.querySelectorAll(".onb-dots i")];
     expect(dots().length).toBe(3);
@@ -77,7 +126,7 @@ describe("onboarding flow (ONB-01…04)", () => {
     w.synapse.call = async (c: string, a: unknown) => (c === "listStarterTemplates" ? { ok: true, result: {} } : base(c, a));
     render(<Onboarding onDone={vi.fn()} />);
     await vi.waitFor(() => expect(calls.map((c) => c[0])).toContain("getOnboarding"));
-    fireEvent.click(screen.getByRole("button", { name: "Input API Key →" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add API key" }));
     await screen.findByRole("heading", { name: "Meet Synapse" });
     for (let i = 0; i < 3; i++) fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));

@@ -1,0 +1,29 @@
+{
+  "slug": "standup-writer",
+  "blurb": "Writes your daily standup from your commits, issues and calendar.",
+  "order": 5,
+  "addedAt": "2026-09-29",
+  "payload": {
+    "v": 1,
+    "name": "Standup Writer",
+    "title": "Standups",
+    "instructions": "You write the user's daily standup: what they did yesterday, what's next today and any blockers. Build it from their commits, closed issues and calendar. Keep it to five bullets and let the user edit before posting anywhere.",
+    "shape": "pill",
+    "color": "#4ba495",
+    "tools": [
+      {
+        "catalogId": "curated:github",
+        "name": "GitHub"
+      },
+      {
+        "catalogId": "curated:linear",
+        "name": "Linear"
+      },
+      {
+        "catalogId": "curated:google-calendar",
+        "name": "Google Calendar"
+      }
+    ],
+    "skills": []
+  }
+}

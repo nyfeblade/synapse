@@ -63,6 +63,8 @@ export function postValidate(
      * rule-coverage.ts proves it covers this action's target and service; an undecidable one does not count.
      */
     coverage?: { rules: { id: string; text: string }[]; surface: string; target: RiskTarget; signals?: string[] };
+    /** Bug 410: floor categories the owner's own request covers in Full auto's intent check (F1, F2 only). */
+    intentFloors?: string[];
   },
 ): { verdict: Verdict; overrides: string[] } {
   const out: Verdict = { ...v };
@@ -76,7 +78,8 @@ export function postValidate(
   const exactHit = !!o.target && (o.exactRules ?? []).some((r) => exactRuleMatches(r, { ...o.target!, cwd: o.target!.cwd ?? ws }, ws));
   const cov = o.coverage;
   const covers = (id: string) => !cov || cov.rules.some((r) => r.id === id && ruleCoversAction(r.text, cov.surface, cov.target, cov.signals ?? [], { workspace: o.workspace }));
-  if (floor && FLOOR_WORDS[floor] && out.decision === "allow" && !exactHit && !out.matched_allow_rule_ids.some((id) => o.allowIds.includes(id) && covers(id))) {
+  const intentHit = (floor === "F1" || floor === "F2") && (o.intentFloors ?? []).includes(floor) && !o.floorHits.some((f) => FLOOR_WORDS[f] && f !== floor);
+  if (floor && FLOOR_WORDS[floor] && out.decision === "allow" && !exactHit && !intentHit && !out.matched_allow_rule_ids.some((id) => o.allowIds.includes(id) && covers(id))) {
     block(3);
     out.reason = `This ${FLOOR_WORDS[floor]} needs your OK (built-in safety check).`;
   }

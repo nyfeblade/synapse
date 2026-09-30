@@ -33,8 +33,11 @@ export SYNAPSE_GATEWAY_PORT SYNAPSE_WEBHOOK_PORT SYNAPSE_AUTH_PROXY_PORT
 SYNAPSE_BOX_SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SYNAPSE_BOX_SCRIPTS
 box_ports_script() { cat "$SYNAPSE_BOX_SCRIPTS/files/bots-ports"; }
+# Bug 364: the streamed script is installed first (the boot service and the host's `check` run the installed copy), then run.
 box_apply_ports() {
-  box_ports_script | orb -m "$BOX_MACHINE" -u root bash -s -- apply "$SYNAPSE_GATEWAY_PORT" "$SYNAPSE_WEBHOOK_PORT" "$SYNAPSE_AUTH_PROXY_PORT"
+  box_ports_script | orb -m "$BOX_MACHINE" -u root sh -c 'install -d -m 0755 /usr/local/lib/bots && cat > /usr/local/lib/bots/bots-ports.new && chmod 0755 /usr/local/lib/bots/bots-ports.new && mv /usr/local/lib/bots/bots-ports.new /usr/local/lib/bots/bots-ports'
+  # Bug 365: the Mac's own networks (SYNAPSE_MAC_NETS, from the app) go in when the app passed them, even empty.
+  orb -m "$BOX_MACHINE" -u root /usr/local/lib/bots/bots-ports apply "$SYNAPSE_GATEWAY_PORT" "$SYNAPSE_WEBHOOK_PORT" "$SYNAPSE_AUTH_PROXY_PORT" ${SYNAPSE_MAC_NETS+"$SYNAPSE_MAC_NETS"}
 }
 export -f box_ports_script box_apply_ports
 # The /hello proof (host/gateway/server.ts): HMAC-SHA256(key = $TOKEN, "synapse-hello:" + nonce), hex. Built from plain

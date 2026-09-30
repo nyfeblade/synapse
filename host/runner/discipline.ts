@@ -1,4 +1,5 @@
 import { LIMITS } from "@synapse/shared";
+import { outsideLog } from "../review/outside-log";
 import { SEND_TOOL } from "../brain/tool-policy";
 import type { PostToolOutcome, StopOutcome, ToolBatchOutcome, ToolCall } from "../brain/types";
 import { nudgeText, reminder } from "./prompt-collector";
@@ -54,6 +55,9 @@ export function shouldFence(tool: string, input: Record<string, unknown>): boole
   return false;
 }
 
+/** Bug 419: the shells whose output the Full-auto checks read for addresses and links (the Mac's are fenced above). */
+const SHELL_TOOLS = new Set(["Bash", "mcp__bot__Shell", "mcp__bot__AwaitShell", "BashOutput"]);
+
 export function fenceOutput(tool: string, output: string): string {
   const safe = output.replace(/<(\/?)untrusted_data/g, "<$1untrusted_data_redacted");
   return `<untrusted_data source="${tool}">\n${safe}\n</untrusted_data>`;
@@ -75,6 +79,11 @@ export function onPostToolUse(slot: TurnSlot, call: ToolCall, output: string, no
   if (shouldFence(call.toolName, call.input)) {
     out.replaceOutput = fenceOutput(call.toolName, output);
     slot.untrusted = [...slot.untrusted, output.slice(0, 4000)].slice(-10);
+    outsideLog.record(slot.botId, output, now?.() ?? Date.now()); // bug 415: whole, across turns, for Full auto's checks
+  } else if (SHELL_TOOLS.has(call.toolName)) {
+    // Bug 419: a command can fetch a page (curl, wget, git clone, gh api, a script) or read a file from anywhere, so
+    // the addresses and links in ALL shell output count as outside content for Full auto's send checks.
+    outsideLog.record(slot.botId, output, now?.() ?? Date.now(), { lite: true });
   }
   if (isSend || slot.silenceAllowed) return out;
   const n = slot.toolCallsSinceSend;

@@ -1,4 +1,5 @@
 import { BudgetGate } from "./usage/budget-gate";
+import { composioSentTo, resolveComposioSend } from "./composio/recipients";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import type http from "node:http";
@@ -119,6 +120,7 @@ import { wirePhase5, type Phase5 } from "./phase5/wire";
 import type { ReviewerLike } from "./approvals/approval-gate";
 import { sudoFsQuery } from "./walls/home-fs";
 import { execBuf } from "./computer/x-exec";
+import { BoxFirewallCheck, sudoFirewallCheck } from "./net/firewall-check";
 
 export const HOST_VERSION = "0.1.0";
 
@@ -291,6 +293,13 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
   const presence = new PresenceTracker((id) => { if (bots.has(id)) bots.publish(id); }, now);
   bots.setRuntimeView((id) => presence.view(id));
   const trays = new TrayService(hub, now);
+  // Bug 364: on the box (the production service), no Bot turn runs without the box firewall; checked now and every minute.
+  const firewall = new BoxFirewallCheck({
+    enabled: process.platform === "linux" && process.env.NODE_ENV === "production" && process.env.VITEST === undefined,
+    run: sudoFirewallCheck, log: (m) => console.warn(m),
+    onChange: (ok) => { if (ok) for (const t of trays.list()) if (t.dedupeKey === "box-firewall") trays.dismiss(t.id); },
+  });
+  firewall.start();
   const proxyTray = (): void => {
     if (!authProxyUp && auth.apiKey()) trays.add({ botId: null, title: STR_AUTH.proxyDownTitle, detail: STR_AUTH.proxyDownDetail, retry: true, dedupeKey: "auth-proxy" });
   };
@@ -316,6 +325,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     cfg, bots, acks, trays, presence, settings, flags: flagsFn, now, hooks, toolExtensions: ext, metrics,
     sendAcceptance: new SendAcceptanceLedger(hp("send-acceptance.json")), resume: new ResumeLedger(hp("host-restart-resume.json")),
     beforeTurn: () => conformanceReady,
+    turnBlocked: () => firewall.blocked(),
     extraSystemAppend: (botId) => phase3?.promptSection(botId) ?? "",
     extraTools: (botId) => phase3?.botTools(botId) ?? [],
     extraSendHandlers: (botId) => phase3?.sendHandlers(botId),
@@ -457,12 +467,24 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     displayIdentity: (botId) => (phase3 ? phase3.browser.identity(botId).catch(() => null) : Promise.resolve(null)),
     shellLastCwd: (botId, childId) => phase3?.shells.lastCwdFor(botId, childId) ?? null,
     mcpReadOnly: (serverId, tool) => phase5?.mcpReadOnly(serverId, tool) ?? false,
+    mcpServerHost: (serverId) => phase5?.mcpServerHost(serverId) ?? null,
+    mcpServerComposio: (serverId) => phase5?.mcpServerComposio(serverId) ?? false,
+    composioBuiltin: (botId) => phase5?.composioBuiltin(botId) ?? false,
+    // Bug 413: who a Composio send reaches, read through the Bot's own granted connection (a read-listed tool).
+    // Bug 420: known contacts — the owner's Gmail Sent folder, through Google if connected, else Composio's Gmail.
+    sentTo: async (botId, address) => {
+      const g = phase5 ? await phase5.google.sentTo(address) : null;
+      if (g !== null) return g;
+      return phase5 ? (await composioSentTo((s, a) => phase5!.composio.hostLookup(botId, s, a), address)) === true : false;
+    },
+    composioRecipients: (botId, slug, args) => (phase5 ? resolveComposioSend((s, a) => phase5!.composio.hostLookup(botId, s, a), slug, args) : Promise.resolve({ error: "Composio isn't set up." })),
     // feat-mac-access-parity: the per-Bot permission mode and the connected Mac, for the fixed-rules layer.
     permMode: (botId) => (bots.has(botId) ? bots.summary(botId).settings.permMode ?? "ask" : "ask"),
     noLimits: (botId) => bots.has(botId) && bots.summary(botId).settings.noLimits === true,
     macEnv: () => phase5?.macEnv() ?? null,
     googleEmail: () => phase5?.googleEmail() ?? null,
     googleBuiltin: (botId) => phase5?.googleBuiltin(botId) ?? false,
+    googleClientReplace: (botId) => (phase5 ? phase5.google.setup.cardFor(botId, phase5.google.status().state === "connected") : null),
     googleDraftPreview: (draftId) => (phase5 ? phase5.googleDraftPreview(draftId) : Promise.resolve({ error: STRG.toolNotConnected })),
     googleCardFacts: (tool, input) => (phase5 ? phase5.googleCardFacts(tool, input) : Promise.resolve({ error: STRG.toolNotConnected })),
     // Item 9: the Bot's secrets never reach the approval card the user sees (the draft-send preview included).
@@ -669,6 +691,14 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
   // I10: connector secrets (Slack/GitHub tokens, signing secrets, IMAP passwords) are scanner values too.
   p3.scanners.addSource((botId) => p4.services.adapters.secrets.values(botId));
   p4.services.adapters.secrets.onChange((botId) => p3.scanners.invalidate(botId));
+  // google-setup: the Google client secret (saved, or captured off a page by the setup task) is redacted everywhere.
+  p3.scanners.addSource(() => {
+    const saved = p5.google.auth.clientSecret();
+    return [...(saved ? [{ name: "GOOGLE_CLIENT_SECRET", value: saved }] : []), ...p5.google.setup.secrets()];
+  });
+  const rescan = () => { for (const id of bots.ids()) p3.scanners.invalidate(id); };
+  p5.google.onChange(rescan);
+  p5.google.setup.onSecrets(rescan);
   const { sendPrompt: p4Send, ...p4Rest } = p4.handlers as Required<Pick<CommandHandlers, "sendPrompt">> & CommandHandlers;
 
   // ---- Bug 142: the voice fast path. On a 1:1 call the Bot's voice (a warm, lean front session on the Bot's
@@ -832,7 +862,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     createContextCommands({ bots, compactor, rollover, sizeOf }),
     createMemoryCommands({ store: memory, botExists: (id) => bots.has(id), nameOf, secrets: secretValues, redact: redactFor }),
     createHistoryCommands({ archive: historyArchive, bots }),
-    createAuthCommands({ store: auth, keyPair: () => loadOrCreateBoxKeyPair(cfg.hostPrivate) }),
+    createAuthCommands({ store: auth, keyPair: () => loadOrCreateBoxKeyPair(cfg.hostPrivate), fake: process.env.FUZZ === "1" || cfg.brain === "fake" }),
     {
       // Review round 2 (P4): `refresh` re-probes now (real brain only); otherwise the last answer.
       getModelAccess: async (a) => {
@@ -870,6 +900,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
         });
       }),
     close: async () => {
+      firewall.stop();
       await p4.stop(); // EVT-19: scheduler, webhook listener and watchers stop first
       clearInterval(ticker);
       clearInterval(phase3Ticker);

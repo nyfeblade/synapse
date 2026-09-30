@@ -69,7 +69,7 @@ export class LocalPolicyStore {
     const list = this.read<{ computers: LocalComputer[] }>(this.files.computers, { computers: [] }).computers;
     let c = list.find((x) => x.isCurrent);
     if (!c) {
-      c = { computerId: os.hostname(), label: os.hostname().replace(/\.local$/, ""), isCurrent: true, executionPolicy: "ask", localRoot: this.home(), autoRunRoots: [] };
+      c = { computerId: os.hostname(), label: macLabel(os.hostname()), isCurrent: true, executionPolicy: "ask", localRoot: this.home(), autoRunRoots: [] };
       this.write(this.files.computers, { computers: [...list, c] });
     }
     // Ruling A: the auto-run roots default to NONE (an older computers.json has no field).
@@ -472,4 +472,9 @@ export class LocalPolicyStore {
   }
 
   askTtlMs(): number { return LIMITS5.localAskTtlMs; }
+}
+
+/** New-user walk, nit 30: the Mac's name without the network suffix ("Studio-MBP.localdomain" → "Studio-MBP"). */
+export function macLabel(hostname: string): string {
+  return hostname.replace(/\.(local|localdomain|lan|home|internal)$/i, "");
 }

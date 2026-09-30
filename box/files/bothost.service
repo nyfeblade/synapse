@@ -1,7 +1,9 @@
 [Unit]
 Description=Bots host (gateway, transcripts, supervisor)
-After=network-online.target
+After=network-online.target bots-auth-proxy.service
 Wants=network-online.target
+# Bug 364: fail closed. The host never runs without the box firewall (auth proxy rule + Mac guard).
+Requires=bots-auth-proxy.service
 
 [Service]
 User=bothost

@@ -24,9 +24,17 @@ read -r port hello _ <<<"$(info "$M")"
 [ "$hello" = "1" ] && ok "test box answers /hello" || bad "test box has no /hello"
 [ "$(curl -s -m5 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$want/health")" = 401 ] && ok "test box refuses no token" || bad "test box answered without a token"
 bash "$B/verify-box.sh" >"$LOG/verify" 2>&1
-for c in "the rule guards this account's proxy port" "another local user can't reach the auth proxy" "the proxy refuses a made-up proxy token"; do
+for c in "the rule guards this account's proxy port" "another local user can't reach the auth proxy" "the proxy refuses a made-up proxy token" \
+  "the Mac guard is loaded" "root in the box reaches a Mac listener (control)" "a Bot account can't reach the Mac (host.orb.internal)" \
+  "a Bot account can't reach the Mac (host.docker.internal)" "a Bot account can't reach the Mac (0.250.250.254)" \
+  "box can't reach the Mac (host.docker.internal)" "box and the Bots are kept off the LAN (rule)" "a Bot account still resolves names (DNS allowed)" \
+  "boxmcp can't reach the Mac" "a Bot account can't reach the Mac ([fd07:b51a:cc66:f0::fe])" "the host can confirm the firewall (bots-ports check)"; do
   grep -qF "PASS $c" "$LOG/verify" && ok "$c" || bad "$c"
 done
+# Bug 362: every "can't reach the Mac" check passed, the IPv6 one included (none may FAIL).
+grep -q "^FAIL .*reach the Mac" "$LOG/verify" && bad "every Mac-reach check" || ok "every Mac-reach check"
+# Bug 366: a Mac or LAN check that couldn't be proven (SKIP) is a failure here, not a pass.
+grep -E "^SKIP .*(Mac|LAN)" "$LOG/verify" && bad "no Mac or LAN check skipped" || ok "no Mac or LAN check skipped"
 after="$(info "$REAL" 2>/dev/null || echo none)"
 [ "$before" = "$after" ] && ok "real box untouched ($REAL)" || bad "real box changed: $before -> $after"
 exit $fail

@@ -11,7 +11,7 @@ describe("ConnectionScreen (CMP-13)", () => {
     rerender(<ConnectionScreen state={{ kind: "reconnecting", attempt: 2 }} onRetry={onRetry} />);
     expect(screen.getByText("Reconnecting")).toBeTruthy();
     rerender(<ConnectionScreen state={{ kind: "unreachable", error: "The host did not answer." }} onRetry={onRetry} />);
-    expect(screen.getByText("Couldn't Reach Bots' Computer")).toBeTruthy();
+    expect(screen.getByText("Couldn't reach Bots' computer")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalledOnce();
   });

@@ -8,13 +8,12 @@ import { initialState } from "../../src/renderer/reducer";
 import { useUi } from "../../src/renderer/store";
 import { botFixture, installFakeBridge } from "./fake-bridge";
 
-// Under 1180px the right column lies OVER the conversation's edge instead of squeezing it. The rule
-// that does it lives in app.css's `@media (max-width: 1180px)` block and is written against the DOM
-// ChatView really renders: `.window > .panel-mount (display: contents) > .panel`. When DetailsPanel
-// grew its `.panel-mount` wrapper, the old `.window > .panel` selectors silently stopped matching —
-// the stylesheet's own tests still passed because none of them looked at the real tree. This one
-// renders the panel inside a `.window` and asks the browser's own selector engine whether each
-// overlay selector reaches it.
+// Under 1180px the right column used to lie OVER the conversation's edge. The new-user walk (bug 355)
+// found it covered the composer's mic and send at the 1024px floor, so the panel now stays in the row
+// and the chat column gives way (a smaller --chat-inset). This test renders the panel in the real DOM
+// ChatView uses (`.window > .panel-mount (display: contents) > .panel`) and asks the browser's own
+// selector engine that no absolute-position rule in the narrow block reaches it — an overlay rule
+// written against any wrapper would be caught here, not only one with the old selector.
 
 const readCss = () => readFileSync(fileURLToPath(new URL("../../src/renderer/styles/" + "app.css", import.meta.url)), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
@@ -37,7 +36,7 @@ function overlaysFor(panel: Element): string[] {
   return narrowRules().filter((r) => /position\s*:\s*absolute/.test(r.body) && panel.matches(r.sel)).map((r) => r.sel);
 }
 
-describe("narrow window: the right panel overlays the chat's edge", () => {
+describe("narrow window: the right panel stays in the row (bug 355)", () => {
   beforeEach(() => {
     installFakeBridge({ getAgentMemories: { facts: [], projects: [] }, listRoutines: { routines: [] } });
     useUi.setState({ ...initialState(), bots: { a: botFixture("a", "Scout") }, panel: "details", transcripts: { a: [] } } as never);
@@ -54,16 +53,20 @@ describe("narrow window: the right panel overlays the chat's edge", () => {
     return panel!;
   };
 
-  it("the Now panel (not wide) is matched by an absolute-position overlay rule in the real DOM", () => {
+  it("the Now panel (not wide) is matched by no absolute-position overlay rule in the real DOM", () => {
     const panel = mountInWindow();
     expect(panel.classList.contains("wide")).toBe(false);
-    expect(overlaysFor(panel).length).toBeGreaterThan(0);
+    expect(overlaysFor(panel)).toEqual([]);
   });
 
-  it("a wide panel (Memory) is matched by an absolute-position overlay rule in the real DOM", () => {
+  it("a wide panel (Memory) is matched by no absolute-position overlay rule in the real DOM", () => {
     useUi.setState({ panel: "memory" } as never);
     const panel = mountInWindow();
     expect(panel.classList.contains("wide")).toBe(true);
-    expect(overlaysFor(panel).length).toBeGreaterThan(0);
+    expect(overlaysFor(panel)).toEqual([]);
+  });
+
+  it("the chat column gives way instead: a smaller inset under 1180px", () => {
+    expect(narrowRules().some((r) => r.sel === ".main" && /--chat-inset:\s*24px/.test(r.body))).toBe(true);
   });
 });

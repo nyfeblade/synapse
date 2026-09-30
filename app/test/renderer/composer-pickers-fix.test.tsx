@@ -78,7 +78,7 @@ describe("composer pickers: skills, mentions and the clipboard", () => {
     installFakeBridge({ getWorkflows: WORKFLOWS });
     render(<><ComposerPlusMenu botId="b" /><Composer botId="b" name="Piper" running={false} /></>);
     fireEvent.click(screen.getAllByRole("button", { name: STR.attachFile })[0]!);
-    fireEvent.click(screen.getByRole("menuitem", { name: `${STR.useASkill} ▸` }));
+    fireEvent.click(screen.getByRole("menuitem", { name: STR.useASkill }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Weekly report" }));
     expect(await screen.findByText("/Weekly report")).toBeTruthy();
   });

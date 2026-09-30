@@ -19,6 +19,18 @@ export function suggestMonthlyBudget(last30Usd: number): number {
   return Math.max(5, Math.ceil((Number.isFinite(last30Usd) ? last30Usd : 0) / 5) * 5);
 }
 
+/**
+ * New-user walk, finding 7: one budget, the account's monthly $ limit. A weekly (soft) budget saved by an older build
+ * becomes that limit (x52/12, to the cent) unless one is already set, and is then cleared.
+ */
+export function migrateWeeklyBudget(usage: Pick<UsageStore, "budgetUsd" | "setBudgetUsd">, budgets: Pick<Budgets, "config" | "setAccountMonthlyUsd">): void {
+  const weekly = usage.budgetUsd();
+  if (!weekly) return;
+  const has = !!budgets.config().account?.limits.some((l) => l.period === "month" && l.unit === "usd");
+  if (!has) budgets.setAccountMonthlyUsd(Math.round(((weekly * 52) / 12) * 100) / 100);
+  usage.setBudgetUsd(null);
+}
+
 /** The one-message hint the Bot gets when the user's own words set or clear a task alert. */
 export const spendHint = {
   set: (usd: number) => `Synapse set a spend alert from the user's words: the user will be asked before this task passes ${STR_COST.money(usd)}, and the alert ends when they say continue. Acknowledge it; no tool is needed.`,
@@ -57,6 +69,7 @@ export function createBudgetModule(ctx: ModuleContext, o: { usage: UsageStore; b
     name: "budgets",
     observers: [labelRun],
     start: () => {
+      migrateWeeklyBudget(o.usage, o.budgets);
       // The simulator runs once (~70 ms) and is memoized; do it off the first dashboard open.
       setTimeout(() => comparisonRatios(), 0).unref?.();
       offVisible = ctx.bots.onBeforeVisibleAppend((chatId, entry) => {

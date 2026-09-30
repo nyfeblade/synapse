@@ -1,8 +1,8 @@
 import { COMPUTER_NAME } from "./strings";
 
-/** "Bots' Computer" — COMPUTER_NAME capitalized for titles (D13). */
+/** New-user walk, finding 14: one spelling everywhere, sentence case ("Bots' computer"), titles included. */
 export function computerTitle(): string {
-  return COMPUTER_NAME.replace(/ computer$/, " Computer");
+  return COMPUTER_NAME;
 }
 
 /** Phase 3 copy (CMP-*, SEC-*, SET-13). */
@@ -72,10 +72,10 @@ export const STRC = {
     getting_ready: "Getting ready", backing_up: "Backing up your data", recreating: "Recreating", starting: "Starting",
     cleaning_up: "Cleaning up", reconnecting: "Reconnecting", wiping: "Wiping your data", creating: "Creating",
   } as Record<string, string>,
-  // SET-13 Updates (keeps "assistants")
+  // SET-13 Updates (new-user walk nit 33: "Bots", not "assistants")
   updatesNav: "Updates",
   updateTitle: `Update ${computerTitle()}`,
-  updateHelp: "Brings the shared computer up to date for all your assistants at once. Files and sign-ins are kept; apps and packages you installed are removed.",
+  updateHelp: "Brings the shared computer up to date for all your Bots at once. Files and sign-ins are kept; apps and packages you installed are removed.",
   onLatest: "The computer is up to date",
   update: "Update",
   resetTitle: `Reset ${computerTitle()}`,

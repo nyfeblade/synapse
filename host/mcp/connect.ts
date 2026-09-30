@@ -4,6 +4,7 @@ import path from "node:path";
 import { APP_NAME } from "@synapse/shared";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -20,10 +21,13 @@ import { applySentinel, scrubClaudeAuth } from "../auth/auth-env";
  * since the header-vault fix — the values live sealed and the pool resolves them at connect time,
  * the same shape as a command server's env. This is the ONLY place a header credential is used.
  */
-export function httpConnector(authProviderFor: (serverId: string) => OAuthClientProvider | undefined): Connector {
+export function httpConnector(authProviderFor: (serverId: string) => OAuthClientProvider | undefined, fetchFor: (serverId: string) => FetchLike | undefined): Connector {
   return async (s, headers = {}) => {
     const url = new URL(s.url!);
-    const opts = { authProvider: authProviderFor(s.id), requestInit: { headers } };
+    // Bug 363: the server's fetch (the guarded one unless the owner added it) carries every request, redirect and
+    // OAuth discovery/token call the transport makes.
+    const fetch = fetchFor(s.id);
+    const opts = { authProvider: authProviderFor(s.id), requestInit: { headers }, ...(fetch ? { fetch } : {}) };
     const client = new Client({ name: APP_NAME.toLowerCase(), version: "1.0.0" });
     try {
       await client.connect(new StreamableHTTPClientTransport(url, opts));

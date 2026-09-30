@@ -26,7 +26,9 @@
       <a href="#code">Code</a>
       <a href="#calls">Voice calls</a>
       <a href="#mac">Your Mac and approvals</a>
+      <a href="#google">Connect Google</a>
       <a href="#schedules">Schedules</a>
+      <a href="#composio">Connect apps with Composio</a>
       <p class="grp">Managing Synapse</p>
       <a href="#spending">Spending and budgets</a>
       <a href="#settings">Settings at a glance</a>
@@ -113,8 +115,45 @@
       </table>
       <p>Mac permissions and the Bots' computer live in <b>Settings → Computer</b>.</p>
 
+      <h2 id="google">Connect Google</h2>
+      <p>Bots can use your Gmail, Google Calendar and Google Drive through your <b>own</b> Google Cloud OAuth client, so nothing goes through a third party. Open <b>Settings → Connected accounts → Google → Set up</b>. The sheet has six steps, each with an <b>Open in browser</b> button for the exact Google Cloud console page and a <b>Copy</b> button for every value.</p>
+      <h3>Do it yourself (about 5 minutes)</h3>
+      <ol>
+        <li>Create a project.</li>
+        <li>Enable the Gmail, Calendar and Drive APIs.</li>
+        <li>Consent screen: External, the app name, the six scopes the sheet lists, and your email.</li>
+        <li>Publishing status: <b>In production</b>.</li>
+        <li>Create a <b>Desktop app</b> OAuth client.</li>
+        <li>Paste the Client ID and secret, then Connect. Google says it hasn't verified this app: choose Continue, because it's your own app. Then click Allow.</li>
+      </ol>
+      <h3>Let a Bot do most of it</h3>
+      <p>Choose <b>Let a Bot do it</b> and pick a Bot that may use the browser on your Mac. It does steps 1 to 5 in the Synapse browser window, where you're already signed in, and each change to your Google Cloud project asks for your OK first. When the client is created, Synapse saves the Client ID and secret straight from the page. The Bot never sees them, and they never appear in the chat.</p>
+      <h3>Why "In production"</h3>
+      <p>Google ends a Testing app's sign-ins after 7 days. In production they last. For your own personal use there's no review: you see the "unverified app" warning once, when you connect.</p>
+      <h3>What always stays with you</h3>
+      <table>
+        <tr><th>Passwords</th><td>A Bot never types one. If Google asks you to sign in, the Bot stops and asks you.</td></tr>
+        <tr><th>The final Allow</th><td>Synapse refuses any Bot click on Google's consent page, in every mode. You click Allow in your browser.</td></tr>
+        <tr><th>The client secret</th><td>It goes from the page to Synapse's encrypted store, never through the chat.</td></tr>
+      </table>
+      <p>If the sign-in ever expires, Synapse shows one <b>Reconnect Google</b> notification. The weekly sign-in check in <b>Settings → Connected accounts</b> is on by default only while your app is in Testing.</p>
+
       <h2 id="schedules">Schedules</h2>
       <p>Bots can do work on a schedule, like a morning inbox brief on weekdays, or when something happens, like an invoice arriving. They tell you what they found. Manage these in <b>Settings → Schedules</b>.</p>
+
+      <h2 id="composio">Connect apps with Composio</h2>
+      <p>Composio connects Gmail, Google Calendar, Google Drive, Slack, GitHub, Notion and Linear in one click each, with no Google Cloud setup. You create your own Composio key once. Synapse never uses a shared key.</p>
+      <p><b>Create your key</b> in <b>Settings → General → Connected accounts → Composio → Set up</b>:</p>
+      <ol>
+        <li><b>Open Composio</b> opens the Composio dashboard in your browser.</li>
+        <li>Sign in or create a free account, go to <b>Settings → API Keys</b>, create a new key and copy it.</li>
+        <li>Back in Synapse, press <b>Paste key</b>. Synapse reads your clipboard only when you press it.</li>
+        <li>Synapse checks the key with Composio. <b>Key rejected</b> means Composio didn't accept it; copy it again. <b>Can't reach Composio</b> means your Mac is offline or Composio is down; try again later.</li>
+      </ol>
+      <p><b>Connect Gmail in one click.</b> Open the <b>Marketplace</b> and find Gmail. It offers two ways to connect: <b>Connect directly</b> (your own Google app, the private default) and <b>One click with Composio</b>. Press <b>One click with Composio</b>. Slack, GitHub, Notion and Linear are under <b>Apps through Composio</b>, each with one <b>Connect</b>. The first time, Synapse shows one line about your data (see below) and asks you to accept it. Composio's sign-in page opens in your browser. Approve it there, and the row changes to <b>Connected</b>.</p>
+      <p><b>Choose which Bots can use it.</b> A newly connected app starts off for every Bot. Turn it on for a Bot in the list that opens under the app, or in that Bot's settings. You can turn it off again at any time, and it takes effect on the Bot's next action.</p>
+      <p><b>What always asks.</b> Reading is quiet: a Bot can search and read your mail, events and files without asking. Anything that sends or changes something asks you first, such as sending an email, creating or deleting an event, posting a message or opening an issue. This happens even with Auto-review off. In Full auto, a Bot does what you just asked for without a card, such as the email you told it to send to the person you named. It still asks before deleting, paying, messaging or inviting people you didn't ask it to, acting on many people or items at once, or doing anything an email, web page, routine or another Bot asked for.</p>
+      <p><b>Privacy.</b> Apps connected through Composio send their data through Composio. Synapse talks to Composio directly from your Mac with your key; there is no Synapse server in between. Your key is stored encrypted with your other secrets. It never appears in chats or logs, and Bots never see it. <b>Disconnect</b> removes the connection from Composio, and <b>Remove key</b> forgets the key.</p>
 
       <h2 class="sec">Managing Synapse</h2>
       <h2 id="spending">Spending and budgets</h2>
@@ -138,10 +177,12 @@
       <p><b>Settings → System → Backups</b> saves your Bots, their memory and settings, and restores them later.</p>
 
       <h2 id="privacy">Privacy and your data</h2>
+      <p>The full details are in the <a href="/privacy">Privacy Policy</a>.</p>
       <ul>
         <li><b>No Synapse account or server.</b> Synapse talks straight to Anthropic with your key. The only thing that ever reaches us is feedback you choose to send.</li>
         <li><b>Your data stays on your Mac</b>, in <span class="path">~/Library/Application Support/Synapse</span>, and in the Bots' computer (an OrbStack machine called <span class="path">box</span>).</li>
         <li><b>Secrets are encrypted</b> with a key kept in the app's own data folder. Bots' sandboxed commands can't read it.</li>
+        <li><b>Apps you connect through Composio</b> send their data through Composio, using your own Composio key. See <a href="#composio">Connect apps with Composio</a>.</li>
         <li><b>Logs</b> are in <span class="path">~/Library/Logs/Synapse</span> and never leave your Mac unless you send them.</li>
         <li><b>This website</b> counts visits with Vercel Web Analytics: no cookies, no personal data, nothing that identifies you. Its fonts are served from this site. It loads release info (the latest version and download link) from GitHub's API, so GitHub sees your IP address for that request. The app itself sends no analytics.</li>
         <li><b>Feedback</b> leaves your Mac only when you press <b>Send privately</b> or <b>Post on GitHub</b>, and only what its preview shows. Logs are cleaned of keys, tokens, emails and your user name first, and phone numbers, card numbers and addresses in your message are hidden. Replies appear in the app under <b>Your feedback</b>, or at the private link the website gives you. 👍 and 👎 on replies stay on your Mac.</li>

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -51,6 +51,21 @@ export type DictationEvent =
   | { type: "end" };
 
 export interface DeviceRef { uid: string; name: string }
+/**
+ * A device event as one voice-log line. Device names carry the user's name ("Jane's AirPods") and a
+ * Bluetooth id carries the hardware address, so neither is written: each device is a short hash of
+ * its id, stable for following one device through a session.
+ */
+export function deviceLogLine(e: Extract<DictationEvent, { type: "devices" | "device-fallback" | "device-restored" | "echo-unavailable" }>): string {
+  const id = (d: { uid: string } | null) => (d ? `#${createHash("sha256").update(d.uid).digest("hex").slice(0, 6)}` : "none");
+  switch (e.type) {
+    case "devices": return `devices input=${id(e.input)} output=${id(e.output)} echo=${e.echoCancellation ? "on" : "off"}`;
+    case "device-fallback": return `device-fallback ${e.kind} ${id(e)} → default`;
+    case "device-restored": return `device-restored ${e.kind} ${id(e)}`;
+    case "echo-unavailable": return `echo-unavailable ${e.reason.replace(/[^\w .,-]/g, "").slice(0, 80)}`;
+  }
+}
+
 const deviceRef = (v: unknown): DeviceRef | null => {
   const d = v as { uid?: unknown; name?: unknown } | null;
   return d && typeof d.uid === "string" && typeof d.name === "string" ? { uid: d.uid, name: d.name } : null;
@@ -381,7 +396,7 @@ export function registerDictation(o: {
           if (e.type === "error") { reported = true; log(`dictation[${sessionId.slice(0, 8)}] error ${e.code ?? ""}: ${e.message}`); }
           if (e.type === "audio-restart") log(`dictation[${sessionId.slice(0, 8)}] audio restarted (${e.reason})`);
           if (e.type === "device-fallback" || e.type === "device-restored" || e.type === "echo-unavailable" || e.type === "devices") {
-            log(`dictation[${sessionId.slice(0, 8)}] ${JSON.stringify(e)}`);
+            log(`dictation[${sessionId.slice(0, 8)}] ${deviceLogLine(e)}`);
             if (e.type === "device-fallback" || e.type === "device-restored") o.onDeviceEvent?.();
           }
           if (remoteHelpers.has(spawned)) o.remote?.event(e, sessionId);

@@ -1,0 +1,32 @@
+/* Send feedback sheet and the 👍/👎 on replies and tasks. */
+.feedback-sheet { width: 520px; }
+.feedback-title { margin: 0; font-size: var(--type-title); font-weight: 600; }
+.feedback-sheet .segmented { align-self: flex-start; }
+.feedback-shot { display: block; max-width: 100%; max-height: 160px; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-card); }
+.feedback-logs { margin: 0; max-height: 140px; overflow: auto; padding: 8px 10px; border-radius: var(--radius-control); background: var(--fill-inset); font-family: var(--mono); font-size: var(--type-small); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.feedback-meta { margin: 0; }
+.feedback-preview-toggle { align-self: flex-start; }
+.feedback-preview { border-top: var(--hairline) solid var(--line-card); padding-top: 10px; }
+.feedback-pre { white-space: pre-wrap; }
+.feedback-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.feedback-done { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.feedback-done p { margin: 0; font-size: var(--type-ui); }
+.rate { display: inline-flex; gap: 2px; margin-top: 2px; }
+.rate-btn { width: 22px; height: 22px; color: var(--ink-faint); }
+.rate-btn[aria-pressed="true"] { color: var(--ink); }
+.activity-rate { display: flex; padding-left: 2px; }
+.feedback-shot-btn { align-self: flex-start; padding: 0; border: none; background: none; cursor: zoom-in; }
+.feedback-zoom { max-width: 92vw; max-height: 92vh; overflow: auto; border-radius: var(--radius-surface); background: var(--surface-raised); box-shadow: var(--shadow-modal); }
+.feedback-zoom-close { display: block; padding: 0; border: none; background: none; cursor: zoom-out; }
+.feedback-zoom img { display: block; max-width: none; }
+.feedback-threads { width: 560px; }
+.feedback-thread { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: var(--hairline) solid var(--line-card); }
+.feedback-thread-head { margin: 0; }
+.feedback-msgs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.feedback-msg { display: flex; flex-direction: column; gap: 2px; max-width: 88%; padding: 8px 10px; border-radius: var(--radius-control); background: var(--fill-inset); font-size: var(--type-ui); }
+.feedback-msg.you { align-self: flex-end; background: var(--bubble-user); color: var(--bubble-user-ink); }
+.feedback-msg-from { color: inherit; opacity: 0.7; }
+.feedback-msg-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback-reply { display: flex; gap: 8px; align-items: flex-end; }
+.feedback-reply .field { flex-grow: 1; }
+.feedback-head-actions { display: flex; align-items: center; gap: 6px; }

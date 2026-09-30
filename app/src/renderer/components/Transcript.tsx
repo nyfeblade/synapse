@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { STR, STR5 } from "@synapse/shared";
@@ -30,6 +30,7 @@ import { EventRow } from "./EventRow";
 import { ExchangeBlock } from "./ExchangeBlock";
 import { FileCard } from "./FileCard";
 import { MessageActions } from "./MessageActions";
+import { RateButtons } from "../feedback/Ratings";
 import { Reactions } from "./Reactions";
 import { ReplyHeader } from "./ReplyHeader";
 import { ShapeAvatar } from "./ShapeAvatar";
@@ -332,6 +333,7 @@ export function Transcript({ botId, onScrolledChange }: { botId: string; onScrol
                   ) : bubble}
                   <MessageActions botId={botId} entry={it.entry} text={it.text} />
                 </div>
+                <RateButtons botId={botId} entryId={it.key} kind="reply" />
                 <Reactions botId={botId} entry={it.entry} />
                 {it.replyCount > 0 && <ThreadPanel botId={botId} rootId={it.key} count={it.replyCount} />}
               </div>
@@ -350,7 +352,7 @@ export function Transcript({ botId, onScrolledChange }: { botId: string; onScrol
             : it.link && bots[it.link.botId]
             ? <button key={it.key} type="button" className="event-row notice as-button" onClick={() => void useUi.getState().openBot(it.link!.botId)}>{it.text}</button>
             : <div key={it.key} className="event-row notice">{it.text}</div>;
-          case "activity": return <ActivityGroup key={it.key} item={it} />;
+          case "activity": return it.running ? <ActivityGroup key={it.key} item={it} /> : <Fragment key={it.key}><ActivityGroup item={it} /><div className="activity-rate"><RateButtons botId={botId} entryId={it.key} kind="task" /></div></Fragment>;
           case "approval": return <ApprovalCard key={it.key} botId={botId} approval={it.approval} isNew={isNew(it.key)} />;
           case "box-help": return <BoxHelpCard key={it.key} botId={botId} request={it.request} />;
           case "secret": return <SecretCard key={it.key} botId={botId} entryId={it.entryId} secret={it.secret} />;

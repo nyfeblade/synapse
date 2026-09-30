@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useUi } from "../../store";
 
-export type SettingsSectionId = "general" | "account" | "voice" | "computer" | "schedules" | "system";
+export type SettingsSectionId = "general" | "auto-review" | "account" | "usage" | "voice" | "computer" | "schedules" | "system";
 interface SectionDef { id: SettingsSectionId; label: string; Component: ComponentType | null }
 
 const sections: SectionDef[] = [
   { id: "general", label: "General", Component: null },
+  // New-user walk, finding 22: Auto-review's rule builder no longer tops General.
+  { id: "auto-review", label: "Auto-review", Component: null },
   { id: "account", label: "Account", Component: null },
+  // New-user walk, finding 15: the account menu's Usage opened Account; it is a section of its own.
+  { id: "usage", label: "Usage", Component: null },
   { id: "voice", label: "Voice", Component: null },
   { id: "computer", label: "Computer", Component: null },
   { id: "schedules", label: "Schedules", Component: null },
@@ -78,11 +82,9 @@ export function SectionBlocks({ section }: { section: SettingsSectionId }) {
 
 /** A sub-focus that used to be its own top-level section and folded into another one as a block. */
 const SECTION_OF_BLOCK: Record<string, SettingsSectionId> = {
-  usage: "account",
   updates: "system",
   backups: "system",
   diagnostics: "system",
-  "auto-review": "general",
 };
 
 /** "auto-review" (Phase 1) → general; "usage" → account; "updates|backups|diagnostics" → system;
@@ -90,5 +92,5 @@ const SECTION_OF_BLOCK: Record<string, SettingsSectionId> = {
 export function sectionOf(focus: string | null): SettingsSectionId {
   const head = (focus ?? "").split("/")[0]!;
   if (Object.hasOwn(SECTION_OF_BLOCK, head)) return SECTION_OF_BLOCK[head]!;
-  return (["account", "voice", "computer", "schedules", "system"] as const).find((s) => s === head) ?? "general";
+  return (["auto-review", "account", "usage", "voice", "computer", "schedules", "system"] as const).find((s) => s === head) ?? "general";
 }

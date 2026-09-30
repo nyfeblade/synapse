@@ -7,7 +7,17 @@ import type { HostModule, ModuleContext } from "../phase5/types";
 import { httpConnector, stdioConnector } from "./connect";
 import { McpOAuth } from "./oauth";
 import { McpProxyPool, type CommandConnector, type Connector } from "./proxy";
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { hostGuardedFetch } from "../net/guarded-fetch";
 import { McpRegistry } from "./registry";
+
+/**
+ * Bug 363: the fetch a remote server's requests (and its OAuth) use. The guarded fetch for every server, except one the
+ * OWNER added in the app (ownerPrivateReach), which uses the plain fetch and may reach the Mac or the LAN.
+ */
+export function mcpFetchFor(registry: McpRegistry, guarded: FetchLike): (serverId: string) => FetchLike | undefined {
+  return (serverId) => (registry.get(serverId)?.ownerPrivateReach === true ? undefined : guarded);
+}
 
 export interface McpServices { registry: McpRegistry; pool: McpProxyPool; oauth: McpOAuth; authorized: Set<(serverId: string) => void> }
 
@@ -26,14 +36,15 @@ export function createMcpServices(ctx: ModuleContext, o: { connect?: Connector; 
   const vaultKey = vaultKeySync(ctx.cfg.hostPrivate);
   const registry = new McpRegistry({ dir, settings: ctx.settings, now: ctx.now, onChange: () => publish(), envKey: subkey(vaultKey, "bots/mcp-env/v1"), headerKey: subkey(vaultKey, "bots/mcp-headers/v1") });
   let oauth: McpOAuth;
+  const fetchFor = mcpFetchFor(registry, hostGuardedFetch());
   const pool = new McpProxyPool({
     registry, workspace: ctx.cfg.workspace, now: ctx.now,
-    connect: o.connect ?? httpConnector((id) => oauth.providerFor(id)),
+    connect: o.connect ?? httpConnector((id) => oauth.providerFor(id), fetchFor),
     connectCommand: o.connectCommand ?? stdioConnector({ cfg: ctx.cfg, get runAs() { return ctx.flags().runAs; } }),
     onStatus: () => publish(),
   });
   oauth = new McpOAuth({
-    dir, registry, now: ctx.now, authFn: o.authFn, key: subkey(vaultKey, "bots/mcp-oauth/v1"), legacyKey: vaultKey,
+    dir, registry, now: ctx.now, authFn: o.authFn, fetchFor, key: subkey(vaultKey, "bots/mcp-oauth/v1"), legacyKey: vaultKey,
     onWaiting: (id) => pool.markWaiting(id),
     onAuthorized: async (id) => { await pool.restart(id); publish(); for (const fn of authorized) fn(id); },
   });
@@ -54,7 +65,8 @@ export function createMcpModule(ctx: ModuleContext, s: McpServices): HostModule 
     handlers: {
       listMcpServers: () => ({ servers: mcpServerViews(s) }),
       addMcpServer: async (a) => {
-        const r = s.registry.add(a, "custom");
+        // Bug 363: the gateway command is the owner's add-server form in the app, the only door that keeps private reach.
+        const r = s.registry.add(a, "custom", null, { ownerPrivateReach: true });
         if (s.registry.hostProxied(r)) await s.pool.ensure(r.id);
         return { server: view(r.id) };
       },

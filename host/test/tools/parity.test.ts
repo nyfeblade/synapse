@@ -30,11 +30,11 @@ const IMPLEMENTED: Record<CommandName, true> = {
   getDiskPressure: true, openDiskSaver: true, snapshotBoxStoreNow: true, getBoxStoreStatus: true, listSnapshots: true,
   restoreSnapshot: true, deleteSnapshot: true, prepareBoxRestart: true, setBoxMaintenance: true,
   // Phase 5:
-  setWeeklyBudget: true, getUsageDashboard: true, getBudgets: true, setBudget: true, approveBudget: true, clearTaskAlert: true, getBudgetPrompt: true, dismissBudgetPrompt: true, setMonthlyBudget: true, macClaudeAuth: true, recordMacUsage: true, getModelAccess: true, getMarketplace: true, searchCatalog: true, getCatalogEntry: true, listPlugins: true, installPlugin: true,
+  getUsageDashboard: true, getBudgets: true, setBudget: true, approveBudget: true, clearTaskAlert: true, getBudgetPrompt: true, dismissBudgetPrompt: true, setMonthlyBudget: true, macClaudeAuth: true, recordMacUsage: true, getModelAccess: true, getMarketplace: true, searchCatalog: true, getCatalogEntry: true, listPlugins: true, installPlugin: true,
   uninstallPlugin: true, listMcpServers: true, addMcpServer: true, removeMcpServer: true, renameMcpAccount: true, setMcpToolEnabled: true,
   setMcpInstructions: true, restartMcpServers: true, setMcpServerEnabled: true, setMcpServerTrusted: true, setMcpServerHeader: true, setOAuthLoopbackPort: true, startMcpAuth: true, completeMcpOAuth: true, listPluginMarketplaces: true,
   addPluginMarketplace: true, removePluginMarketplace: true, draftTemplate: true, exportTemplate: true, getTemplate: true,
-  deleteTemplate: true, previewTemplateImport: true, importTemplate: true, listStarterTemplates: true, getLocalComputer: true, getLocalPolicyStatus: true, getLocalPolicyReset: true, dismissLocalPolicyReset: true, restoreLocalBotModes: true, resetLocalPolicy: true, getLocalBotMode: true, getLocalBrowserAllowed: true, setLocalBrowserAllowed: true, getLocalMacAppAllowed: true, setLocalMacAppAllowed: true, getBrowserUsage: true,
+  deleteTemplate: true, previewTemplateImport: true, importTemplate: true, previewShareImport: true, sharePayload: true, listStarterTemplates: true, getLocalComputer: true, getLocalPolicyStatus: true, getLocalPolicyReset: true, dismissLocalPolicyReset: true, restoreLocalBotModes: true, resetLocalPolicy: true, getLocalBotMode: true, getLocalBrowserAllowed: true, setLocalBrowserAllowed: true, getLocalMacAppAllowed: true, setLocalMacAppAllowed: true, getBrowserUsage: true,
   setLocalComputer: true, registerLocalComputer: true, localExecHeartbeat: true, localExecOutput: true, localExecDone: true,
   localExecUpload: true, readLocalFile: true, resolveLocalToolPermission: true, getNetworkStats: true, generateAgentAvatar: true,
   setAgentAvatarBytes: true, getAgentAvatar: true, clearAgentAvatar: true, setAgentVoice: true, noteVoiceCall: true, startCall: true, addToCall: true, removeFromCall: true, endCall: true, getOnboarding: true,
@@ -42,6 +42,8 @@ const IMPLEMENTED: Record<CommandName, true> = {
   setAgentFollowups: true, setAgentEngineeringMode: true, setAgentPermMode: true, setAgentNoLimits: true, setAgentSaveUsage: true, setAgentComputerPerception: true, getPhase5Settings: true,
   // Built-in Google connector:
   getGoogleStatus: true, setGoogleClient: true, startGoogleAuth: true, disconnectGoogle: true, setAgentGoogle: true,
+  getComposioStatus: true, setComposioKey: true, clearComposioKey: true, acceptComposioDisclosure: true, connectComposioApp: true, disconnectComposioApp: true, setComposioGrant: true,
+  startGoogleSetupTask: true, cancelGoogleSetupTask: true, getGoogleReconnectCheck: true, setGoogleReconnectCheck: true,
   getGitHubStatus: true, startGitHubSignIn: true, signOutGitHub: true,
   // The memory screen (MEM-09, designed):
   getAgentMemories: true, addAgentMemory: true, updateAgentMemory: true, deleteAgentMemory: true, clearAgentMemories: true, getHistoryArchiveStats: true,

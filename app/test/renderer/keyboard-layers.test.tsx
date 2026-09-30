@@ -297,7 +297,7 @@ describe("Escape in a field with pending content cancels the field, not the moda
   it("keeps Settings open when Escape cancels a half-typed auto-review rule", async () => {
     render(<App />);
     await screen.findByRole("button", { name: STR.openAccountMenu });
-    act(() => useUi.getState().openSettings());
+    act(() => useUi.getState().openSettings("auto-review")); // new-user walk finding 22: its own section
     await screen.findByRole("dialog", { name: STR.settings });
     const field = await screen.findByLabelText(/When a Bot wants to/);
     fireEvent.change(field, { target: { value: "reply to emails" } });

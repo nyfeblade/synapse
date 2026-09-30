@@ -9,7 +9,6 @@
    because this is not an unavailable action: it is the option the user PICKED, kept on screen as a
    record of the decision. Fading it with the options they did not pick would erase the answer. */
 .btn-outline.chosen:disabled{opacity:1;color:var(--ink);border-color:var(--primary)}
-.text-input{height:30px;padding:0 10px;border-radius:var(--radius-control);border:var(--hairline) solid var(--line-button);background:var(--bg);color:var(--ink);font:inherit;font-size:13px}
 .card-settled{font-size:13px}
 .email-fields{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:0;font-size:13px}
 .email-fields dt{color:var(--ink-muted)}
@@ -22,6 +21,6 @@
 .link-card { transition: background-color var(--motion-tap), border-color var(--motion-tap); }
 .link-card:hover { background-color: var(--fill-hover); border-color: var(--line-button-hover); }
 .link-card:active { background-color: var(--fill-press); }
-.text-input { transition: border-color var(--motion-tap); }
-.text-input:not(:disabled):hover { border-color: var(--line-button-hover); }
-.link-card:focus-visible, .text-input:focus-visible { outline: 3px solid var(--focus-ring-soft); outline-offset: 2px; }
+.text-input, .field-input { transition: border-color var(--motion-tap); }
+.text-input:not(:disabled):hover, input.field-input:not(:disabled):hover, textarea.field-input:not(:disabled):hover { border-color: var(--ink-faint); }
+.link-card:focus-visible, .text-input:focus-visible, .field-input:focus-visible { outline: 3px solid var(--focus-ring-soft); outline-offset: 2px; }

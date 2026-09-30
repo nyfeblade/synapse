@@ -9,7 +9,7 @@ import type { TurnUsage } from "../../brain/types";
 import type { CommandHandlers } from "../../gateway/server";
 import type { HostModule } from "../../phase5/types";
 import { HostSettingsStore } from "../../store/host-settings";
-import { createBudgetModule, suggestMonthlyBudget } from "../../usage/budget-module";
+import { createBudgetModule, migrateWeeklyBudget, suggestMonthlyBudget } from "../../usage/budget-module";
 import { Budgets } from "../../usage/budgets";
 import { UsageDashboard } from "../../usage/dashboard";
 import { UsageStore } from "../../usage/usage-store";
@@ -220,5 +220,22 @@ describe("review fix: the monthly budget prompt keeps the rest of the account po
     (mod.handlers.setMonthlyBudget as (a: unknown) => unknown)({ usd: 20 });
     expect(budgets.config().account).toEqual({ limits: [{ period: "month", unit: "usd", limit: 20 }], warnPct: 80, onLimit: "ask" });
     expect(() => (mod.handlers.setMonthlyBudget as (a: unknown) => unknown)({ usd: 0 })).toThrow();
+  });
+});
+
+describe("new-user walk finding 7: one budget, a monthly $ limit", () => {
+  it("a saved weekly budget becomes the account's monthly limit (x52/12) and the weekly one is cleared", () => {
+    store.setBudgetUsd(30);
+    migrateWeeklyBudget(store, budgets);
+    expect(store.budgetUsd()).toBeNull();
+    expect(budgets.config().account?.limits).toContainEqual({ period: "month", unit: "usd", limit: 130 });
+  });
+
+  it("an existing monthly limit wins; the weekly one is only cleared", () => {
+    budgets.setAccountMonthlyUsd(75);
+    store.setBudgetUsd(30);
+    migrateWeeklyBudget(store, budgets);
+    expect(store.budgetUsd()).toBeNull();
+    expect(budgets.config().account?.limits.filter((l) => l.period === "month")).toEqual([{ period: "month", unit: "usd", limit: 75 }]);
   });
 });

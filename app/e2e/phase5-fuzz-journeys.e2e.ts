@@ -124,7 +124,7 @@ test("TPL-01/02 speed + input: triple-click Save template → one file and one t
   fs.writeFileSync(evil, zipSync({ "template.json": strToU8("{}"), "../../outside.txt": strToU8("x") }));
   const { app, win, api, saveDir } = await launch("template", { E2E_OPEN_FILE: evil });
   await win.getByRole("button", { name: "Template actions" }).click();
-  await win.getByRole("menuitem", { name: "Share as Template" }).click();
+  await win.getByRole("menuitem", { name: "Export Bot…" }).click();
   const save = win.getByRole("button", { name: "Save template" });
   await expect(save).toBeEnabled();
   await save.click({ clickCount: 3, delay: 20 });

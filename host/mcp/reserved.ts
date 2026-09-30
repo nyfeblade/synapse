@@ -4,7 +4,7 @@ import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
  * Final secfix item 4: MCP server ids the app itself owns. No registry server or plugin may take one, and a
  * session only ever mounts the app's own (built-in) server under one of them.
  */
-export const RESERVED_MCP_IDS: ReadonlySet<string> = new Set(["google", "bot", "computer", "probe"]);
+export const RESERVED_MCP_IDS: ReadonlySet<string> = new Set(["google", "bot", "computer", "probe", "composio_apps", "composio-apps"]);
 
 /** True for a reserved id or the claude.ai connector prefix (claude_ai_ / claude-ai- / "claude ai …", any case). */
 export function isReservedMcpId(nameOrId: string): boolean {

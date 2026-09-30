@@ -17,11 +17,12 @@ const css = readFileSync(path.join(stylesDir, "app.css"), "utf8");
 const rule = (sel: string) => { const i = css.indexOf(`${sel} {`); return i < 0 ? "" : css.slice(i, css.indexOf("}", i)); };
 
 describe("smooth chat", () => {
-  it("does not centre the conversation in a column", () => {
+  it("keeps the chat-pane inset as the floor of the reading column", () => {
     expect(rule(".transcript")).not.toMatch(/100% - 720px/);
-    // UI polish pass: the inset is the chat-pane grid's token, shared with the composer.
-    expect(rule(".transcript")).toMatch(/padding-inline:\s*var\(--chat-inset\)/);
-    expect(rule(".composer-wrap")).toMatch(/padding:\s*6px var\(--chat-inset\) 16px/);
+    // UI polish pass: the inset is the chat-pane grid's token, shared with the composer. The new-user
+    // walk (bug 354) centres a 760px reading width on a large window; the inset is still the minimum.
+    expect(rule(".transcript")).toMatch(/padding-inline:\s*max\(var\(--chat-inset\),/);
+    expect(rule(".composer-wrap")).toMatch(/padding:\s*6px max\(var\(--chat-inset\),[^;]*\) 16px/);
     expect(readFileSync(path.join(stylesDir, "tokens.css"), "utf8")).toMatch(/--chat-inset:\s*56px/);
   });
   it("anchors event lines and activity to the Bot's side", () => {

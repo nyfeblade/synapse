@@ -31,6 +31,7 @@ import "./components/UpdatesSection"; // Phase 3 box updates, as a block in Sett
 import "./marketplace/ManagePlugins";
 import "./google/ConnectedAccountsBlock"; // Settings → General → Connected accounts (ORIG-GOOGLE)
 import "./styles/google.css";
+import "./styles/composio.css";
 import "./styles/usage-dashboard.css";
 import "./styles/voice-calls.css";
 import "./styles/living-avatars.css";

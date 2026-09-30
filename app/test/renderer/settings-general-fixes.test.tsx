@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { HostSettingsView } from "@synapse/shared";
 import { SettingsModal } from "../../src/renderer/components/SettingsModal";
-import { GeneralSection } from "../../src/renderer/components/settings/GeneralSection";
+import { AutoReviewSection as GeneralSection } from "../../src/renderer/components/settings/GeneralSection";
 import { initialState } from "../../src/renderer/reducer";
 import { useUi } from "../../src/renderer/store";
 import { COPY, installBridge, settings } from "./settings-fixtures";

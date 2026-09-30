@@ -24,7 +24,7 @@ export const settings = (over: Partial<HostSettingsView> = {}): HostSettingsView
 });
 
 export const usageView: UsageView = {
-  source: "metering", budgetUsd: null, budgetPct: null,
+  source: "metering", budgetPct: null,
   level: "L0", limitedUntil: null, weekStart: 0,
   rows: [{ botId: "a", name: "Courier", model: "claude-sonnet-5", turns: 1, tokens: 10, costUsd: 1 }],
   efficiency: { dropped: 1, wakesAvoided: 1, burstsCoalesced: 1, loopsEnded: 1 },

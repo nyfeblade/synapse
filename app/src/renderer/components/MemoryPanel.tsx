@@ -26,9 +26,9 @@ export function MemoryPanel({ botId }: { botId: string }) {
     <aside aria-label="Conversation details" className="panel wide" data-memory={botId}>
       <PanelTabs current="memory" />
       <RefreshNote botId={botId} name={name} />
-      <MemoryList botId={botId} scope={{ kind: "agent" }} title={STRM.scopeAgent} hint={STRM.scopeAgentHint} />
-      <MemoryList botId={botId} scope={{ kind: "user" }} title={STRM.scopeUser} hint={STRM.scopeUserHint} />
-      <MemoryList botId={botId} scope={{ kind: "team" }} title={STRM.scopeTeam} hint={STRM.scopeTeamHint} />
+      <MemoryList botId={botId} scope={{ kind: "agent" }} title={STRM.scopeAgent} />
+      <MemoryList botId={botId} scope={{ kind: "user" }} title={STRM.scopeUser} />
+      <MemoryList botId={botId} scope={{ kind: "team" }} title={STRM.scopeTeam} />
       <section aria-label={STRM.projects} className="memory-scope">
         <h3 className="panel-subtitle">{STRM.projects}</h3>
         <Async resource={projects} label={STRM.projects}>
@@ -61,8 +61,7 @@ function RefreshNote({ botId, name }: { botId: string; name: string }) {
   return (
     <section className="settings-card memory-refresh">
       <p className="memory-refresh-note">{STRM.freezeNote(name)}</p>
-      <div className="settings-row">
-        <span className="muted small grow">{STRM.refreshHint}</span>
+      <div className="settings-row memory-refresh-row">
         <button type="button" className="btn-outline" disabled={state === "busy"} onClick={refresh}>{STRM.refreshNow}</button>
       </div>
       {state === "scheduled" && <div className="status-box" role="status">{STRM.refreshScheduled}</div>}
@@ -110,8 +109,8 @@ function MemoryList({ botId, scope, title, hint }: { botId: string; scope: Memor
         <div className="memory-edit">
           <textarea aria-label={STRM.editLabel} className="field-input" rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} />
           <div className="row-actions">
+            <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>{STRM.cancel}</button>
             <button type="button" className="btn-primary" disabled={busy || !draft.trim()} onClick={() => save(f)}>{STRM.save}</button>
-            <button type="button" className="btn-outline small" onClick={() => setEditing(null)}>{STRM.cancel}</button>
           </div>
         </div>
       ) : (
@@ -147,8 +146,8 @@ function MemoryList({ botId, scope, title, hint }: { botId: string; scope: Memor
         <div className="memory-confirm">
           <span>{scope.kind === "user" ? STRM.clearAskUser : scope.kind === "team" ? STRM.clearAskTeam : STRM.clearAsk(title)}</span>
           <div className="row-actions">
+            <button type="button" className="btn-secondary" disabled={busy} onClick={() => setConfirming(false)}>{STRM.cancel}</button>
             <button type="button" className="btn-danger" disabled={busy} onClick={clear}>{STRM.clearConfirm}</button>
-            <button type="button" className="btn-outline" disabled={busy} onClick={() => setConfirming(false)}>{STRM.cancel}</button>
           </div>
         </div>
       )}

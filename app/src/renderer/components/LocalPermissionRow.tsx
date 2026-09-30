@@ -28,7 +28,7 @@ type Set = "setLocalBrowserAllowed" | "setLocalMacAppAllowed";
  *    a banner far away. It now flips at once, takes the coordinator's read-back as the truth, and a save
  *    that failed or that the Mac did not keep goes back to what is saved with a short error beside it.
  */
-export function LocalPermissionRow({ botId, get, set, setting, label, help }: { botId: string; get: Get; set: Set; setting: string; label: string; help: string }) {
+export function LocalPermissionRow({ botId, get, set, setting, label, help, onSaved }: { botId: string; get: Get; set: Set; setting: string; label: string; help: string; onSaved?(allowed: boolean): void }) {
   const connected = useUi((s) => s.connection.kind === "connected");
   // callQuiet: a failed read is shown in this row, with its own Retry.
   const r = useAsync(() => callQuiet(get as CommandName, { id: botId } as never) as Promise<{ allowed?: unknown }>, [botId, connected]);
@@ -54,16 +54,17 @@ export function LocalPermissionRow({ botId, get, set, setting, label, help }: { 
       (res) => {
         const kept = res?.allowed === true;
         r.setValue({ allowed: kept });
+        onSaved?.(kept);
         if (kept !== want) setError(STR.settingNotSaved);
       },
       (e: unknown) => setError(`${STR.settingNotSaved} ${e instanceof Error ? e.message : String(e)}`.trim()),
     ).finally(() => setPending(null));
   };
   return (
-    <div className="settings-row" data-setting={setting} style={{ flexWrap: "wrap" }}>
-      <span style={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+    // New-user walk, finding 21: a label and a right-hand switch like every other row; the explanation is the tooltip.
+    <div className="settings-row" data-setting={setting}>
+      <span style={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column" }} title={help}>
         <span>{label}</span>
-        <span className="muted">{help}</span>
         {r.status === "error" && (
           <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <span className="error" role="alert">{r.message || STR.settingNotLoaded}</span>

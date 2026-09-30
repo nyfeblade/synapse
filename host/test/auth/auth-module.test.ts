@@ -26,11 +26,11 @@ async function setup(failures: { status: number; type: string; message?: string;
 }
 
 describe("Test connection (one tiny request to Anthropic)", () => {
-  it("a bogus key reaches Anthropic and is rejected: 401 authentication_error → \"Reached Anthropic ✓ — key rejected\"", async () => {
+  it("a bogus key reaches Anthropic and is rejected: 401 authentication_error → \"Key rejected\"", async () => {
     const { api } = await setup();
     const r = await testAnthropicConnection("sk-ant-api03-" + "x".repeat(60), { baseUrl: api.url });
-    expect(r).toMatchObject({ ok: false, reached: true, kind: "invalid-key", status: 401, title: "Reached Anthropic ✓ — key rejected" });
-    expect(STR_AUTH.keyRejected).toBe("Reached Anthropic ✓ — key rejected");
+    expect(r).toMatchObject({ ok: false, reached: true, kind: "invalid-key", status: 401, title: "Key rejected" });
+    expect(STR_AUTH.keyRejected).toBe("Key rejected");
     const req = api.requests.at(-1)!;
     expect(req.path).toBe("/v1/messages");
     expect(req.apiKey).toBe("sk-ant-api03-" + "x".repeat(60)); // the key travels as x-api-key…
@@ -122,5 +122,21 @@ describe("gateway commands: the key goes in sealed and never comes back", () => 
     await cmds.setApiKey!({ sealed: await sealTo(kp.publicKey, KEY) });
     expect(await cmds.testAuthConnection!({})).toMatchObject({ ok: true });
     expect(api.requests.every((r) => r.apiKey === KEY)).toBe(true);
+  });
+});
+
+describe("new-user walk finding 9: FUZZ never reaches Anthropic", () => {
+  it("with fake set, a well-formed key tests fine and one with 'wrong' in it is rejected, all offline", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "auth-fake-"));
+    dirs.push(dir);
+    const store = new AuthStore({ dir: path.join(dir, "anthropic-auth"), key: randomBytes(32) });
+    const kp = await loadOrCreateBoxKeyPair(dir);
+    const fetchFn = vi.fn();
+    const cmds = createAuthCommands({ store, keyPair: async () => kp, fake: true, fetchFn: fetchFn as never });
+    const good = await cmds.testAuthConnection!({ sealed: await sealTo(kp.publicKey, KEY) } as never);
+    expect(good).toMatchObject({ ok: true, kind: "ok" });
+    const bad = await cmds.testAuthConnection!({ sealed: await sealTo(kp.publicKey, "sk-ant-api03-wrong" + "x".repeat(40)) } as never);
+    expect(bad).toMatchObject({ ok: false, kind: "invalid-key", title: STR_AUTH.keyRejected });
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });

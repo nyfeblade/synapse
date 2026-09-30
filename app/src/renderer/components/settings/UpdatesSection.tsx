@@ -81,6 +81,7 @@ function StatusLine({ s }: { s: UpdateState }) {
 
 export function UpdatesSection() {
   const s = useUpdates((st) => st.state);
+  const advanced = useUi((x) => x.settings?.advancedEnabled ?? false);
   const [error, setError] = useState<string | null>(null);
   const [autoError, setAutoError] = useState<string | null>(null);
   // Hand-testing round: this load used to be a bare `void ...then(...)`, so a rejection (Settings
@@ -129,9 +130,14 @@ export function UpdatesSection() {
             : <button type="button" className="btn-outline small" disabled={s.status === "checking" || downloading} onClick={() => void nativeCall<UpdateState>("updates.check").then((v) => useUpdates.setState({ state: v }))}>{s.status === "checking" ? STR5.checking : downloading ? STR5.downloading : STR5.checkForUpdates}</button>}
         </div>
       </div>
-      <h3>{STRO.releaseSource}</h3>
-      <ReleaseFolder />
-      <UpdateSource stored={s.feed ?? ""} />
+      {/* New-user walk, finding 8: where builds come from (a folder, a GitHub repo and token) is for developers. */}
+      {advanced && (
+        <>
+          <h3>{STRO.releaseSource}</h3>
+          <ReleaseFolder />
+          <UpdateSource stored={s.feed ?? ""} />
+        </>
+      )}
       {blocks.map(({ id, Component }) => <Component key={id} />)}
     </>
   );

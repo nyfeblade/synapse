@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { STRMA } from "@synapse/shared";
+import { STRMA, isWebBrowserApp } from "@synapse/shared";
 import { AX_MAX_CHARS, axDiff, axOutline, toRead, type AxNode, type AxRead } from "../../src/main/macapp/ax";
 import { MacAppController } from "../../src/main/macapp/controller";
 import type { HelperReply, HelperRequest, MacHelper } from "../../src/main/macapp/helper";
@@ -252,6 +252,65 @@ describe("the consequential gate on the Mac (send, delete, spend, security ALWAY
     expect(r.needsApproval).toBe(true);
   });
 
+  it("google-setup: nothing is pressed in a Google sign-in/consent window, even approved", async () => {
+    const outline: AxRead = read([node({ ref: "e5", role: "button", name: "Allow", interactive: true })], { app: "Google Chrome", window: "Sign in - Google Accounts - Google Chrome" });
+    const { c } = controller({ helper: () => ({ ok: true, ...outline }) as never });
+    await c.handle(call({ action: "ui.outline", app: "Google Chrome" }));
+    for (const approved of [false, true]) {
+      const r = await c.handle(call({ action: "ui.press", ref: "e5", app: "Google Chrome" }, approved));
+      expect(r).toMatchObject({ ok: false, error: STRMA.browserRefused }); // security fix 3: browsers are refused outright
+    }
+    expect(await c.handle(call({ action: "ui.key", value: "return", app: "Google Chrome" }, true))).toMatchObject({ ok: false });
+  });
+
+  it("google-setup security fix 3: no ui.* action in a web browser, whatever the window title says", async () => {
+    const sent: HelperRequest[] = [];
+    for (const app of ["Google Chrome", "Safari", "Microsoft Edge", "Arc", "Firefox", "Brave Browser"]) {
+      const outline: AxRead = read([node({ ref: "e5", role: "button", name: "Weiter", interactive: true })], { app, window: "Untitled" });
+      const { c } = controller({ helper: (r) => { sent.push(r); return { ok: true, ...outline } as never; } });
+      for (const a of [{ action: "ui.outline", app }, { action: "ui.press", ref: "e5", app }, { action: "ui.key", value: "return", app }, { action: "ui.set", ref: "e5", value: "x", app }, { action: "ui.menu", value: "File > Print", app }]) {
+        expect(await c.handle(call(a, true))).toEqual({ ok: false, error: STRMA.browserRefused });
+      }
+    }
+    expect(sent).toEqual([]);
+  });
+
+  it("google-setup security fix 3: a ui.* action with no app never lands on a browser", async () => {
+    const outline: AxRead = read([node({ ref: "e5", role: "button", name: "Allow", interactive: true })], { app: "Safari", window: "Untitled" });
+    const { c } = controller({ helper: () => ({ ok: true, ...outline }) as never });
+    // The frontmost app turned out to be a browser: the read is dropped, and nothing can act on it.
+    expect(await c.handle(call({ action: "ui.outline" }))).toEqual({ ok: false, error: STRMA.browserRefused });
+    expect(await c.handle(call({ action: "ui.key", value: "return" }, true))).toMatchObject({ ok: false });
+    expect(await c.handle(call({ action: "ui.press", ref: "e5" }, true))).toMatchObject({ ok: false });
+  });
+
+  it("re-review 2: an app whose outline holds a web area (a browser or a web view) takes no ui.* action", async () => {
+    const sent: HelperRequest[] = [];
+    const web: AxRead = { ...read([node({ ref: "e5", role: "button", name: "Allow", interactive: true }), node({ ref: "e6", role: "webarea", name: "", interactive: false })], { app: "Notion" }) };
+    const { c } = controller({ helper: (r) => { sent.push(r); return { ok: true, ...web } as never; } });
+    expect(await c.handle(call({ action: "ui.outline", app: "Notion" }))).toEqual({ ok: false, error: STRMA.browserRefused });
+    sent.length = 0;
+    expect(await c.handle(call({ action: "ui.press", ref: "e5", app: "Notion" }, true))).toMatchObject({ ok: false });
+    expect(await c.handle(call({ action: "ui.key", value: "return", app: "Notion" }, true))).toMatchObject({ ok: false });
+    expect(sent).toEqual([]);
+    // The helper's own flag counts too (a web area pruned from the node list).
+    const flagged = { ...read([node({ ref: "e5", role: "button", name: "OK", interactive: true })], { app: "Slack" }), web: true };
+    const k = controller({ helper: () => ({ ok: true, ...flagged }) as never });
+    expect(await k.c.handle(call({ action: "ui.outline", app: "Slack" }))).toEqual({ ok: false, error: STRMA.browserRefused });
+  });
+
+  it("re-review 2: an acting ui.* call needs this session's outline of that app first", async () => {
+    const sent: HelperRequest[] = [];
+    const { c } = controller({ helper: (r) => { sent.push(r); return { ok: true, ...read([]) } as never; } });
+    expect(await c.handle(call({ action: "ui.key", value: "cmd+s", app: "Figma" }, true))).toEqual({ ok: false, error: STRMA.uiNeedsApp });
+    expect(sent).toEqual([]);
+  });
+
+  it("re-review 2: the newer browsers are refused by name or bundle id", () => {
+    for (const n of ["Comet", "Dia", "company.thebrowser.dia", "ChatGPT Atlas", "SigmaOS", "DuckDuckGo", "Yandex", "LibreWolf", "Waterfox", "Floorp"]) expect(isWebBrowserApp(n)).toBe(true);
+    for (const n of ["Figma", "Notes", "Calculator", "Diagrams", "Arcade Tool"]) expect(isWebBrowserApp(n)).toBe(false);
+  });
+
   it("an ordinary button is pressed without a card", async () => {
     const outline: AxRead = read([node({ ref: "e4", role: "button", name: "Zoom in", interactive: true })]);
     const { c } = controller({ helper: () => ({ ok: true, ...outline }) as never });
@@ -350,8 +409,10 @@ describe("paging and failures", () => {
   });
 
   it("a stale ref says exactly how to recover", async () => {
-    const { c } = controller({ helper: () => ({ ok: false, code: "notfound", error: "gone" }) });
-    const r = await c.handle(call({ action: "ui.focus", ref: "e12" })) as { ok: false; error: string };
+    const figma = read([node({ ref: "e1", role: "button", name: "Zoom in", interactive: true })]);
+    const { c } = controller({ helper: (r) => (r.action === "outline" ? { ok: true, ...figma } as never : { ok: false, code: "notfound", error: "gone" }) });
+    await c.handle(call({ action: "ui.outline", app: "Figma" }));
+    const r = await c.handle(call({ action: "ui.focus", ref: "e12", app: "Figma" })) as { ok: false; error: string };
     expect(r.error).toContain("e12 is no longer on screen");
     expect(r.error).toContain("ui.outline");
   });

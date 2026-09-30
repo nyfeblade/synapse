@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { APP_NAME, LIMITS5, STR5, type McpServerStatus } from "@synapse/shared";
 import { auth, type OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { OAuthClientInformationMixed, OAuthClientMetadata, OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { GatewayError } from "../gateway/errors";
 import { readJson, writeJsonAtomic } from "../util/atomic-json";
@@ -89,7 +90,7 @@ export class McpOAuth {
   private pending = new Map<string, { serverId: string; createdAt: number }>();
   private providers = new Map<string, FileOAuthProvider>();
 
-  constructor(private d: { dir: string; registry: McpRegistry; now(): number; authFn?: typeof auth; onWaiting(serverId: string): void; onAuthorized(serverId: string): Promise<void>; key?: Uint8Array; legacyKey?: Uint8Array }) {}
+  constructor(private d: { dir: string; registry: McpRegistry; now(): number; authFn?: typeof auth; fetchFor?(serverId: string): FetchLike | undefined; onWaiting(serverId: string): void; onAuthorized(serverId: string): Promise<void>; key?: Uint8Array; legacyKey?: Uint8Array }) {}
 
   private loopbackPort = OAUTH_LOOPBACK_PORT;
   /** Final secfix item 5: the redirect for the port the Mac bound (the Google sign-in uses it too). */
@@ -122,7 +123,7 @@ export class McpOAuth {
     p.lastAuthUrl = null;
     let r: Awaited<ReturnType<typeof auth>>;
     try {
-      r = await (this.d.authFn ?? auth)(p, { serverUrl: s.url! });
+      r = await (this.d.authFn ?? auth)(p, { serverUrl: s.url!, ...this.fetchOpt(serverId) });
     } catch (e) {
       if (/dynamic client registration|incompatible auth server/i.test(String(e))) {
         throw new GatewayError("OAUTH_FAILED", STR5.oauthNeedsHeader);
@@ -152,11 +153,17 @@ export class McpOAuth {
     if (!s) throw new GatewayError("NOT_FOUND", "That connector was removed.", 404);
     const p = this.providerFor(pend.serverId);
     p.setState(a.state);
-    const r = await (this.d.authFn ?? auth)(p, { serverUrl: s.url!, authorizationCode: a.code });
+    const r = await (this.d.authFn ?? auth)(p, { serverUrl: s.url!, authorizationCode: a.code, ...this.fetchOpt(pend.serverId) });
     if (r !== "AUTHORIZED") return { serverId: pend.serverId, status: "needs-auth" };
     this.clearPending(pend.serverId);
     await this.d.onAuthorized(pend.serverId);
     return { serverId: pend.serverId, status: "connected" };
+  }
+
+  /** Bug 363: OAuth discovery, registration and token calls go through the server's (guarded) fetch. */
+  private fetchOpt(serverId: string): { fetchFn?: FetchLike } {
+    const f = this.d.fetchFor?.(serverId);
+    return f ? { fetchFn: f } : {};
   }
 
   forget(serverId: string): void {

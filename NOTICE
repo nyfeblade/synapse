@@ -1,0 +1,16 @@
+Synapse
+Copyright 2026 the Synapse authors.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+Versions up to and including 0.1.2 were released under the MIT License, and
+copies of those versions remain available under it.
+
+Synapse.app bundles third-party components, each under its own licence,
+including the GPL-3.0-or-later espeak-ng and phonemizer used by the bundled
+Kokoro voice (their source archives are attached to every release). See
+app/build/THIRD-PARTY-NOTICES.txt, which also ships inside the app as
+Contents/Resources/THIRD-PARTY-NOTICES.txt.
+
+"Synapse" and the Synapse Bot logo and icon are the project's marks: see
+TRADEMARKS.md. The Apache License does not grant permission to use them
+(section 6).

@@ -26,7 +26,7 @@ describe("LocalPolicyStore (LOC-02, LOC-05)", () => {
     const p = new LocalPolicyStore(dir, () => now);
     const c = p.current();
     expect(c).toMatchObject({ isCurrent: true, executionPolicy: "ask", localRoot: os.homedir() });
-    expect(c.label).toBe(os.hostname().replace(/\.local$/, ""));
+    expect(c.label).toBe(os.hostname().replace(/\.(local|localdomain|lan|home|internal)$/i, "")); // new-user walk nit 30
     expect(fs.existsSync(path.join(dir, "computers.json"))).toBe(true);
   });
 

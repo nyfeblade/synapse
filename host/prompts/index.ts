@@ -17,6 +17,11 @@ export function loadPrompt(name: string): string {
   return text;
 }
 
+/** New-user walk, finding 12: the skills the app itself ships (prompts/skills/<id>), never part of a user's template. */
+export function builtInSkillIds(): string[] {
+  try { return fs.readdirSync(path.join(dir(), "skills")); } catch { return []; }
+}
+
 export function fillTemplate(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => {
     if (!(k in vars)) throw new Error(`missing template var ${k}`);

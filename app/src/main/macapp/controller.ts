@@ -12,8 +12,11 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   MACAPP_CONSEQUENCE_REASON,
+  STRGS,
   STRMA,
   contactQuestion,
+  isGoogleAccountsWindow,
+  isWebBrowserApp,
   isHandle,
   macAppConsequence,
   macAppLabelConsequence,
@@ -156,6 +159,22 @@ export class MacAppController {
     //     own approval cards, its settings or the No limits confirm. Refuse by name or bundle id before anything runs.
     if (this.targetsSynapse(a)) return { ok: false, error: STRMA.synapseRefused };
 
+    // --- google-setup security fix 3: no ui.* action in a web browser at all. A window title can be stale; only the
+    //     Browser tool sees the page's live address (and refuses Google's consent). An acting ui.* call is always
+    //     bound to a named app (its own, or the last outline's), never to whatever happens to be frontmost.
+    if (a.action.startsWith("ui.")) {
+      const target = a.app ?? (a.action === "ui.outline" ? undefined : s.ax?.app);
+      if (target && isWebBrowserApp(target)) return { ok: false, error: STRMA.browserRefused };
+      // Re-review 2: an acting call needs this session's outline of that very app, and an outline holding a web
+      // area (any browser or web view, whatever its name) takes no action.
+      if (a.action !== "ui.outline") {
+        if (!target || !s.ax || s.ax.app.toLowerCase() !== target.toLowerCase()) return { ok: false, error: STRMA.uiNeedsApp };
+        if (s.ax.web) return { ok: false, error: STRMA.browserRefused };
+      }
+    }
+    // --- google-setup: a Bot never presses anything in a Google sign-in/consent window (the final Allow is the user's).
+    if (/^ui\.(press|set|key|menu|focus)$/.test(a.action) && s.ax && isGoogleAccountsWindow(s.ax.window)) return { ok: false, error: STRGS.consentBlocked };
+
     // --- the consequential gate, before anything happens -----------------------------------------
     const gated = await this.gate(call, s);
     if (gated) return gated;
@@ -211,13 +230,16 @@ export class MacAppController {
       if (node?.sensitive) return { ok: false, error: STRMA.credentialsRefused };
     }
     const action = a.action.slice(3); // outline | press | set | menu | key | focus
-    const req = { op: "ax" as const, action, ...(a.app ? { app: a.app } : {}), ...(a.ref ? { ref: a.ref } : {}), ...(a.value !== undefined ? { value: a.value } : {}) };
+    const app = a.app ?? (a.action === "ui.outline" ? undefined : s.ax?.app);
+    const req = { op: "ax" as const, action, ...(app ? { app } : {}), ...(a.ref ? { ref: a.ref } : {}), ...(a.value !== undefined ? { value: a.value } : {}) };
     const r = await this.d.helper.request(req, 20_000);
     if (!r.ok) return { ok: false, error: r.code === "notfound" && a.ref ? staleRef(a.ref) : r.error };
     const read = toRead(r as Record<string, unknown>);
     if (!read) return { ok: false, error: "The Mac sent back an unreadable window outline." };
     // Fix round: a ui.* with no app read whatever was frontmost; if that turned out to be Synapse, refuse now.
     if (namesSynapseApp(read.app)) return { ok: false, error: STRMA.synapseRefused };
+    // An outline with no app read the frontmost one: a browser is dropped, never kept as a target.
+    if (isWebBrowserApp(read.app) || read.web) { s.ax = null; s.rest = []; return { ok: false, error: STRMA.browserRefused }; }
     const fresh = a.action === "ui.outline";
     const out = fresh ? axOutline(read) : axDiff(s.ax, read);
     s.ax = read;

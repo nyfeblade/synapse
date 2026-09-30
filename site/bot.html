@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<!--THEME-->
+<!--SEO:bot-->
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body data-page="bot">
+<!--HEADER:bot-->
+<!--BOTDEFS-->
+<main class="wrap">
+  <article class="bp" data-bot>
+    <p class="bp-line" data-error role="alert" hidden></p>
+    <p class="bp-line" data-empty hidden>No Bot in this link. <a href="/bots">See Bots</a></p>
+    <div class="bp-pending" data-pending hidden><button class="btn primary" type="button" data-pending-add></button></div>
+
+    <div class="bp-card" data-card hidden>
+      <div class="bp-head">
+        <div class="bp-face" data-face></div>
+        <div class="bp-id">
+          <h1 data-name></h1>
+          <p class="bp-title" data-title></p>
+        </div>
+      </div>
+
+      <div class="bp-actions">
+        <button class="btn primary" type="button" data-add>Add to Synapse</button>
+        <a class="btn primary" href="https://github.com/nyfeblade/synapse/releases" target="_blank" rel="noopener noreferrer" data-download hidden>Download Synapse</a>
+        <button class="btn ghost" type="button" data-save>Save .botpack</button>
+      </div>
+      <p class="bp-note" data-copied role="status" hidden>Link copied</p>
+      <p class="bp-note" data-update hidden>Nothing happened? <a href="https://github.com/nyfeblade/synapse/releases" target="_blank" rel="noopener noreferrer">Update Synapse</a></p>
+
+      <dl class="bp-rows">
+        <div data-row="tools" hidden><dt>Tools</dt><dd class="bp-chips" data-tools></dd></div>
+        <div data-row="skills" hidden><dt>Skills</dt><dd data-skills></dd></div>
+        <div data-row="flags" hidden><dt>Unusual text</dt><dd class="bp-chips" data-flags></dd></div>
+      </dl>
+
+      <section class="bp-section">
+        <h2 class="bp-h">Instructions</h2>
+        <pre class="bp-instructions" data-instructions></pre>
+      </section>
+    </div>
+  </article>
+</main>
+<!--FOOTER-->
+<script src="/assets/site.js"></script>
+<script type="module" src="/assets/bot.js"></script>
+</body>
+</html>
