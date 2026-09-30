@@ -237,3 +237,40 @@ describe("final box verification: a child inherits the review origin of the turn
   });
 });
 
+
+describe("0.1.6: computer and browser helpers run on Claude, whatever the parent's model", () => {
+  function launchOn(parentModel: string, claudeReady?: () => boolean) {
+    const sup = new Supervisor({ caps: { maxLive: 20, maxRunning: 20, warmIdleMs: 600_000, userPreemptAfterMs: 15_000 }, brainFactory: () => { throw new Error("no bots here"); } });
+    const specs: ChildSpec[] = [];
+    const svc = new SubagentService({
+      supervisor: sup,
+      makeBrain: (spec) => { specs.push(spec); return new FakeBrain(`child:${spec.id}`, wiring(), () => [{ text: "ok" }]); },
+      revivals: { complete: () => {} }, pending: new PendingWakes(path.join(fs.mkdtempSync(path.join(os.tmpdir(), "sa-c-")), "pw.json")),
+      hub: new SseHub(), bots: { summary: () => ({ profile: { model: parentModel } }) as never, nextTurnNo: () => 11, userMessageEpoch: () => 1 },
+      transcriptPath: () => null, ...(claudeReady ? { claudeReady } : {}),
+    });
+    return { svc, specs };
+  }
+
+  it("a provider Bot's computerUse and browserUse children are Claude children; its generalPurpose child keeps its own model", async () => {
+    const got: [string, string][] = [];
+    for (const t of ["computerUse", "browserUse", "generalPurpose"]) { // one service each: only one desktop child runs at a time
+      const s = launchOn("openai:gpt-6.1-sol", () => true);
+      await s.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: t });
+      await flush();
+      got.push(...s.specs.map((x): [string, string] => [x.type, x.model]));
+    }
+    expect(got).toEqual([["computerUse", "claude-sonnet-5"], ["browserUse", "claude-sonnet-5"], ["generalPurpose", "openai:gpt-6.1-sol"]]);
+  });
+
+  it("without an Anthropic key they're refused up front with a reason the Bot can pass on; generalPurpose still runs", async () => {
+    const s = launchOn("gemini:gemini-3.8-flash", () => false);
+    for (const t of ["computerUse", "browserUse"]) {
+      expect(await s.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: t })).toEqual({ text: STRC.computerNeedsClaude, isError: true });
+    }
+    expect((await s.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: "generalPurpose" })).isError).toBeFalsy();
+    await flush();
+    expect(s.specs.map((x) => x.type)).toEqual(["generalPurpose"]);
+    expect(STRC.computerNeedsClaude).toContain("Anthropic API key");
+  });
+});

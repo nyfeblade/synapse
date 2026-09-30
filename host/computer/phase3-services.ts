@@ -1,3 +1,5 @@
+import { credentialsReady } from "../auth/auth-env";
+import { isProviderModelRef } from "@synapse/shared";
 import type net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
@@ -66,6 +68,8 @@ export interface Phase3Context {
   fuzz: boolean; brainKind: "claude" | "fake"; flags(): ConformanceFlags; now?(): number;
   /** I3: Teach a task rehearsal registry shared with the approval gate. */
   rehearsals?: { start(botId: string, childTaskId: string): void; end(childTaskId: string): void };
+  /** Spec P2: a Task subagent of a Bot on a model provider runs on ProviderBrain (app.ts builds it). */
+  providerChild?(spec: ChildSpec, wiring: BrainWiring, hooks: ChildHooks): SupervisedBrain;
 }
 
 const nullConnector: BrowserConnector = { connect: async () => { throw new Error("The browser isn't available in this mode."); } };
@@ -189,6 +193,8 @@ export async function createPhase3Services(ctx: Phase3Context) {
   const subagents: SubagentService = new SubagentService({
     supervisor: ctx.supervisor, revivals, pending, hub, bots, now, rehearsals: ctx.rehearsals, parentSlot: (b) => ctx.runner.slot(b), perception: computerPerception,
     onWork: (b) => github.botStartedWorking(b), // bug 195 S2
+    // 0.1.6: computer and browser children run on Claude; without an Anthropic key they're refused up front.
+    ...(ctx.brainKind === "claude" ? { claudeReady: () => credentialsReady() } : {}),
     redact: redactBlock, // bug 198 fix round 1: a mirrored child step's body, redacted with the parent's secrets
     activity: { append: (b, e) => { if (bots.has(b)) bots.appendEntry(b, e); }, update: (b, e) => { if (bots.has(b)) bots.updateEntry(b, e); } },
     transcriptPath: (s, parent) => path.join(cliConfigDirFor(cfg, parent), "projects", "-workspace", `${s}.jsonl`),
@@ -203,6 +209,7 @@ export async function createPhase3Services(ctx: Phase3Context) {
       const computer = computerToolsFor(spec.type as SubagentType, { computer: computerTool(spec.parentBotId), browser: browserTools(spec.parentBotId), live: () => liveTools(spec.parentBotId) }, spec.perception);
       const inner = createChildWiring({ parentBotId: spec.parentBotId, childId: spec.id, slot: hooks.slot, gate: ctx.gate, tools: [...botTools, ...computer], flags: ctx.flags });
       const wiring: BrainWiring = withSecrets({ ...inner, postToolUse: async (call, out) => { const r = await inner.postToolUse(call, out); hooks.onAction(inner.actions.at(-1) ?? call.toolName); return r; } }, { botId: spec.parentBotId, registry: scanners });
+      if (isProviderModelRef(spec.model) && ctx.providerChild) return ctx.providerChild(spec, wiring, hooks);
       if (ctx.brainKind === "fake") return new FakeBrain(`child:${spec.id}`, wiring, () => [{ text: `Report: finished “${spec.title}”.` }]);
       return new ClaudeBrain({
         botId: `child:${spec.id}`, cfg, wiring, getSessionId: hooks.getSessionId, setSessionId: hooks.setSessionId,

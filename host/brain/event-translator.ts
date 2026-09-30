@@ -8,7 +8,7 @@ type RawUsage = { input_tokens?: number; output_tokens?: number; cache_read_inpu
 interface MsgUse { model: string; input: number; read: number; write: number; write1h: number; out: number; ws: number }
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
 /** 5.7: the live meter moves at most once per this many dollars (a tenth of a cent), so it never floods a turn. */
-const SPEND_STEP_USD = 0.001;
+export const SPEND_STEP_USD = 0.001;
 
 type Block = { type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string; tool_use_id?: string; is_error?: boolean; content?: unknown };
 

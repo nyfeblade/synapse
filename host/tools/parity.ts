@@ -37,6 +37,10 @@ export const SPEC_GATEWAY_COMMANDS: readonly string[] = [
   "completeOnboarding", "setMemoryMode", "setAgentFollowups", "setAgentEngineeringMode", "setAgentPermMode", "setAgentNoLimits", "setAgentSaveUsage", "setAgentComputerPerception",
   // Settings → Account (the API key)
   "setApiKey", "clearApiKey", "testAuthConnection", "checkApiKey",
+  // Settings → Account (model provider keys and consent)
+  "setProviderKey", "clearProviderKey", "testProviderKey", "consentProvider", "runSafetyCheck", "cancelSafetyCheck", "setSafetyReviewer", "runProviderConformance",
+  // Settings → Account, coding CLIs over ACP (Wave 3)
+  "consentAcpVendor", "startAcpLogin", "checkAcpLogin", "installAcpVendor", "removeAcpVendor",
   "answerBotCall", "setBotCallPermission",
   // Built-in Google connector (ORIG-GOOGLE)
   "setGoogleClient", "startGoogleAuth", "disconnectGoogle", "setAgentGoogle", "setAgentGoogleAccount", "setAgentEmailIn",
@@ -66,7 +70,7 @@ export const READ_ONLY_COMMANDS: readonly string[] = [
   "getMarketplace", "getCatalogEntry", "listPluginMarketplaces", "getTemplate", "listStarterTemplates", "getLocalComputer", "getLocalPolicyStatus", "getLocalPolicyReset", "getLocalBotMode", "getLocalBrowserAllowed", "getLocalMacAppAllowed", "getBrowserUsage",
   "listMacActions", "exportMacActions", "getLocalDryRun",
   "readLocalFile", "getNetworkStats", "getOnboarding", "listCodingAgents", "getPhase5Settings", "getGoogleStatus", "getGoogleReconnectCheck", "getComposioStatus", "getGitHubStatus",
-  "getAuth", "getModelAccess", "getBudgetPrompt", "getSpendMeter", "macClaudeAuth",
+  "getAuth", "getProviders", "getAcpVendors", "getSafetyReviewer", "getModelCatalog", "getCostPreview", "getModelAccess", "getBudgetPrompt", "getSpendMeter", "macClaudeAuth",
   "mcpListBots", "mcpTaskStatus", "mcpTaskResult",
   // 4.4: connector health
   "getConnectorHealth",
@@ -208,6 +212,19 @@ export const PARITY: Record<string, ParityEntry> = {
   clearApiKey: { userOnly: "secret values" },
   testAuthConnection: { userOnly: "account sign-in" },
   checkApiKey: { userOnly: "account sign-in (spends one tiny message)" },
+  setProviderKey: { userOnly: "secret values" },
+  clearProviderKey: { userOnly: "secret values" },
+  testProviderKey: { userOnly: "account sign-in (spends one tiny message)" },
+  consentProvider: { userOnly: "data-sharing consent is the user's own" },
+  consentAcpVendor: { userOnly: "data-sharing consent is the user's own" },
+  startAcpLogin: { userOnly: "account sign-in" },
+  checkAcpLogin: { userOnly: "account sign-in" },
+  installAcpVendor: { userOnly: "installing software on the Bots' computer as root" },
+  removeAcpVendor: { userOnly: "installing software on the Bots' computer as root" },
+  runSafetyCheck: { userOnly: "safety settings (spends model calls)" },
+  setSafetyReviewer: { userOnly: "safety settings" },
+  cancelSafetyCheck: { userOnly: "safety settings" },
+  runProviderConformance: { userOnly: "model checks (spends model calls)" },
   answerBotCall: { userOnly: "answering a Bot's call" },
   setBotCallPermission: { userOnly: "which Bots may call the user" },
   setMemoryMode: { userOnly: "memory settings" },

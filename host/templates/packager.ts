@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { describeHidden, encodeShareRaw, normalizeAvatarShape, redactPersonal, runsCode, SHARE_LIMITS, type CatalogAuthor, type SharePreview, type ShareSelection, type TemplateManifest, type TemplateRecord } from "@synapse/shared";
+import { describeHidden, isModelId, encodeShareRaw, normalizeAvatarShape, redactPersonal, runsCode, SHARE_LIMITS, type CatalogAuthor, type SharePreview, type ShareSelection, type TemplateManifest, type TemplateRecord } from "@synapse/shared";
 import type { BotService } from "../bots/bot-service";
 import type { HostConfig } from "../config";
 import { readJson, writeJsonAtomic } from "../util/atomic-json";
@@ -62,7 +62,7 @@ export class TemplatePackager {
     const out = await (allowed ? this.d.drafter : new StubTemplateDrafter()).draft(botId, this.d.bots.sessionId(botId), input);
     const p = this.d.bots.summary(botId).profile;
     return {
-      profile: { name: p.name, title: p.title, description: out.description, avatarShape: p.avatarShape, avatarColor: p.avatarColor, ...(p.model ? { model: p.model } : {}) },
+      profile: { name: p.name, title: p.title, description: out.description, avatarShape: p.avatarShape, avatarColor: p.avatarColor, ...(isModelId(p.model) ? { model: p.model } : {}) }, // a provider model isn't shared in a template (the recipient may have no key)
       skills: input.skills, memories: out.memories, routines: input.routines, plugins: this.d.plugins(),
     };
   }

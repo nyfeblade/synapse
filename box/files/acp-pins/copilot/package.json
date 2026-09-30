@@ -1,0 +1,6 @@
+{
+  "name": "synapse-acp-copilot",
+  "private": true,
+  "description": "The pinned @github/copilot package Synapse installs for Bots (box/files/bot-acp-install).",
+  "dependencies": { "@github/copilot": "1.0.89" }
+}

@@ -21,7 +21,9 @@
 .feedback-zoom img { display: block; max-width: none; }
 .feedback-threads { width: 560px; }
 .feedback-thread { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: var(--hairline) solid var(--line-card); }
+.feedback-thread-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .feedback-thread-head { margin: 0; }
+.feedback-thread-foot { margin: 0; }
 .feedback-msgs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .feedback-msg { display: flex; flex-direction: column; gap: 2px; max-width: 88%; padding: 8px 10px; border-radius: var(--radius-control); background: var(--fill-inset); font-size: var(--type-ui); }
 .feedback-msg.you { align-self: flex-end; background: var(--bubble-user); color: var(--bubble-user-ink); }

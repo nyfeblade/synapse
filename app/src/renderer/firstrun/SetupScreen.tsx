@@ -3,12 +3,12 @@ import { GITHUB_TOKEN_URL, STR_SETUP, setupView, type BoxReport, type OrbReport,
 import { callQuiet } from "../bridge";
 import { nativeCall, onNative } from "../native";
 import { useUi } from "../store";
-import { AccountPanel } from "../components/settings/AccountSection";
+import { KeyStep } from "../onboarding/KeyStep";
 import { Announce } from "../components/Announce";
 import { useSetupGate } from "./store";
 
 /**
- * Portable install: the first-run setup screen. OrbStack → the Bots' computer → the Anthropic API key are required; voices,
+ * Portable install: the first-run setup screen. OrbStack → the Bots' computer → an AI key (any-key setup: Anthropic or another provider) are required; voices,
  * phone access and GitHub updates are optional. Each step says where it is (done / working / needs you),
  * the Bots' computer shows a real progress bar and a log, and everything resumes after a failure or a relaunch.
  * Titles and labels only.
@@ -224,7 +224,7 @@ export function SetupScreen({ onClose }: { onClose?(): void }) {
         </Step>
         <Step title={STR_SETUP.claude} state={view.steps.claude}>
           {view.steps.claude === "needs-you" && (
-            <AccountPanel onReady={() => setSignedIn(true)} />
+            <KeyStep onReady={() => setSignedIn(true)} />
           )}
           {view.steps.claude === "doing" && signInError && <Announce><p role="alert" className="error">{signInError}</p></Announce>}
         </Step>

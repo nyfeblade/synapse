@@ -3,6 +3,29 @@
 Every version of Synapse. The website's Changelog page is built from this file.
 Newest first. A version headed `Unreleased` shows as "in progress".
 
+## 0.1.6 — 2026-09-30
+
+### Any AI provider
+
+- **Run a Bot on OpenAI, Gemini, OpenRouter, Mistral or DeepSeek** with your own API key, or on a model on your Mac with Ollama or LM Studio. A Bot on another provider uses it for chat, tools, subagents and voice calls. Coding agents, and computer and browser helpers, still run on Claude, so they need an Anthropic key.
+- **Set up with any of them.** The key step offers every provider, with Anthropic first. Another provider's key is tested before it's saved, and a model on your Mac needs only a Test. With no Anthropic key, new Bots start on that provider's main model, and Synapse's shared work, like the safety reviewer and reading schedules, runs there too.
+- **Consent first.** Nothing goes to a provider until you allow it once, at setup or in Settings → Account, and the consent says what is sent.
+- **Your keys stay on your Mac.** They're encrypted, and only Synapse's own proxy adds them to a request. Your Bots never see them.
+- **The model picker shows measured badges.** A model outside Claude earns Experimental or Supported only by passing checks run on it; every one starts as Not checked. The picker also shows what 100 turns like your Bot's recent ones would cost.
+- **OpenRouter's whole model list,** searchable in the picker with live prices.
+- **The safety reviewer is ask-only until it qualifies.** With an Anthropic key it runs on Claude, as before. On another provider's model (the default with no Anthropic key, or one you pick), anything the fixed rules don't settle comes to you as a card until the reviewer's model passes the safety check in Settings → Auto-review → Safety reviewer.
+- **Web search** runs through OpenAI, Gemini or OpenRouter, so a Bot on DeepSeek, Mistral or a local model has it only when one of those is set up.
+- **Experimental:** voice calls on local models, and web search through Gemini.
+
+### Coding plans you already pay for
+
+- **Run a Bot on the GitHub Copilot, Cursor, Kimi Code or Mistral Vibe CLI,** signed in with your own account, over the Agent Client Protocol. Experimental: none has passed a live check with a real sign-in yet. Every file change and command goes through Synapse's safety gate first. Not yet on these Bots: voice calls, web search, images, subagents, Synapse's coding agents, and choosing the vendor's model (the CLI uses its own default).
+- **Install from Settings.** GitHub Copilot and Kimi Code install from Settings → Account → Coding CLIs at a fixed version, checked against the checksum npm publishes. Cursor and Mistral Vibe can't be installed from Synapse yet.
+
+### Feedback
+
+- **Copy link** on each conversation in Your feedback. Open the link on any device to see replies, so you keep the conversation if you reinstall or switch Macs.
+
 ## 0.1.5 — 2026-09-30
 
 ### Faster and smoother

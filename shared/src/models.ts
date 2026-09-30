@@ -1,3 +1,7 @@
+import { isProviderModelRef, parseProviderModelRef, providerLabel, type ProviderModelRef } from "./providers";
+import { catalogModel, providerContextWindow } from "./provider-catalog";
+import { acpVendorLabel, parseAcpModelRef, type AcpModelRef } from "./acp-vendors";
+
 export const MODEL_IDS = ["claude-sonnet-5", "claude-opus-5-5", "claude-opus-5", "claude-haiku-4-5-20251001", "claude-fable-5-1"] as const;
 export type ModelId = (typeof MODEL_IDS)[number];
 
@@ -16,12 +20,23 @@ export function isModelId(x: unknown): x is ModelId {
   return typeof x === "string" && (MODEL_IDS as readonly string[]).includes(x);
 }
 
-export function modelLabel(id: ModelId): string {
-  return LABELS[id];
+/** "Sonnet 5", or for a provider model "gpt-5.1 · OpenAI" (spec §10 model labels). */
+export function modelLabel(id: ModelId | ProviderModelRef | AcpModelRef): string {
+  if (isModelId(id)) return LABELS[id];
+  const acp = parseAcpModelRef(id);
+  if (acp) return acpVendorLabel(acp); // a vendor's own coding CLI on the user's plan (Wave 3)
+  const p = parseProviderModelRef(id);
+  return p ? `${catalogModel(id)?.label ?? p.model} · ${providerLabel(p.provider)}` : String(id);
+}
+
+/** A Claude model (runs on the Claude brain). */
+export function isClaudeModel(x: unknown): x is ModelId {
+  return isModelId(x);
 }
 
 /** ORIG-07 §07.1: W is 200,000 tokens, or 1,000,000 for `[1m]` models. */
 export function contextWindow(model: string): number {
+  if (isProviderModelRef(model)) return providerContextWindow(model);
   return model.endsWith("[1m]") ? 1_000_000 : 200_000;
 }
 

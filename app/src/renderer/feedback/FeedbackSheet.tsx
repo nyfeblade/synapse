@@ -21,7 +21,7 @@ export function FeedbackHost() {
   return <>{open ? <FeedbackSheet /> : null}<FeedbackThreadsHost /></>;
 }
 
-type Status = { kind: "idle" } | { kind: "sending" } | { kind: "sent" } | { kind: "error"; message: string } | { kind: "posted"; logsCut: boolean };
+type Status = { kind: "idle" } | { kind: "sending" } | { kind: "sent"; testMode?: boolean } | { kind: "error"; message: string } | { kind: "posted"; logsCut: boolean };
 
 export function FeedbackSheet() {
   const preset = useFeedback((s) => s.preset);
@@ -52,7 +52,7 @@ export function FeedbackSheet() {
     const p = problem();
     if (p || !payload) { setStatus({ kind: "error", message: p ?? STRF.loading }); return; }
     setStatus({ kind: "sending" });
-    void nativeCall("feedback.send", payload).then(() => setStatus({ kind: "sent" }), (e: Error) => setStatus({ kind: "error", message: e.message }));
+    void nativeCall<{ testMode?: boolean }>("feedback.send", payload).then((r) => setStatus({ kind: "sent", testMode: r?.testMode === true }), (e: Error) => setStatus({ kind: "error", message: e.message }));
   };
   const postGithub = () => {
     const p = problem();
@@ -75,7 +75,7 @@ export function FeedbackSheet() {
       </div>
       {status.kind === "sent" ? (
         <div className="feedback-done">
-          <p role="status">{STRF.sent}</p>
+          <p role="status">{status.testMode ? STRF.sentTestMode : STRF.sent}</p>
           <button type="button" className="btn-primary" onClick={closeFeedback}>{STRF.close}</button>
         </div>
       ) : (

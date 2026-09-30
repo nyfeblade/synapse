@@ -1,7 +1,7 @@
 import path from "node:path";
 import {
-  STR_HEALTH, composioAppName, isBadHealth,
-  type ComposioStatusView, type ConnectorHealthView, type GoogleStatusView, type HealthFix, type KeyCheckView, type McpServerView, type SseEvent,
+  STR_HEALTH, composioAppName, isBadHealth, providerLabel,
+  type ComposioStatusView, type ProviderId, type ConnectorHealthView, type GoogleStatusView, type HealthFix, type KeyCheckView, type McpServerView, type SseEvent,
 } from "@synapse/shared";
 import { GatewayError } from "../gateway/errors";
 import type { ComposioServices } from "../composio/module";
@@ -26,6 +26,9 @@ export interface HealthServices {
   /** Google's expired sign-in (the reconnect check or a Bot's call that hit invalid_grant). */
   googleChanged(): void;
   keyCheck(v: KeyCheckView): void;
+  /** 0.1.6: a model provider key's real signal — the HTTP status of a call made with the saved key (a model call, the
+   *  key test, the free model list); null = the key was saved anew or removed (its row goes until the next signal). */
+  providerKey(p: Exclude<ProviderId, "anthropic">, status: number | null): void;
   observer: TurnObserver;
 }
 
@@ -38,6 +41,7 @@ export interface HealthServices {
  * - GitHub (per Bot): the sign-in events, and a Bot's git/gh call refused for its credentials.
  * - Telegram: what the app's main process reports (it owns the long poll).
  * - The Anthropic API key: the key check's answer (never probed: it costs a message).
+ * - Each model provider's key (0.1.6): the status of every call made with the saved key (never probed either).
  * - Every connector a Bot calls: auth errors at once, other failures after three in a row.
  */
 export function createHealthServices(ctx: Pick<ModuleContext, "cfg" | "hub" | "trays" | "bots" | "now">, o: {
@@ -202,6 +206,18 @@ export function createHealthServices(ctx: Pick<ModuleContext, "cfg" | "hub" | "t
     }
   };
 
+  // ---- Model provider keys (0.1.6, any AI provider) ----
+  // The same states as the Anthropic key: 401 = the key was rejected; 402/403 = no credit or no access; a success = OK.
+  // Rate limits, overload and the network are passing weather, not a broken key.
+  const providerKey = (p: Exclude<ProviderId, "anthropic">, status: number | null) => {
+    const id = `provider:${p}`;
+    if (status === null) { health.report(id, null); return; }
+    const base = { kind: "provider" as const, name: STR_HEALTH.providerKey(providerLabel(p)), fix: { kind: "provider" as const } };
+    if (status >= 200 && status < 300) health.report(id, { ...base, state: "ok" });
+    else if (status === 401) health.report(id, { ...base, state: "needs-sign-in" });
+    else if (status === 402 || status === 403) health.report(id, { ...base, state: "broken", reason: STR_HEALTH.reasons.noCredit });
+  };
+
   ctx.hub.subscribe((e: SseEvent) => {
     if (e.channel === "mcp-servers") mcp(e.payload.servers);
     else if (e.channel === "composio") composio(e.payload);
@@ -235,7 +251,7 @@ export function createHealthServices(ctx: Pick<ModuleContext, "cfg" | "hub" | "t
   google();
   mcp();
   composio();
-  return { health, probes, noteFor: (b) => health.noteFor(b), googleChanged: google, keyCheck, observer };
+  return { health, probes, noteFor: (b) => health.noteFor(b), googleChanged: google, keyCheck, providerKey, observer };
 }
 
 export function createHealthModule(h: HealthServices, o: { mcp: McpServices | null; warmUpMs?: number }): HostModule {

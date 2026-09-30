@@ -86,7 +86,10 @@ function Thread({ t }: { t: ThreadView }) {
   };
   return (
     <section className="feedback-thread" aria-label={STRF.sentOn(when(t.sentAt))}>
-      <p className="feedback-thread-head muted small">{STRF.sentOn(when(t.sentAt))}{t.status === "closed" ? ` · ${STRF.closed}` : ""}</p>
+      <div className="feedback-thread-top">
+        <p className="feedback-thread-head muted small">{STRF.sentOn(when(t.sentAt))}{t.status === "closed" ? ` · ${STRF.closed}` : ""}</p>
+        <CopyLink id={t.id} onError={setError} />
+      </div>
       <ol className="feedback-msgs">
         {t.messages.map((m, i) => (
           <li key={i} className={`feedback-msg ${m.from}`}>
@@ -102,6 +105,22 @@ function Thread({ t }: { t: ThreadView }) {
         <button type="button" className="btn-primary" disabled={busy || !text.trim()} onClick={send}>{STRF.send}</button>
       </div>
       {error && <div className="error small" role="alert">{error}</div>}
+      <p className="feedback-thread-foot muted small">{STRF.linkHint}</p>
     </section>
   );
+}
+
+/** Copy link: main writes the page's link (with the thread's code) straight to the clipboard; the code never comes here. */
+function CopyLink({ id, onError }: { id: string; onError(e: string | null): void }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const h = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(h);
+  }, [copied]);
+  const copy = () => {
+    onError(null);
+    void nativeCall("feedback.threads.link", { id }).then(() => setCopied(true), (e: Error) => onError(e.message));
+  };
+  return <button type="button" className="btn-outline small" onClick={copy}>{copied ? STRF.copied : STRF.copyLink}</button>;
 }

@@ -29,7 +29,8 @@
     "security-suite": "node security/run.mjs",
     "eval:routing": "vitest run --project host host/test/evals/routing-real.live.test.ts --silent=false",
     "dmg": "npm run dmg -w @synapse/app",
-    "journeys": "(test -f host/dist/host.mjs || node host/build.mjs) && (test -f app/dist/main.cjs || npm run build -w @synapse/app) && node scripts/journeys/run.ts"
+    "journeys": "(test -f host/dist/host.mjs || node host/build.mjs) && (test -f app/dist/main.cjs || npm run build -w @synapse/app) && node scripts/journeys/run.ts",
+    "bench:provider-gate": "node host/bench/coding/provider-gate-run.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

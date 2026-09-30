@@ -1029,6 +1029,10 @@ export class TurnRunner {
         this.d.bots.updateEntry(botId, done);
         break;
       }
+      case "retry":
+        // A provider stream that failed partway is discarded whole (spec §6): its partial reply goes with it.
+        if (e.resetStream) slot.partialJson = "";
+        break;
       case "send_message_delta":
         if (this.d.flags().sendStreaming) {
           slot.partialJson += e.partialJson;

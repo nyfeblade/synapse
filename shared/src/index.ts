@@ -60,4 +60,8 @@ export * from "./mcp";
 export * from "./strings-telegram";
 export * from "./action-log";
 export * from "./health";
+export * from "./providers";
+export * from "./strings-providers";
+export * from "./provider-catalog";
+export * from "./acp-vendors";
 export * from "./voice-latency";

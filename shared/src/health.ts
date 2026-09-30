@@ -21,7 +21,7 @@ export type HealthFix =
   | { kind: "provider" };
 
 export interface ConnectorHealthView {
-  /** "google:<accountId>", "mcp:<serverId>", "composio:<toolkit>:<accountId>", "telegram", "github:<botId>", "provider:anthropic".
+  /** "google:<accountId>", "mcp:<serverId>", "composio:<toolkit>:<accountId>", "telegram", "github:<botId>", "provider:anthropic", "provider:<provider id>" (0.1.6).
    *  4.3b: one row per account, so a broken work account never marks the personal one. */
   id: string;
   kind: ConnectorKind;
@@ -87,6 +87,8 @@ export const STR_HEALTH = {
   workNotifyOff: "Off",
   workNotifyTelegram: "Also on Telegram",
   anthropicKey: "Anthropic API key",
+  /** 0.1.6: a model provider's key (OpenAI, Gemini, …), one row per provider with a saved key. */
+  providerKey: (label: string) => `${label} API key`,
   githubFor: (bot: string) => `GitHub (${bot})`,
   reasons: {
     didntStart: "Didn't start",
@@ -96,6 +98,7 @@ export const STR_HEALTH = {
     tokenRejected: "Token rejected",
     conflict: "Another program is using it",
     keyRejected: "Key rejected",
+    noCredit: "No credit or no access",
   },
 } as const;
 

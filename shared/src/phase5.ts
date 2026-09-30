@@ -1,5 +1,6 @@
 import type { AvatarShape, BotSummary } from "./bots";
 import type { ModelId } from "./models";
+import type { ProviderId } from "./providers";
 import type { PermAction, PermMode } from "./perm-rules";
 import type { ComputerPerception } from "./computer";
 import type { SavingsEstimates } from "./savings";
@@ -380,7 +381,13 @@ declare module "./gateway" {
     removeFromCall: { args: { callId: string; botId: string }; result: VoiceCallView };
     endCall: { args: { callId: string; durationMs?: number }; result: None };
     // Onboarding (ONB-*)
-    getOnboarding: { args: None; result: { hasSeenOnboarding: boolean; tokenConfigured: boolean } };
+    /**
+     * `tokenConfigured`: a key is set up — an Anthropic key, or (any-key setup) a consented provider whose key worked,
+     * or a consented model on this Mac that answered. `anthropicKey`: an Anthropic key is saved. `provider`: the
+     * account's provider when there is no Anthropic key. `newBotModel`: what a new Bot runs on (null = Claude's default,
+     * or a model on this Mac with no model listed yet).
+     */
+    getOnboarding: { args: None; result: { hasSeenOnboarding: boolean; tokenConfigured: boolean; anthropicKey?: boolean; provider?: Exclude<ProviderId, "anthropic"> | null; newBotModel?: string | null } };
     completeOnboarding: { args: None; result: None };
     // Coding agent (TOOL-20)
     listCodingAgents: { args: { id: string }; result: { agents: CodingAgentView[] } };

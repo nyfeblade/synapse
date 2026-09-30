@@ -78,7 +78,8 @@ export type TurnEvent =
   | { kind: "tool_start"; toolUseId: string; name: string; input: Record<string, unknown>; messageId: string }
   | { kind: "tool_end"; toolUseId: string; name: string; isError: boolean; output: string }
   | { kind: "send_message_delta"; toolUseId: string; partialJson: string }
-  | { kind: "retry"; attempt: number; errorStatus: number | null }
+  /** resetStream: the streamed reply so far was discarded (a provider stream that failed partway, spec §6). */
+  | { kind: "retry"; attempt: number; errorStatus: number | null; resetStream?: true }
   | { kind: "compact_boundary" }
   | { kind: "rate_limit"; status: string; windows: Record<string, { utilization: number | null; resetsAt: number | null }> }
   /** 5.7: this turn's spend so far, in API dollars at list price, cumulative (any brain may emit it; the header meter
@@ -105,6 +106,8 @@ export interface SupervisedBrain extends BrainSession {
   readonly turnStartedAt: number;
   readonly toolInFlight: boolean;
   readonly pid: number | null;
+  /** Holds no process (ProviderBrain): not counted toward the supervisor's process caps. Absent = false. */
+  readonly processless?: boolean;
   cool(reason: string, force?: boolean): Promise<void>;
   onStateChange(cb: (s: ProcState, prev: ProcState) => void): () => void;
 }

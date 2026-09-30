@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { DEFAULT_EFFORT, EFFORT_LABELS, EFFORT_LEVELS, NO_LIMITS_CONFIRM, STR, STR5, modelLabel, type EffortLevel, type ModelId, type PermMode } from "@synapse/shared";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { DEFAULT_EFFORT, EFFORT_LABELS, EFFORT_LEVELS, NO_LIMITS_CONFIRM, STR, STR5, modelLabel, parseAcpModelRef, type EffortLevel, type ModelId, type PermMode } from "@synapse/shared";
 import { setNotify } from "../bot-actions";
 import { nativeCall } from "../native";
 import { call, callQuiet } from "../bridge";
@@ -25,7 +25,10 @@ import { SettingLinksLayer } from "./settings/SettingLinksLayer";
 import { overlaysOpen } from "../overlay-stack";
 import { usePopOrigin } from "../pop-origin";
 import { pickableModels, startModelAccessSync, useModelAccess } from "../model-access";
+import { hasProviders, useModelCatalog } from "../model-catalog";
+import { ModelPickerList } from "./ModelPicker";
 import { RatingsRow } from "../feedback/Ratings";
+import { AcpSignInRow } from "./AcpSignInRow";
 
 /** feat-mac-access-parity: the per-Bot permission mode (Ask / Auto-accept edits / Full auto), with a clear warning
  *  on Full auto. Neutral copy; the guard chip stays green via the existing switch/select styling. */
@@ -124,6 +127,31 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
   // P4: the picker offers only models the saved API key can reach (checked by the host; unchecked ones stay listed).
   const access = useModelAccess((s) => s.view);
   useEffect(() => { startModelAccessSync(); }, []);
+  // Spec §10: with a model provider set up, the picker groups models by provider, with badges and What works.
+  const catalog = useModelCatalog((s) => s.view);
+  useEffect(() => { if (modelOpen) void useModelCatalog.getState().load(); }, [modelOpen]);
+  // The grouped picker is tall: it opens fully visible — the trigger scrolled into view first, then below it when
+  // there's room, else above it (whichever side has more), capped to that side's space and scrolling inside.
+  const [placement, setPlacement] = useState<{ up: boolean; max: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!modelOpen) { setPlacement(null); return; }
+    const btn = modelRef.current?.querySelector(".select") as HTMLElement | null;
+    if (!btn) return;
+    btn.scrollIntoView?.({ block: "nearest" });
+    const r = btn.getBoundingClientRect();
+    const below = window.innerHeight - r.bottom - 12;
+    const above = r.top - 12;
+    const up = below < 360 && above > below;
+    setPlacement({ up, max: Math.max(160, Math.floor(up ? above - 24 : below)) });
+  }, [modelOpen, catalog]);
+  // Like a native select, the list opens on the current model: the list scrolls inside itself, never the panel.
+  useLayoutEffect(() => {
+    const list = modelList.current as unknown as HTMLElement | null;
+    const sel = list?.querySelector("[aria-selected=\"true\"]") as HTMLElement | null;
+    if (!list || !sel || !placement) return;
+    const top = sel.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+    if (top < list.scrollTop || top + sel.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = Math.max(0, top - (list.clientHeight - sel.offsetHeight) / 2);
+  }, [placement]);
   useEffect(() => { setName(bot?.profile.name ?? ""); setDesc(bot?.profile.description ?? ""); }, [botId, bot?.profile.name, bot?.profile.description]);
   // The open list is opaque and paints over the rows below it (VoiceSettings, Notifications), so without a
   // dismissal path the next click anywhere under it silently picked a model. Escape and an outside mousedown
@@ -153,7 +181,7 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("mousedown", onDown); };
   }, [modelOpen, effortOpen]);
   if (!bot) return null;
-  const model = (bot.profile.model ?? "claude-sonnet-5") as ModelId;
+  const model = (bot.profile.model ?? "claude-sonnet-5") as ModelId;  // a provider ref reads the same way (modelLabel)
   const effort = (bot.profile.effort ?? DEFAULT_EFFORT) as EffortLevel;
   const save = (patch: Record<string, unknown>) => {
     setError(null);
@@ -195,7 +223,13 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
         <button type="button" aria-haspopup="listbox" aria-expanded={modelOpen} aria-label={`Model: ${modelLabel(model)}`} className={modelOpen ? "dropdown select open" : "dropdown select"} onClick={() => setModelOpen(!modelOpen)}>
           <span>{modelLabel(model)}</span><ChevronDownIcon />
         </button>
-        {modelOpen && (
+        {modelOpen && hasProviders(catalog) && (
+          <div ref={modelList as unknown as React.RefObject<HTMLDivElement>} className={placement?.up ? "listbox model-pop up" : "listbox model-pop"}
+            style={placement ? { maxHeight: placement.max } : undefined}>
+            <ModelPickerList view={catalog} current={model} botId={botId} onPick={(m) => { setModelOpen(false); if (m !== model) save({ model: m }); }} />
+          </div>
+        )}
+        {modelOpen && !hasProviders(catalog) && (
           <ul ref={modelList} role="listbox" aria-labelledby="model-label" className="listbox">
             {pickableModels(access, model).map((m) => (
               <li key={m} role="option" aria-selected={m === model} className={m === model ? "opt selected" : "opt"} onClick={() => { setModelOpen(false); if (m !== model) save({ model: m }); }}>
@@ -205,6 +239,7 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
           </ul>
         )}
       </div>
+      {parseAcpModelRef(model) && <AcpSignInRow botId={botId} vendor={parseAcpModelRef(model)!} />}
       <div className="field model-field" ref={effortRef}>
         <span id="effort-label">{STR.effort}</span>
         <button type="button" aria-haspopup="listbox" aria-expanded={effortOpen} aria-label={`${STR.effort}: ${EFFORT_LABELS[effort]}`} className={effortOpen ? "dropdown select open" : "dropdown select"} onClick={() => setEffortOpen(!effortOpen)}>

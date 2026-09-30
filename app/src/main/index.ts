@@ -73,7 +73,7 @@ import { registerMacDisk } from "./mac-disk";
 import { configureProfile } from "./profile";
 import { resolveUnpacked } from "./resolve-unpacked";
 import { MacSecretVault } from "./secret-vault";
-import { confirmTrustDialog, createApiKeySender, registerAuthIpc, type ApiKeySender } from "./auth-key";
+import { confirmTrustDialog, createApiKeySender, createProviderKeySender, registerAuthIpc, registerProviderIpc, type ApiKeySender, type ProviderKeySender } from "./auth-key";
 import { SecretSync, sealWith } from "./secret-sync";
 import { saveFileFromGateway } from "./save-file";
 import { readSecret, sealedSecretNames, storeSecret } from "./secrets";
@@ -156,6 +156,8 @@ async function openSecrets(): Promise<void> {
 let secretSync: SecretSync | null = null;
 /** Settings → Account's sender, once connected (registerAuthIpc answers before that with why not). */
 let apiKeySender: ApiKeySender | null = null;
+/** Settings → Account: the model providers' key sender, once connected. */
+let providerKeySender: ProviderKeySender | null = null;
 /**
  * Review fix 4: the Mac's copy of the API key is kept by the coordinator, which owns the permission key file (and
  * creates it on demand with its one-time migration). Main asks over the parent port; no answer in 10 s is a failure.
@@ -196,6 +198,7 @@ function startSecrets(profileDir: string, baseUrl: string, token: string): void 
   // Settings → Account: the Anthropic API key is sealed to the box here and never sent back (auth-key.ts). A saved key
   // is also kept for the Bots' claude on this Mac (through the coordinator's key proxy), encrypted with
   // the profile's local-policy.key (never the keychain).
+  providerKeySender = createProviderKeySender({ call: gatewayCall(baseUrl, token, hostCallOpts), pin, seal: sealWith });
   apiKeySender = createApiKeySender({
     // No client time limit: a Save must reach its real end before a queued Remove runs (auth-key.ts), or a Save given
     // up on here could still land on the box after the Remove. The panel shows its slow note meanwhile.
@@ -361,7 +364,9 @@ async function start(): Promise<void> {
     endpoint: !app.isPackaged ? process.env.SYNAPSE_FEEDBACK_URL : undefined,
     crashText: (id) => { const r = id === "latest" ? crash.store.list()[0] : crash.store.list().find((x) => x.id === id); return r ? crash.store.reportText(r.id) : null; },
     capture: async () => (win.isDestroyed() ? null : fitPng(await win.webContents.capturePage())),
-    openExternal: (url) => shell.openExternal(url), offline: process.env.FUZZ === "1",
+    copyText: (t) => clipboard.writeText(t),
+    openExternal: (url) => shell.openExternal(url), // FUZZ never sends, except in a development build with SYNAPSE_FEEDBACK_LIVE=1 (to test real delivery).
+    offline: process.env.FUZZ === "1" && !(!app.isPackaged && process.env.SYNAPSE_FEEDBACK_LIVE === "1"),
     // A reply: a quiet notice in the window, and a macOS notification when the window isn't in front.
     onReply: (unread) => {
       emitNative("feedback-reply", { unread });
@@ -885,6 +890,7 @@ async function start(): Promise<void> {
   // Settings → Account and the setup screen can Save before the first connection lands (or after it failed): the
   // auth IPC is there from the start and says why, instead of Electron's "No handler registered".
   registerAuthIpc(ipcMain, () => (hostConnected ? apiKeySender : null), () => hostConnectError);
+  registerProviderIpc(ipcMain, () => (hostConnected ? providerKeySender : null), () => hostConnectError);
   // Settings → Connected accounts → Composio: the Paste click reads the clipboard here and hands the key straight to
   // the host. FUZZ never touches the real clipboard: it pastes a stand-in key the fake Composio accepts.
   // 0.1.4: Synapse's MCP server — off by default; while on, one private Unix socket (no port) that approved MCP

@@ -18,4 +18,14 @@ describe("onboarding module (ONB-01; api-key-only)", () => {
     expect(await m.handlers.getOnboarding!({})).toEqual({ hasSeenOnboarding: true, tokenConfigured: true });
     fs.rmSync(dir, { recursive: true, force: true });
   });
+
+  it("any-key setup: says whether the key is Anthropic's, the account's provider and a new Bot's model", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "onb-"));
+    const settings = new HostSettingsStore(path.join(dir, "s.json"));
+    const m = createOnboardingModule({ settings } as never, { tokenConfigured: () => true, anthropicKey: () => false, provider: () => "ollama", newBotModel: async () => null });
+    expect(await m.handlers.getOnboarding!({})).toEqual({ hasSeenOnboarding: false, tokenConfigured: true, anthropicKey: false, provider: "ollama", newBotModel: null });
+    const a = createOnboardingModule({ settings } as never, { tokenConfigured: () => true, anthropicKey: () => true, provider: () => null, newBotModel: () => "never asked" });
+    expect(await a.handlers.getOnboarding!({})).toEqual({ hasSeenOnboarding: false, tokenConfigured: true, anthropicKey: true, provider: null, newBotModel: null });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 });

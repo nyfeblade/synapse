@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { STRSH, STR_AUTH, APP_NAME, AVATAR_COLOR_NAMES, AVATAR_COLORS, DEFAULT_AVATAR_COLOR, AVATAR_EDITOR_SHAPES, AVATAR_SHAPE_LABELS, STR, STR5, STRC, type AvatarShape, type StarterView } from "@synapse/shared";
+import { STRSH, STR_AUTH, STR_KEY_STEP, APP_NAME, AVATAR_COLOR_NAMES, AVATAR_COLORS, DEFAULT_AVATAR_COLOR, AVATAR_EDITOR_SHAPES, AVATAR_SHAPE_LABELS, STR, STR5, STRC, type AvatarShape, type StarterView } from "@synapse/shared";
 import { useAsync } from "../async-resource";
 import { call, callQuiet } from "../bridge";
 import { Async } from "../components/Async";
 import { ShapeAvatar } from "../components/ShapeAvatar";
-import { AccountPanel } from "../components/settings/AccountSection";
+import { KeyStep } from "./KeyStep";
 import { ONBOARDING_TOOLS } from "./tools";
 import { nativeCall } from "../native";
 import { useTemplates } from "../templates/store";
@@ -51,6 +51,12 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
   // callQuiet: a background probe for the Sign in button's destination; the button re-asks when it
   // is pressed, and that ask is the one whose failure the user is told about.
   useEffect(() => { void callQuiet("getOnboarding", {}).then((o) => setTokenOk(o.tokenConfigured)).catch(() => {}); }, []);
+  // Any-key setup: a model on this Mac with no model downloaded yet leaves a new Bot without one; the Bot step says so.
+  const [noLocalModel, setNoLocalModel] = useState(false);
+  useEffect(() => {
+    if (step !== "new-bot") return;
+    void callQuiet("getOnboarding", {}).then((o) => setNoLocalModel((o.provider === "ollama" || o.provider === "lmstudio") && !o.newBotModel)).catch(() => {});
+  }, [step]);
   // Was `.catch(() => {})` into an empty array: a failed starter list rendered as a carousel with a
   // heading and no cards, indistinguishable from a build that ships no starters.
   // callQuiet: the carousel presents this one itself, where the cards would have been.
@@ -107,10 +113,10 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
   );
   if (step === "setup") return (
     <main className="onb">
-      {/* First run: the Anthropic API key, the only sign-in. New-user walk, finding 17: one heading, no status line
-          that never moved ("Starting your computer…"), and the panel without its "No API key saved yet". */}
+      {/* First run: an AI key. Any-key setup: Anthropic by default (its API-key panel as before), or another provider
+          after its consent. New-user walk, finding 17: one heading, no status line that never moved. */}
       <h1>{STR_AUTH.firstRunTitle}</h1>
-      <AccountPanel firstRun onReady={() => { setTokenOk(true); setStep("tour"); }} />
+      <KeyStep onReady={() => { setTokenOk(true); setStep("tour"); }} />
       <div className="onb-nav"><button type="button" className="btn-outline" onClick={() => setStep("splash")}>{STR5.back}</button></div>
     </main>
   );
@@ -169,6 +175,7 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
       <div role="radiogroup" aria-label="Shape" className="shapes">
         {AVATAR_EDITOR_SHAPES.map((s) => <button key={s} type="button" role="radio" aria-checked={s === shape} aria-label={`${AVATAR_SHAPE_LABELS[s]} shape`} className="onb-shape" onClick={() => setShape(s)}><ShapeAvatar shape={s} color={color} size={28} still /></button>)}
       </div>
+      {noLocalModel && <p role="status" className="muted">{STR_KEY_STEP.noLocalModels}</p>}
       <label htmlFor="onb-name">{STR.name}</label>
       <input id="onb-name" className="text-input" value={name} placeholder={STR.newBotName} onChange={(e) => setName(e.target.value)} />
       {error && <span className="error" role="alert">{error}</span>}

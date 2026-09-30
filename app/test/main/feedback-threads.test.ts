@@ -15,7 +15,7 @@ afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true
 const CODE = "3.AbCdEfGhIjKlMnOpQrStUv";
 const ok = { type: "bug", message: "It broke", appVersion: "0.1.2", macos: "macOS 15.1.0", model: "Mac14,2" };
 
-function setup(server: (url: string, init: RequestInit) => Response) {
+function setup(server: (url: string, init: RequestInit) => Response, over: Partial<Parameters<typeof installFeedback>[0]> = {}) {
   const handlers = new Map<string, (a: any) => unknown>();
   const dir = tmp();
   const fetch = vi.fn(async (url: string, init: RequestInit) => server(url, init));
@@ -23,7 +23,7 @@ function setup(server: (url: string, init: RequestInit) => Response) {
   const api = installFeedback({
     reg: (n, f) => handlers.set(n, f), userData: dir, home: "/Users/jane", appVersion: "0.1.2", macos: "15.1.0",
     logFiles: () => [], secrets: () => [], crashText: () => null, capture: async () => null, openExternal: async () => {},
-    fetch: fetch as unknown as typeof globalThis.fetch, model: async () => "Mac14,2", endpoint: "https://site.test/api/feedback", onReply, firstPollMs: 60 * 60 * 1000,
+    fetch: fetch as unknown as typeof globalThis.fetch, model: async () => "Mac14,2", endpoint: "https://site.test/api/feedback", onReply, firstPollMs: 60 * 60 * 1000, ...over,
   });
   return { dir, fetch, onReply, api, call: (n: string, a: unknown = {}) => Promise.resolve(handlers.get(n)!(a)) };
 }
@@ -127,5 +127,34 @@ describe("the poll schedule", () => {
     expect((await s.call("feedback.threads.list") as { threads: { status: string }[] }).threads[0]!.status).toBe("closed");
     gone = false;
     s.api.stopPolling();
+  });
+
+  it("Copy link writes the website's private page to the clipboard, gives the renderer no code, and logs nothing", async () => {
+    replies = [];
+    const clip: string[] = [];
+    const s = setup(server, { copyText: (t) => { clip.push(t); } });
+    await s.call("feedback.send", ok);
+    const logs = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
+    const r = await s.call("feedback.threads.link", { id: threadId(CODE) });
+    expect(clip).toEqual([`https://site.test/feedback/thread#${CODE}`]);
+    expect(r).toEqual({ ok: true });
+    expect(JSON.stringify(r)).not.toContain(CODE.split(".")[1]);
+    for (const l of logs) { expect(l).not.toHaveBeenCalled(); l.mockRestore(); }
+    s.api.stopPolling();
+  });
+
+  it("Copy link says the conversation is gone for an unknown id, and still copies in test mode", async () => {
+    replies = [];
+    const clip: string[] = [];
+    const s = setup(server, { copyText: (t) => { clip.push(t); } });
+    await expect(Promise.resolve().then(() => s.call("feedback.threads.link", { id: "000000000000" }))).rejects.toThrow("That conversation is gone.");
+    expect(clip).toEqual([]);
+    s.api.stopPolling();
+    // Test mode (FUZZ): nothing is sent, but a stored thread's link still copies.
+    const off = setup(server, { copyText: (t) => { clip.push(t); }, offline: true });
+    new ThreadStore(path.join(off.dir, "feedback-threads.json")).add(CODE, "It broke");
+    await expect(off.call("feedback.threads.link", { id: threadId(CODE) })).resolves.toEqual({ ok: true });
+    expect(clip).toEqual([`https://site.test/feedback/thread#${CODE}`]);
+    off.api.stopPolling();
   });
 });

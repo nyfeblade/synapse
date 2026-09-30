@@ -9,11 +9,11 @@ import type { AccountResolution } from "../approvals/approval-gate";
 import type { ApprovalGateLike } from "../runner/bot-wiring";
 import type { ReviewerLike } from "../approvals/approval-gate";
 import { createAvatarModule } from "../avatar/module";
-import { SdkAvatarGenerator, StubAvatarGenerator } from "../avatar/generate";
+import { SdkAvatarGenerator, StubAvatarGenerator, type AvatarGenerator } from "../avatar/generate";
 import { buildBotEnv } from "../brain/spawn-options";
 import { claudeExecutableFor } from "../brain/tool-policy";
 import type { BotToolDef } from "../brain/types";
-import { CodingAgents, boxGit, umaskGit } from "../coding/coding-agents";
+import { CodingAgents, boxGit, codingModelFor, umaskGit } from "../coding/coding-agents";
 import { CodingCardIds } from "../coding/card-ids";
 import { codingHooks, createCodingModule } from "../coding/module";
 import { gateForCoding, sdkChildFactory } from "../coding/sdk-child";
@@ -45,10 +45,10 @@ import { createGoogleModule, createGoogleServices, runGoogleToolForFake, type Go
 import { createComposioModule, createComposioServices, runComposioToolForFake, type ComposioServices } from "../composio/module";
 import { createHealthModule, createHealthServices, type HealthServices } from "../health/module";
 import { createWorkFinishedModule } from "../health/work-finished";
-import { Dreamer } from "../memory/dreaming/dreamer";
+import { Dreamer, type DreamLlm } from "../memory/dreaming/dreamer";
 import { DreamMemoryPort } from "../memory/dreaming/port";
 import { SdkDreamLlm } from "../memory/dreaming/sdk-llm";
-import { createOnboardingModule } from "../onboarding/module";
+import { createOnboardingModule, type OnboardingDeps } from "../onboarding/module";
 import { codingAgentRule } from "../coding/review-rule";
 import { ForceAskReviewer, pluginInstallRule } from "../review/force-ask";
 import { firstScheduleRule } from "../routines/first-schedule-rule";
@@ -58,7 +58,7 @@ import type { TurnSlot } from "../runner/turn-slot";
 import { importHandlers, loadStarters, TemplateImporter } from "../templates/importer";
 import { createTemplatesModule } from "../templates/module";
 import { TemplatePackager } from "../templates/packager";
-import { SdkTemplateDrafter, StubTemplateDrafter } from "../templates/drafter";
+import { SdkTemplateDrafter, StubTemplateDrafter, type TemplateDrafter } from "../templates/drafter";
 import { UsageLadder } from "../usage/ladder";
 import { createUsageModule } from "../usage/module";
 import { setUsageSink } from "../usage/metered-query";
@@ -110,6 +110,8 @@ export interface Phase5 {
   /** I12: Phase 5's step in the canonical delete order. */
   removeBot(botId: string): Promise<void>;
   bodyLimits: Partial<Record<CommandName, number>>; start(): Promise<void>; stop(): Promise<void>;
+  /** Spec §10 cost preview: this Bot's own turns since `since` (tokens only). */
+  turnTokens(botId: string, since: number): { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; outputTokens: number }[];
   /** Re-publishes the Usage view (Phase 4's runtime metrics call this when an efficiency counter moves). */
   publishUsage(): void;
   /** Review round 2 (P2): the box key proxy's answer before each model call (the budget, on the Mac key proxy's terms). */
@@ -149,12 +151,19 @@ export function wirePhase5(ctx: ModuleContext, o: {
   remember?(botId: string, fact: string): boolean;
   /** C2: the one ApprovalGate; a coding agent's Bash is decided by it like any Shell. */
   gate?: ApprovalGateLike;
+  /** Multi-provider (§7a): routes dreaming to the Bot's provider's helper model; absent = Claude only. */
+  routeDreams?(claude: DreamLlm): DreamLlm;
+  /** Multi-provider (§7a rows 9–10): avatars and template drafts on the account/Bot helper; absent = Claude only. */
+  routeAvatar?(claude: AvatarGenerator): AvatarGenerator;
+  routeDrafter?(claude: TemplateDrafter): TemplateDrafter;
   /** Host-posted approval cards (budget asks for held routine fires). */
   widgets?: Pick<HostWidgets, "hostPost" | "registerHostKind">;
   /** SendMessage call: "look" — ask the app for one snapshot of the shared screen; false = no 1:1 call to look through. */
   onLook?(botId: string): boolean;
   /** Bug 158: SendMessage call: "drop <Bot>" — take that Bot off the call this one is on (the host decides whether it may). */
   onDrop?(botId: string, name: string): { text: string; isError?: boolean };
+  /** Any-key setup: what first-run setup counts as a key; absent = an Anthropic key only. */
+  onboarding?: OnboardingDeps;
 }): Phase5 {
   const hp = (f: string) => path.join(ctx.cfg.hostPrivate, f);
   const helperEnv = (id: string) => ({ env: buildBotEnv({ cfg: ctx.cfg, botId: id }), cwd: ctx.cfg.workspace, pathToClaudeCodeExecutable: claudeExecutableFor(ctx.flags().runAs, ctx.cfg) });
@@ -209,7 +218,7 @@ export function wirePhase5(ctx: ModuleContext, o: {
   // 4.4: one health model for every connector (connector-health.ts), and the work-finished notice.
   health = createHealthServices(fullCtx, { google, mcp, composio });
   const healthSvc = health;
-  const packager = new TemplatePackager({ cfg: ctx.cfg, bots: ctx.bots, drafter: o.fake ? new StubTemplateDrafter() : new SdkTemplateDrafter(helperEnv("template-draft")), now: ctx.now,
+  const packager = new TemplatePackager({ cfg: ctx.cfg, bots: ctx.bots, drafter: (o.routeDrafter ?? ((d: TemplateDrafter) => d))(o.fake ? new StubTemplateDrafter() : new SdkTemplateDrafter(helperEnv("template-draft"))), now: ctx.now,
     plugins: () => catalog.entries().filter((e) => e.kind === "plugin" && e.state !== "available" && e.source !== "marketplace").map((e) => ({ catalogId: e.id, name: e.name })), author: () => undefined,
     onChange: () => catalog.refresh(), ladder: () => ladder });
   const importer = new TemplateImporter({ cfg: ctx.cfg, bots: ctx.bots, packager, starters: loadStarters(), kickstart: o.kickstart, selfName: () => null, now: ctx.now,
@@ -240,14 +249,19 @@ export function wirePhase5(ctx: ModuleContext, o: {
     prepare: o.fake ? undefined : homeWorktreePrep({ cfg: ctx.cfg, run: shellRunAsBot({ cfg: ctx.cfg, spawner: new SudoShellSpawner(execBuf) }) }),
     child: o.fake ? fakeCodingChild : sdkChildFactory({ cfg: ctx.cfg, flags: ctx.flags, gate: o.gate ? gateForCoding(o.gate) : null,
       // Bug 231 round 1: Write/Edit are checked by real path, resolved as the Bot inside its home.
-      realpaths: ctx.cfg.perBotUid ? botPathInfo(ctx.cfg, sudoFsQuery(ctx.cfg, execBuf)) : undefined }), model: (id) => ctx.bots.summary(id).profile.model ?? "claude-sonnet-5",
+      realpaths: ctx.cfg.perBotUid ? botPathInfo(ctx.cfg, sudoFsQuery(ctx.cfg, execBuf)) : undefined }),
+    // 0.1.6: a coding agent runs on the Claude Agent SDK, so it takes the Bot's model only when that is a Claude model;
+    // a Bot on a provider or a coding CLI gets Claude's default (it never passes "openai:…" to the SDK), and without an
+    // Anthropic key none starts.
+    model: (id) => codingModelFor(ctx.bots.summary(id).profile.model),
+    ...(o.fake ? {} : { claudeReady: () => credentialsReady() }),
     // I13: coding agents follow the usage ladder and count toward the Bot's spend.
     // A real coding child is a metered query and is recorded as it runs (usage/metered-query.ts); only the
     // FUZZ/E2E stand-in, which never calls Claude, reports its pretend usage here.
     ladder: () => ladder, onUsage: o.fake ? (botId, model, u) => usage.recordHelper(botId, "coding", model, u) : undefined,
     onChange: cHooks.onChange, onDone: cHooks.onDone });
   const lastUserTurn = new Map<string, number>();
-  const dreamer = new Dreamer({ port: new DreamMemoryPort(ctx.cfg.dataRoot, ctx.now, o.redact), llm: o.fake ? new StubDreamLlm() : new SdkDreamLlm(helperEnv("dreaming")), now: ctx.now,
+  const dreamer = new Dreamer({ port: new DreamMemoryPort(ctx.cfg.dataRoot, ctx.now, o.redact), llm: (o.routeDreams ?? ((l: DreamLlm) => l))(o.fake ? new StubDreamLlm() : new SdkDreamLlm(helperEnv("dreaming"))), now: ctx.now,
     mode: () => ctx.settings.extra("memoryMode", "standard"), ladder: () => ladder, botName: (id) => ctx.bots.summary(id).profile.name, botIds: () => ctx.bots.ids(),
     busy: (id) => !ctx.isIdle(id) || ctx.now() - (lastUserTurn.get(id) ?? 0) < 120_000, onHelper: () => {} });
   const followStore = new FollowupStore(ctx.cfg.dataRoot, ctx.now, (id) => ctx.bots.has(id) && ctx.bots.summary(id).settings.advanced?.followups === true);
@@ -275,10 +289,10 @@ export function wirePhase5(ctx: ModuleContext, o: {
     createLocalModule(fullCtx, { bridge, asks, egress: new EgressCounter(), browserCards, browserFilter: { refuse: (b, a) => google.setup.refuseBrowser(b, a), text: (b, t, url, editable) => google.setup.browserText(b, t, url, editable) } }),
     createPhase5SettingsModule(fullCtx),
     createTemplatesModule(fullCtx, packager, importHandlers(importer)),
-    createOnboardingModule(fullCtx, { tokenConfigured: () => credentialsReady() }),
+    createOnboardingModule(fullCtx, o.onboarding ?? { tokenConfigured: () => credentialsReady() }),
     createVoiceModule(fullCtx),
     createBotCallsModule(fullCtx, { onLook: o.onLook, onDrop: o.onDrop }),
-    createAvatarModule(fullCtx, o.fake ? new StubAvatarGenerator() : new SdkAvatarGenerator(helperEnv("avatar"))),
+    createAvatarModule(fullCtx, (o.routeAvatar ?? ((g: AvatarGenerator) => g))(o.fake ? new StubAvatarGenerator() : new SdkAvatarGenerator(helperEnv("avatar")))),
     createCodingModule(fullCtx, agents, cardIds, cHooks),
     { name: "dreaming", handlers: {}, observers: [dreamer, { onSettled: (t) => { if (t.source === "user") lastUserTurn.set(t.botId, t.endedAt); } }], start: () => dreamer.start(), stop: () => dreamer.stop() },
     createFollowupsModule(fullCtx, { store: followStore, heartbeat }),
@@ -380,6 +394,7 @@ export function wirePhase5(ctx: ModuleContext, o: {
     },
     stop: async () => { for (const m of modules) await m.stop?.(); setUsageSink(null); usage.close(); },
     publishUsage: () => publishUsage(),
+    turnTokens: (botId, since) => usage.database().prepare("SELECT inputTokens, cacheRead AS cacheReadTokens, cacheWrite AS cacheWriteTokens, outputTokens FROM runs WHERE botId = ? AND purpose = 'turn' AND startedAt >= ? ORDER BY startedAt DESC LIMIT 500").all(botId, since) as { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; outputTokens: number }[],
     budgetAllow: (botId) => {
       const d = budgets.check(botId && ctx.bots.has(botId) ? botId : "host");
       const ok = d.verdict === "ok" || d.verdict === "warn";

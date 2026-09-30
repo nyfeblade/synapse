@@ -82,7 +82,9 @@ export class Supervisor {
 
   private liveCount(): number {
     let n = 0;
-    for (const [id, b] of this.brains) if (!NOT_LIVE.includes(b.procState) || this.leases.has(id)) n++;
+    // A processless brain (a provider Bot: an HTTP client, no CLI) holds no RAM worth capping; a running turn still
+    // counts toward maxRunning through its lease.
+    for (const [id, b] of this.brains) if ((!NOT_LIVE.includes(b.procState) && !b.processless) || (this.leases.has(id) && !b.processless)) n++;
     return n;
   }
 

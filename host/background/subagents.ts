@@ -47,6 +47,10 @@ export interface SubagentDeps {
    *  fix round 2, finding 1: `Redactor` (host/history/archive.ts) answers `null` while it cannot
    *  redact yet — that must mean "no body", never "store it unredacted". */
   redact?: Redactor;
+  /** 0.1.6: whether Claude can be called (an Anthropic key is saved). Computer and browser children always run on
+   *  Claude, so without it they're refused up front instead of failing inside the child. Absent: not checked (tests,
+   *  the fake brain). */
+  claudeReady?(): boolean;
 }
 interface Child {
   spec: ChildSpec; brain: SupervisedBrain | null; slot: TurnSlot; status: AsyncTaskView["status"]; startedAt: number; runningSince: number | null;
@@ -92,6 +96,7 @@ export class SubagentService {
     const type = (a.subagent_type ?? "generalPurpose") as SubagentType;
     if (!SUBAGENT_TYPES.includes(type)) return { text: `Unknown subagent_type "${String(a.subagent_type)}". Use generalPurpose, computerUse or browserUse.`, isError: true };
     const mine = [...this.children.values()].filter((c) => c.spec.parentBotId === botId && this.live(c));
+    if (COMPUTER_TYPES.has(type) && this.d.claudeReady && !this.d.claudeReady()) return { text: STRC.computerNeedsClaude, isError: true };
     if (COMPUTER_TYPES.has(type) && this.activeComputerChild(botId)) return { text: STRC.computerUseBusy, isError: true };
     if (mine.length >= LIMITSC.childrenPerBot || [...this.children.values()].filter((c) => this.live(c)).length >= LIMITSC.childrenTotal) return { text: STRC.tooManyTasks, isError: true };
     const id = `subagent-${randomUUID()}`;

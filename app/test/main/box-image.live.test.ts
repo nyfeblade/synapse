@@ -11,6 +11,7 @@ import { readImageManifest } from "../../src/main/setup/box-image";
 import { boxSteps } from "../../src/main/setup/box-steps";
 import { BoxProvisioner, type ProvisionState } from "../../src/main/setup/provisioner";
 import { bundledImageVersion } from "../../src/main/box-lifecycle";
+import { realHomeForOrb } from "./orb-live-home";
 
 /**
  * 0.1.5 ready-made box, end to end on a THROWAWAY OrbStack machine (never the owner's box). Opt-in: it needs OrbStack,
@@ -30,6 +31,7 @@ const UID = 577; // ports 48650-48652: never the owner's (uid 501, 47800-47802)
 const say = (l: string) => { console.log(l); if (process.env.BOX_IMAGE_REPORT) fs.appendFileSync(process.env.BOX_IMAGE_REPORT, `${l}\n`); };
 
 describe.runIf(LIVE)("ready-made box, live", () => {
+  realHomeForOrb();
   it("imports through the app's setup steps, passes verify-box and the firewall checks, and reports its time to ready", async () => {
     const file = path.resolve(REPO, process.env.BOX_IMAGE_FILE ?? "");
     const m = readImageManifest(path.dirname(file));

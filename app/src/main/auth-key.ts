@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { STR, STR_AUTH, type AuthTestResult, type AuthView } from "@synapse/shared";
+import { STR, STR_AUTH, type AuthTestResult, type AuthView, type ProviderTestResult, type ProvidersView } from "@synapse/shared";
 import type { BoxPin } from "./box-pin";
 import type { Call } from "./gateway-call";
 
@@ -123,6 +123,41 @@ export function registerAuthIpc(ipc: IpcLike, sender: () => ApiKeySender | null,
     ["auth:pin-changed", async () => (sender() ? sender()!.pinChanged().catch(() => false) : false)],
     // Takes no arguments on purpose: whatever the renderer passes, the confirmation happens in main.
     ["auth:trust-computer", async () => need().trust()],
+  ];
+  for (const [ch, fn] of routes) {
+    ipc.removeHandler(ch);
+    ipc.handle(ch, (_e, ...a) => (fn as (...x: unknown[]) => Promise<unknown>)(...a));
+  }
+}
+
+/**
+ * Settings → Account: a model provider's key typed in the renderer comes here over IPC and leaves only sealed to the
+ * box's public key (the same pin check as the Anthropic key). The Mac keeps no copy (spec §4); the host answers with
+ * the masked key at most.
+ */
+export function createProviderKeySender(o: { call: Call; pin: Pick<BoxPin, "check">; seal(publicKey: string, value: string): Promise<string> }) {
+  const sealed = async (value: string): Promise<string> => {
+    const { boxPublicKey } = await o.call("getProviders", {});
+    if (o.pin.check(boxPublicKey) === "mismatch") throw new Error(PIN_MISMATCH);
+    return o.seal(boxPublicKey, String(value ?? "").trim());
+  };
+  type P = ProvidersView["providers"][number]["id"];
+  return {
+    save: async (provider: P, value: string): Promise<ProvidersView> => o.call("setProviderKey", { provider, sealed: await sealed(value) }),
+    test: async (provider: P, value: string): Promise<ProviderTestResult> => o.call("testProviderKey", value ? { provider, sealed: await sealed(value) } : { provider }),
+  };
+}
+export type ProviderKeySender = ReturnType<typeof createProviderKeySender>;
+
+export function registerProviderIpc(ipc: IpcLike, sender: () => ProviderKeySender | null, connectError: () => string | null): void {
+  const need = (): ProviderKeySender => {
+    const s = sender();
+    if (!s) throw new Error(connectError() ?? STR.hostNotConnected);
+    return s;
+  };
+  const routes: Array<[string, (...a: never[]) => Promise<unknown>]> = [
+    ["providers:save-key", async (p: string, value: string) => need().save(p as never, value)],
+    ["providers:test-key", async (p: string, value: string) => need().test(p as never, value)],
   ];
   for (const [ch, fn] of routes) {
     ipc.removeHandler(ch);

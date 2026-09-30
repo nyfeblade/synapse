@@ -7,7 +7,7 @@ import { acceptSettings, useUi } from "../../store";
 import { AdvancedSettingsCard } from "../AdvancedSettingsCard";
 import { Async } from "../Async";
 import { PencilIcon, TrashIcon } from "../Icons";
-import { generalExtraBlocks } from "./sections";
+import { generalExtraBlocks, SectionBlocks } from "./sections";
 
 type Behavior = "allow" | "ask";
 
@@ -125,6 +125,7 @@ export function AutoReviewSection() {
         </div>
       </div>
       <TrustedPeople list={settings.trustedRecipients ?? []} save={(trustedRecipients) => put({ trustedRecipients })} />
+      <SectionBlocks section="auto-review" />
     </>
   );
 }

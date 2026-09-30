@@ -5,6 +5,8 @@ import { subscribeChannel } from "../../feature-store";
 import { nativeCall } from "../../native";
 import { useModelAccess } from "../../model-access";
 import { SectionBlocks } from "./sections";
+import { ProvidersBlock } from "./ProvidersBlock";
+import { AcpVendorsBlock } from "./AcpVendorsBlock";
 import { noteIfSlow, SIGN_IN_TIMEOUT_MS } from "../../within-time";
 
 /** Fired on this window when the key changes (the one-time prompts re-check, KeyPrompts.tsx). */
@@ -178,6 +180,8 @@ export function AccountSection() {
     <section aria-label={STR_AUTH.sectionTitle}>
       <h2>{STR_AUTH.sectionTitle}</h2>
       <AccountPanel />
+      <ProvidersBlock />
+      <AcpVendorsBlock />
       <SectionBlocks section="account" />
     </section>
   );

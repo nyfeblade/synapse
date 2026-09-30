@@ -1,0 +1,47 @@
+#!/bin/sh
+# Root-owned. Wave 3: runs a vendor's own coding CLI (ACP mode, or its documented sign-in) AS the Bot's own account,
+# with HOME set to that Bot's 0700 home, so the vendor keeps its login there and no other Bot (and not bothost) can
+# read it. Synapse never reads or stores that login.
+# Usage (bothost via sudo): bot-acp-as-box <bot account> <botId> <vendor> <acp|login>
+# Rules: the account is checked exactly as bot-file checks it (reserved uid range, GECOS names the Bot, home
+# /home/bots/<account>). The command and its arguments come ONLY from the table below (shared/src/acp-vendors.ts holds
+# the same table; a test keeps them equal); the binary must be a root-owned file under /usr/local/lib/synapse-acp that
+# nobody else can write. The environment is emptied: HOME, USER, LOGNAME, a fixed PATH and LANG only.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+no() { echo "bot-acp-as-box: $1" >&2; exit 126; }
+[ "${SUDO_USER:-}" = "bothost" ] || no "must be invoked by bothost via sudo"
+[ $# -eq 4 ] || no "usage: bot-acp-as-box <bot account> <botId> <vendor> <acp|login>"
+u="$1"; bid="$2"; vendor="$3"; mode="$4"
+case "$u" in bot-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;; *) no "$u is not a Bot account" ;; esac
+case "$bid" in ''|*[!A-Za-z0-9_-]*) no "bad Bot id" ;; esac
+[ "${#bid}" -le 64 ] || no "bad Bot id"
+# ACP-TABLE-BEGIN
+case "$vendor:$mode" in
+  copilot:acp) bin=copilot; set -- --acp --stdio ;;
+  copilot:login) bin=copilot; set -- login --device-code ;;
+  cursor:acp) bin=agent; set -- acp ;;
+  cursor:login) bin=agent; set -- login ;;
+  kimi:acp) bin=kimi; set -- acp ;;
+  kimi:login) bin=kimi; set -- login ;;
+  vibe:acp) bin=vibe-acp; set -- ;;
+  vibe:login) bin=vibe; set -- --setup ;;
+  *) no "unknown vendor or mode" ;;
+esac
+# ACP-TABLE-END
+dir="/usr/local/lib/synapse-acp/$vendor"
+exe="$dir/$bin"
+[ -f "$exe" ] && [ ! -L "$exe" ] && [ -x "$exe" ] || no "$vendor isn't installed"
+[ "$(/usr/bin/stat -c %U "$dir")" = root ] && [ "$(/usr/bin/stat -c %U "$exe")" = root ] || no "$vendor isn't installed by root"
+[ -z "$(/usr/bin/find "$dir" "$exe" -maxdepth 0 -perm /022)" ] || no "$vendor is writable by others"
+ent="$(/usr/bin/getent passwd "$u")" || no "$u is not a Bot account"
+uid="$(printf '%s' "$ent" | /usr/bin/cut -d: -f3)"; gid="$(printf '%s' "$ent" | /usr/bin/cut -d: -f4)"
+gecos="$(printf '%s' "$ent" | /usr/bin/cut -d: -f5)"; home="$(printf '%s' "$ent" | /usr/bin/cut -d: -f6)"
+case "$uid$gid" in ''|*[!0-9]*) no "$u is not a Bot account" ;; esac
+[ "$uid" -ge 60200 ] && [ "$uid" -le 61099 ] && [ "$gid" -ge 60200 ] && [ "$gid" -le 61099 ] || no "$u is not a Bot account"
+[ "$gecos" = "synapse-bot $bid" ] && [ "$home" = "/home/bots/$u" ] || no "$u is not this Bot's account"
+cd /
+umask 002
+exec /usr/bin/setpriv --reuid="$uid" --regid="$gid" --init-groups --pdeathsig=KILL -- \
+  /usr/bin/env -i HOME="$home" USER="$u" LOGNAME="$u" PATH="$dir:/usr/local/bin:/usr/bin:/bin" LANG=C.UTF-8 \
+  /bin/sh -c 'cd -P -- "$HOME" || exit 1; exe="$1"; shift; exec "$exe" "$@"' sh "$exe" "$@"

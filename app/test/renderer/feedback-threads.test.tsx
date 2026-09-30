@@ -64,4 +64,22 @@ describe("Your feedback", () => {
     const row = typedRows({ bots: {}, pinned: [], currentBotId: null, theme: "light", actions: {} as never }, "replies", []).find((r) => r.key === "feedback-threads");
     expect(row?.title).toBe("Your feedback");
   });
+
+  it("Copy link asks main to copy by the thread's id, shows 'Copied' briefly, and never receives the code", async () => {
+    render(<FeedbackHost />);
+    act(() => listeners["feedback-reply"]!({ unread: 1 }));
+    fireEvent.click(screen.getByRole("button", { name: "View" }));
+    const dialog = await screen.findByRole("dialog", { name: "Your feedback" });
+    await within(dialog).findByText("Thanks, fixed in 0.1.3.");
+    expect(within(dialog).getByText("Open this link on any device to see replies.")).toBeTruthy();
+    vi.useFakeTimers();
+    try {
+      await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Copy link" })); });
+      expect(within(dialog).getByRole("button", { name: "Copied" })).toBeTruthy();
+      const call = calls.find((c) => c.name === "feedback.threads.link")!;
+      expect(call.args).toEqual({ id: "abc123def456" });
+      act(() => { vi.advanceTimersByTime(1600); });
+      expect(within(dialog).getByRole("button", { name: "Copy link" })).toBeTruthy();
+    } finally { vi.useRealTimers(); }
+  });
 });

@@ -61,6 +61,10 @@ export const STRC = {
   // The preview dialled a screen the host says exists and the connection did not come up.
   previewFailed: "Preview unavailable",
   computerUseBusy: "Another computerUse subagent has the box's desktop right now; only one at a time.",
+  /** 0.1.6: computer and browser helpers always run on Claude (ruling 65), so they need the Anthropic key. */
+  computerNeedsClaude: "Computer and browser helpers run on Claude, so they need an Anthropic API key, and none is saved. Do the task with your own tools, or tell the user it needs an Anthropic key in Settings → Account.",
+  /** 0.1.6: coding agents run on the Claude Agent SDK, so they need the Anthropic key whatever the Bot's own model. */
+  codingNeedsClaude: "Coding agents run on Claude, so they need an Anthropic API key, and none is saved. Save one in Settings → Account to use them.",
   stillStarting: "The computer is still getting ready (fetching its image or starting up). Try again shortly.",
   // TOOL-14
   tooManyTasks: "There are already as many background tasks as allowed; wait until one finishes.",

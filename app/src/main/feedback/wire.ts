@@ -73,6 +73,8 @@ export function installFeedback(o: {
   onReply?(unread: number): void;
   /** Tests: when the first background check runs. */
   firstPollMs?: number;
+  /** Writes to the system clipboard (Electron's clipboard.writeText). */
+  copyText?(text: string): void;
 }) {
   const secrets = () => { try { return o.secrets(); } catch { return []; } };
   const scrubOpts = () => ({ home: o.home, knownValues: secrets(), username: o.username });
@@ -108,7 +110,8 @@ export function installFeedback(o: {
     const p = checkPayload(a);
     // Logs only ever come from feedback.context; scrubbing again is a no-op for them and a guard for anything else.
     if (p.logs) p.logs = scrubText(p.logs, scrubOpts());
-    if (o.offline) return { ok: true };
+    // Test mode (FUZZ) never sends; the sheet says so instead of claiming it went.
+    if (o.offline) return { ok: true, testMode: true };
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 30_000);
     try {
@@ -144,6 +147,15 @@ export function installFeedback(o: {
     if (!r.ok || !j.ok) throw new Error(j.error || "Couldn't send it. Try again later.");
     await refreshOne(code).catch(() => 0);
     return { threads: threads.list(), unread: threads.unread() };
+  });
+  // Copy link: the website's private page for this thread, written straight to the clipboard so the code
+  // never reaches the renderer. Works in test mode too (nothing is sent). Never logged.
+  o.reg("feedback.threads.link", (a: { id?: unknown }) => {
+    const code = threads.codeFor(String(a?.id ?? ""));
+    if (!code) throw new Error("That conversation is gone.");
+    if (!o.copyText) throw new Error("Couldn't copy the link.");
+    o.copyText(`${new URL(endpoint).origin}/feedback/thread#${code}`);
+    return { ok: true };
   });
   o.reg("ratings.get", (a: { botId?: unknown }) => ratings.get(String(a?.botId ?? "")));
   o.reg("ratings.set", (a: { botId?: unknown; entryId?: unknown; kind?: unknown; value?: unknown }) =>

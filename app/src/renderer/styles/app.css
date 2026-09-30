@@ -617,6 +617,12 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 .account-key { display: flex; flex-direction: column; gap: 4px; }
 /* New-user walk, finding 17: the first-run key card keeps one width (it jumped from ~195 to ~600 px on the first keystroke). */
 .account-panel.first-run { width: 520px; max-width: 100%; box-sizing: border-box; text-align: left; }
+/* Any-key setup: the first-run key step — the provider choice above one card of the same width as the Anthropic one. */
+.key-step { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 100%; }
+.key-step > .segmented { max-width: 100%; overflow-x: auto; }
+.key-step-panel { width: 520px; max-width: 100%; min-height: 44px; box-sizing: border-box; text-align: left; }
+.key-step-panel .provider-consent { margin: 0; padding: 2px 0 0; background: none; }
+.safety-asks { margin: 4px 0 0; font-size: var(--type-ui); }
 .account-test { margin: 4px 0 0; font-size: var(--type-ui); }
 /* Bug 281: the API-key check's result: a title, then label / value rows. */
 .account-check { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; }
@@ -2071,3 +2077,31 @@ a.row, a.tile, a.nav-item, a.side-link, a.mkt-row-main, a.mkt-card, a.mkt-instal
 .connection-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .connection-state { color: var(--ink-muted); font-size: var(--type-ui); white-space: nowrap; }
 .connection-state.bad { color: var(--ink); }
+
+/* Multi-provider (spec §10): the grouped model picker, its badges and "What works", the safety reviewer. Neutral greys only. */
+.model-pop { padding: 4px; max-height: min(560px, 62vh); overflow: auto; }
+.model-pop.up { top: auto; bottom: 40px; }
+.model-list, .model-list ul { list-style: none; margin: 0; padding: 0; }
+.model-group + .model-group { margin-top: 4px; padding-top: 4px; border-top: var(--hairline) solid var(--line-row); }
+.model-group-label { padding: 6px 10px 2px; font-size: var(--type-small); color: var(--ink-muted); }
+.model-list .opt .grow { flex-grow: 1; }
+.model-search { display: block; width: calc(100% - 16px); margin: 4px 8px 4px; }
+.model-price { margin-right: 8px; font-size: var(--type-small); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.model-more { padding: 4px 10px 2px; font-size: var(--type-small); }
+.model-badges { display: inline-flex; gap: 4px; }
+.model-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 9px; font-size: var(--type-small); color: var(--ink-2); background: var(--fill-chip); white-space: nowrap; }
+.menu-item .model-badge { margin-left: 8px; }
+.model-badge.blocked, .model-badge.ask-only { color: var(--ink); background: transparent; box-shadow: inset 0 0 0 var(--hairline) var(--line-field); }
+.model-badge.unchecked, .model-badge.not-checked { color: var(--ink-muted); background: transparent; box-shadow: inset 0 0 0 var(--hairline) var(--line-button); }
+.model-details { margin: 4px 0 0; padding: 8px 10px 6px; border-top: var(--hairline) solid var(--line-row); }
+.model-details h4 { margin: 0 0 6px; font-size: var(--type-ui); font-weight: 600; color: var(--ink); }
+.what-works { display: grid; grid-template-columns: 1fr; gap: 2px; margin: 0; }
+.what-works .ww { display: flex; justify-content: space-between; gap: 8px; font-size: var(--type-small); }
+.what-works dt { color: var(--ink-2); }
+.what-works dd { margin: 0; color: var(--ink-muted); }
+.what-works .ww.yes dd, .what-works .ww.cost dd { color: var(--ink); }
+.safety-reviewer select.text-input { width: auto; min-width: 200px; }
+.provider-row + .provider-row { margin-top: 8px; padding-top: 8px; border-top: var(--hairline) solid var(--line-row); }
+.provider-consent { margin: 8px 0; padding: 10px 12px; border-radius: var(--radius-card); background: var(--fill-soft); }
+.provider-consent h4 { margin: 0 0 4px; font-size: var(--type-ui); }
+.provider-consent p { margin: 0 0 8px; font-size: var(--type-ui); color: var(--ink-2); }

@@ -26,6 +26,8 @@ export const STRV = {
 
   // ---- a Bot calls the user ----
   missedCall: (name: string, reason: string, why?: string) => `Missed call from ${name}: ${reason}${why ? ` (${why})` : ""}`,
+  /** 0.1.6: a Bot on a coding CLI (ACP) has no voice yet, so no call starts with it, either way. */
+  callsNotAvailable: (name: string) => `Calls aren't available for ${name} yet`,
   callByMessage: (name: string, reason: string) => `Call from ${name}: ${reason} · you chose to reply by message`,
   callRateLimited: "limit of 3 calls an hour",
   incomingCall: (name: string) => `${name} is calling`,

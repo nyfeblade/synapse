@@ -4,18 +4,20 @@ import { STR, STR5, STR_AUTH } from "@synapse/shared";
 import { useUi } from "../store";
 import { Dialog } from "./Dialog";
 import { AccountSection } from "./settings/AccountSection";
+import { SafetyReviewerBlock } from "./settings/SafetyReviewerBlock";
 import { CloseIcon, SearchIcon } from "./Icons";
 import { EmptyView } from "./EmptyView";
 import { openDeepLink, settingLink } from "../deep-links";
 import { rowOf, searchSettings, type SettingEntry } from "./settings/search-index";
 import { AutoReviewSection, GeneralSection } from "./settings/GeneralSection";
-import { registerGeneralBlock, registerSettingsSection, sectionOf, settingsSections, type SettingsSectionId } from "./settings/sections";
+import { registerGeneralBlock, registerSectionBlock, registerSettingsSection, sectionOf, settingsSections, type SettingsSectionId } from "./settings/sections";
 import { SettingLinksLayer } from "./settings/SettingLinksLayer";
 
 registerSettingsSection("general", STR.general, GeneralSection);
 registerSettingsSection("auto-review", STR.autoReview, AutoReviewSection);
 // The Anthropic API key (the only sign-in).
 registerSettingsSection("account", STR_AUTH.sectionTitle, AccountSection);
+registerSectionBlock("auto-review", "safety-reviewer", 10, SafetyReviewerBlock);
 
 export function SettingsModal() {
   const { closeSettings, settingsFocus } = useUi();

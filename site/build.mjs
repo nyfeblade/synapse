@@ -60,8 +60,8 @@ const REPO = "https://github.com/nyfeblade/synapse";
 
 /** Each page's search title and description: written for what people search, not only the brand name. */
 export const PAGES = {
-  home: { file: "index.html", path: "/", title: "Synapse: a team of AI agents for your Mac", description: "Synapse is a free, open-source Mac app with a team of AI agents that chat, write code, take voice calls and use your Mac, powered by your own Anthropic API key." },
-  docs: { file: "docs.html", path: "/docs", title: "Synapse Docs: install, API key and using your AI agents", description: "How to install Synapse on your Mac, add your Anthropic API key, work with your AI agents, and fix common problems." },
+  home: { file: "index.html", path: "/", title: "Synapse: a team of AI agents for your Mac", description: "Synapse is a free, open-source Mac app with a team of AI agents that chat, write code, take voice calls and use your Mac, powered by your own AI key: Anthropic to start, then OpenAI, Gemini, local models and more." },
+  docs: { file: "docs.html", path: "/docs", title: "Synapse Docs: install, API key and using your AI agents", description: "How to install Synapse on your Mac, add your Anthropic API key and other AI providers, work with your AI agents, and fix common problems." },
   changelog: { file: "changelog.html", path: "/changelog", title: "Synapse Changelog: what's new in each version", description: "Every version of Synapse, the open-source Mac app for a team of AI agents: new features, fixes and known issues." },
   feedback: { file: "feedback.html", path: "/feedback", title: "Send feedback about Synapse", description: "Report a bug, suggest an idea or tell us what you think of Synapse, the open-source Mac app for a team of AI agents." },
   bots: { file: "bots.html", path: "/bots", title: "Synapse Bots: ready-made AI agents for your Mac", description: "Ready-made Bots for Synapse, the open-source Mac app for a team of AI agents. Add one in a click." },
@@ -80,6 +80,22 @@ export const LINK_PAGES = {
 export const DRAFT_PAGES = {
   security: { file: "security-tests.html", path: "/security-tests", title: "Synapse security tests: the attacks it stops, per release", description: "Attacks a Bot could face, what Synapse does about each one, and the latest results. Anyone can run the tests: no API key needed.", noindex: true },
 };
+/**
+ * The "Works with" pages (battle plan: distribution), published with 0.1.6: one page per provider, built from a body
+ * in site/works-with/<src> inside the shared shell. In the sitemap, and linked from the footer ("Works with").
+ */
+const ww = (src, path, title, description) => ({ file: `${path.slice(1)}.html`, src, path, title, description });
+export const WORKS_WITH_PAGES = {
+  worksWith: ww("index.html", "/works-with", "Synapse works with: AI providers, local models and coding plans", "The AI providers Synapse's Bots can run on: your own API key for OpenAI, OpenRouter, Gemini, Mistral or DeepSeek, local models on your Mac, or a coding plan you already have."),
+  wwOpenai: ww("openai.html", "/works-with-openai", "Synapse with OpenAI: AI agents on your own OpenAI API key", "Run Synapse's Bots on OpenAI models with your own API key: what works, what it costs, and how to set it up."),
+  wwOpenrouter: ww("openrouter.html", "/works-with-openrouter", "Synapse with OpenRouter: many models, one key", "Run Synapse's Bots on the models OpenRouter offers, with your own OpenRouter key: what works, what it costs, and how to set it up."),
+  wwGemini: ww("gemini.html", "/works-with-gemini", "Synapse with Gemini: AI agents on your own Gemini API key", "Run Synapse's Bots on Gemini models with your own Gemini API key: what works, what it costs, and how to set it up."),
+  wwMistral: ww("mistral.html", "/works-with-mistral", "Synapse with Mistral: AI agents on your own Mistral API key", "Run Synapse's Bots on Mistral models with your own API key: what works, what it costs, and how to set it up."),
+  wwDeepseek: ww("deepseek.html", "/works-with-deepseek", "Synapse with DeepSeek: AI agents on your own DeepSeek API key", "Run Synapse's Bots on DeepSeek models with your own API key: what works, what it costs, and how to set it up."),
+  wwLocal: ww("local-models.html", "/works-with-local-models", "Synapse with local models: Ollama and LM Studio on your Mac", "Run Synapse's Bots on a model on your own Mac with Ollama or LM Studio: no key, no per-token cost, and conversations that stay on your Mac."),
+  wwCoding: ww("coding-subscriptions.html", "/works-with-coding-subscriptions", "Synapse with your coding subscription: GitHub Copilot, Cursor, Kimi Code, Mistral Vibe", "Run a Synapse Bot on the coding CLI of a plan you already pay for: GitHub Copilot, Cursor, Kimi Code or Mistral Vibe. Experimental."),
+};
+Object.assign(PAGES, WORKS_WITH_PAGES);
 Object.assign(LINK_PAGES, DRAFT_PAGES);
 /** Pages that show someone's Bot load no analytics script (it could record the link's fragment). */
 export const NO_ANALYTICS = new Set(["bot", "bots"]);
@@ -152,7 +168,7 @@ export function footer() {
   return `<footer class="site-footer"><div class="wrap">
   <div class="foot">
     <div class="foot-brand"><a class="brand" href="/"><img src="/assets/icon.png" alt="" width="26" height="26">Synapse</a></div>
-    <div><h2>Product</h2><a href="${GH}/releases" data-dl>Download</a><a href="/#features">Features</a><a href="/bots">Bots</a><a href="/changelog">Changelog</a></div>
+    <div><h2>Product</h2><a href="${GH}/releases" data-dl>Download</a><a href="/#features">Features</a><a href="/bots">Bots</a><a href="/works-with">Works with</a><a href="/changelog">Changelog</a></div>
     <div><h2>Help</h2><a href="/docs">Docs</a><a href="/docs#install">Install</a><a href="/docs#troubleshooting">Troubleshooting</a><a href="/feedback">Send feedback</a></div>
     <div><h2>Project</h2><a href="${GH}">GitHub</a><a href="${GH}/issues">Report an issue</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="${GH}/blob/main/LICENSE">Apache-2.0 licence</a><a href="${GH}/blob/main/TRADEMARKS.md">Trademarks</a></div>
   </div>
@@ -367,6 +383,12 @@ export function build(today = new Date().toISOString().slice(0, 10), out = defau
   fs.writeFileSync(path.join(dist, "bots.html"), withSeo(renderCatalogue(fs.readFileSync(path.join(here, "bots.template.html"), "utf8"), catalogue.entries), "bots"));
   // /security-tests (a draft, see DRAFT_PAGES): the security suite's newest results.
   fs.writeFileSync(path.join(dist, "security-tests.html"), withSeo(renderSecurity(fs.readFileSync(path.join(here, "security-tests.template.html"), "utf8"), loadSecurityResults()), "security"));
+  // The "Works with" pages: each body inside the shared shell.
+  const shell = fs.readFileSync(path.join(here, "works-with", "_shell.html"), "utf8");
+  for (const [key, p] of Object.entries(WORKS_WITH_PAGES)) {
+    const body = fs.readFileSync(path.join(here, "works-with", p.src), "utf8");
+    fs.writeFileSync(path.join(dist, p.file), withSeo(shell.replaceAll("@KEY@", key).replace("<!--BODY-->", () => body), key));
+  }
   const { toc, body } = renderReleases(releases);
   const page = fs.readFileSync(path.join(here, "changelog.template.html"), "utf8").replace("<!--TOC-->", toc).replace("<!--RELEASES-->", body);
   fs.writeFileSync(path.join(dist, "changelog.html"), withSeo(page, "changelog"));

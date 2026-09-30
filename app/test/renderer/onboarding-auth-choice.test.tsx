@@ -22,12 +22,13 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("first run: the Anthropic API key is the only sign-in", () => {
+describe("first run: the Anthropic API key is the default sign-in", () => {
   it("asks for the API key; no subscription choice and no Connect Claude step", async () => {
     render(<Onboarding onDone={() => {}} initialStep="setup" />);
     expect(await screen.findByText(STR_AUTH.firstRunTitle)).toBeTruthy();
     expect(await screen.findByLabelText(STR_AUTH.keyLabel)).toBeTruthy();
-    expect(screen.queryAllByRole("radio")).toHaveLength(0);
+    // Any-key setup: the provider choice defaults to Anthropic; there is still no subscription choice.
+    expect(screen.getByRole("radio", { name: "Anthropic" }).getAttribute("aria-checked")).toBe("true");
     expect(document.body.textContent).not.toMatch(/subscription|Connect Claude/i);
   });
 

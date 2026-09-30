@@ -90,6 +90,10 @@ contextBridge.exposeInMainWorld("synapse", {
     pinChanged: () => ipcRenderer.invoke("auth:pin-changed"),
     trustComputer: () => ipcRenderer.invoke("auth:trust-computer"),
   },
+  providers: {
+    saveKey: (provider: string, value: string) => ipcRenderer.invoke("providers:save-key", provider, value),
+    testKey: (provider: string, value: string) => ipcRenderer.invoke("providers:test-key", provider, value),
+  },
   box: {
     update: (force: boolean) => ipcRenderer.invoke("box:update", force),
     recover: () => ipcRenderer.invoke("box:recover"),

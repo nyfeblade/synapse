@@ -163,3 +163,11 @@ export function meteredQuery(meter: Meter, params: QueryParams, queryFn?: QueryF
 export function meteredQueryFn(meter: Meter, queryFn?: QueryFn): QueryFn {
   return ((params: QueryParams) => meteredQuery(meter, params, queryFn)) as unknown as QueryFn;
 }
+
+/**
+ * Multi-provider Bots: a provider call's own usage, recorded into the same sink as a Claude call's (usage/metered-provider.ts
+ * is the only caller). "turn" runs go through the brain's TurnResult instead, exactly as for Claude.
+ */
+export function recordMeteredRun(r: MeteredRun): void {
+  if (r.purpose !== "turn") sink?.record(r);
+}

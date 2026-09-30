@@ -380,6 +380,8 @@ details p{color:var(--muted); margin:10px 0 0; max-width:64ch}
 .doc pre code{background:none; padding:0}
 .doc .scroll-x{overflow-x:auto; margin:12px 0; width:0; min-width:100%}
 .doc .scroll-x table{margin:0; min-width:560px}
+/* A small table that fits a phone without its own scroll (the Works with price tables). */
+@media (max-width:480px){.doc table.fit th,.doc table.fit td{padding:10px 6px} .doc table.fit th:first-child,.doc table.fit td:first-child{padding-left:0}}
 .doc td .id{display:block; font:500 12px var(--mono); color:var(--muted); margin-bottom:2px}
 .doc a{text-underline-offset:3px; text-decoration-color:var(--line-2)}
 .doc a:hover{text-decoration-color:var(--ink)}

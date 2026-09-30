@@ -1,16 +1,22 @@
 Defaults!/usr/local/libexec/bot-claude-as-box !env_reset, !use_pty, secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
 # Bug 231 round 1: read-only queries as a Bot (the review fast path in ~/code). Fresh env, fixed PATH.
 Defaults!/usr/local/libexec/bot-fs-query env_reset, !use_pty, secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
+# Multi-provider Bots (spec §3): a provider Bot's Read/Write/Edit, run as that Bot. Fresh env, fixed PATH.
+Defaults!/usr/local/libexec/bot-file env_reset, !use_pty, secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
 Defaults!/usr/local/libexec/bot-reap !use_pty
 Defaults!/usr/local/libexec/bot-git-as-box !use_pty
 Defaults!/usr/local/libexec/bot-mcp-as-box !use_pty
+# Wave 3: a vendor coding CLI as the Bot. Fresh env, fixed PATH.
+Defaults!/usr/local/libexec/bot-acp-as-box env_reset, !use_pty, secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
+# 0.1.6: the owner's Install / Remove of a pinned coding CLI (Settings → Account → Coding CLIs). Fresh env, fixed PATH.
+Defaults!/usr/local/libexec/bot-acp-install env_reset, !use_pty, secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
 Defaults!/usr/local/libexec/bot-claude-read-session !use_pty
 Defaults!/usr/local/libexec/bot-claude-write-session !use_pty
 Defaults!/usr/local/libexec/bot-claude-delete-session !use_pty
 Defaults!/usr/local/libexec/bot-claude-skill-write !use_pty
 Defaults!/usr/local/libexec/bot-claude-skill-delete !use_pty
 Defaults!/usr/local/libexec/bot-claude-skill-write-file !use_pty
-bothost ALL=(root) NOPASSWD: /usr/local/libexec/bot-claude-as-box, /usr/local/libexec/bot-claude-as-box *, /usr/local/libexec/bot-reap, /usr/local/libexec/bot-reap *, /usr/local/libexec/bot-claude-read-session, /usr/local/libexec/bot-claude-read-session *, /usr/local/libexec/bot-claude-write-session, /usr/local/libexec/bot-claude-write-session *, /usr/local/libexec/bot-claude-delete-session *, /usr/local/libexec/bot-claude-skill-write *, /usr/local/libexec/bot-claude-skill-delete *, /usr/local/libexec/bot-claude-skill-write-file *, /usr/local/libexec/bot-git-as-box *, /usr/local/libexec/bot-mcp-as-box *, /usr/local/libexec/bot-fs-query *
+bothost ALL=(root) NOPASSWD: /usr/local/libexec/bot-claude-as-box, /usr/local/libexec/bot-claude-as-box *, /usr/local/libexec/bot-reap, /usr/local/libexec/bot-reap *, /usr/local/libexec/bot-claude-read-session, /usr/local/libexec/bot-claude-read-session *, /usr/local/libexec/bot-claude-write-session, /usr/local/libexec/bot-claude-write-session *, /usr/local/libexec/bot-claude-delete-session *, /usr/local/libexec/bot-claude-skill-write *, /usr/local/libexec/bot-claude-skill-delete *, /usr/local/libexec/bot-claude-skill-write-file *, /usr/local/libexec/bot-git-as-box *, /usr/local/libexec/bot-mcp-as-box *, /usr/local/libexec/bot-fs-query *, /usr/local/libexec/bot-file *, /usr/local/libexec/bot-acp-as-box *, /usr/local/libexec/bot-acp-install *
 Defaults!/usr/local/libexec/bot-display !use_pty
 Defaults!/usr/local/libexec/bot-shell !use_pty
 Defaults!/usr/local/libexec/bot-snapshot !use_pty

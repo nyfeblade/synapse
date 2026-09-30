@@ -91,7 +91,7 @@ describe("Phase 5 journey on FakeBrain (gateway level)", () => {
     await s.api("setAgentVoice", { id, speechRate: 1.5 });
     expect((await s.api<{ memoryMode: string }>("setMemoryMode", { mode: "dreaming" })).memoryMode).toBe("dreaming");
     expect((await s.api<{ memoryMode: string }>("getPhase5Settings")).memoryMode).toBe("dreaming");
-    expect(await s.api("getOnboarding")).toEqual({ hasSeenOnboarding: false, tokenConfigured: false });
+    expect(await s.api("getOnboarding")).toEqual({ hasSeenOnboarding: false, tokenConfigured: false, anthropicKey: false, provider: null, newBotModel: null });
     const repo = path.join(s.cfg.workspace, "repos", "demo");
     fs.mkdirSync(repo, { recursive: true });
     const { execFileSync } = await import("node:child_process");

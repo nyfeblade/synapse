@@ -5,7 +5,7 @@ import { CheckIcon, ChevronRightIcon } from "./Icons";
 
 export type MenuItem =
   /** `checked`: one of a set of choices (a small picker); drawn as a menuitemradio with a check on the chosen one. */
-  | { label: string; danger?: boolean; disabled?: boolean; title?: string; checked?: boolean; submenu?: boolean; onSelect(): void }
+  | { label: string; danger?: boolean; disabled?: boolean; title?: string; checked?: boolean; submenu?: boolean; /** A short tag after the label (a model's badge). */ badge?: string; onSelect(): void }
   /** A hairline divider between two groups of items (the account menu, Marketplace ahead of Settings).
    *  Not a button: it carries no label and no onSelect, so it is invisible to `enabled()`'s roving
    *  focus below and to `focusables()` (Dialog.tsx) — arrow keys, Tab and autofocus all skip it the
@@ -120,7 +120,7 @@ export function Menu({ items, x, y, label, onClose, anchor = "top" }: { items: M
         ? <div key={`separator-${i}`} role="separator" className="menu-separator" />
         : (
           <button key={it.label} type="button" role={it.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={it.checked} aria-haspopup={it.submenu ? "menu" : undefined} disabled={it.disabled} title={it.title} className={it.danger ? "menu-item danger" : "menu-item"} onClick={() => { if (it.disabled) return; it.onSelect(); onClose(); }}>
-            {it.label}{it.checked && <CheckIcon className="menu-check" />}{it.submenu && <ChevronRightIcon size={12} className="menu-check" />}
+            {it.label}{it.badge && <span className="model-badge">{it.badge}</span>}{it.checked && <CheckIcon className="menu-check" />}{it.submenu && <ChevronRightIcon size={12} className="menu-check" />}
           </button>
         ))}
     </div>

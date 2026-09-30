@@ -1,4 +1,6 @@
 import type { ModelId } from "./models";
+import type { ProviderModelRef } from "./providers";
+import type { AcpModelRef } from "./acp-vendors";
 import type { HistoryKeep } from "./history-budget";
 import type { PermMode } from "./perm-rules";
 import type { ComputerPerception } from "./computer";
@@ -71,7 +73,8 @@ export interface BotProfile {
   avatarMaterial?: AvatarMaterial; // kept so saved Bots load; no longer offered or drawn (one flat look)
   avatarMotion?: AvatarMotion;     // kept so saved Bots load; no longer offered or drawn (one measured motion)
   effort?: EffortLevel;            // absent = high (the SDK default)
-  model?: ModelId;
+  /** A Claude model, or a provider model "<provider>:<id>" (spec 2026-09-29 §5). */
+  model?: ModelId | ProviderModelRef | AcpModelRef;
   /** Bot-authored avatar animations (shared/src/avatar-anim.ts), validated by the host before storing. */
   avatarAnimations?: AvatarClip[];
   /** A request to play one stored clip once: avatars play it when `seq` rises past the one they mounted with. */

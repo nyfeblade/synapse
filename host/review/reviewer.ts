@@ -26,6 +26,12 @@ export interface ReviewerDeps {
   redact?(botId: string, s: string): string;
   /** I2: the workspace; an exact rule without a cwd matches only a Shell running here. Default /workspace. */
   workspace?: string;
+  /**
+   * Spec §7a: whether the reviewer model may decide on its own (Claude, or a provider model with a current
+   * qualification record). Not qualified = ask-only: the floor, fast path and exact rules still run; everything that
+   * would reach the model becomes a card, and no verdict is cached. Absent = qualified.
+   */
+  qualified?(): boolean;
 }
 
 /** Bug 410: the Full-auto intent check applies only to a send on the user's accounts (what the gate asks it for). */
@@ -143,6 +149,12 @@ export class Reviewer {
     if (req.wake?.unread) {
       const o: ReviewOutcome = { kind: "block", stage: "guard", reason: TEXT.wakeUnread, proposedRule: null, verdict: null };
       logIt("guard", o);
+      return o;
+    }
+    // Spec §7a ask-only mode: an unqualified reviewer model never decides; the verdict cache is skipped too.
+    if (this.d.qualified && !this.d.qualified()) {
+      const o: ReviewOutcome = { kind: "degraded", reason: TEXT.reviewerUnqualified };
+      logIt("model", o, { unqualified: true });
       return o;
     }
     // S5: cache

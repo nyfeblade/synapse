@@ -28,7 +28,8 @@ describe("every popover in the renderer grows from its trigger", () => {
   // the anchor point) or call usePopOrigin. The exceptions are not popovers from a trigger: the
   // palette's results ARE the palette; NewChat's recipient list is inline; the mention and skill
   // pickers open upward out of the composer they belong to (app.css: transform-origin 50% 100%).
-  const INLINE_OR_COMPOSER = new Set(["CommandPalette.tsx", "NewChat.tsx", "MentionPicker.tsx", "SkillPicker.tsx", "Menus.tsx"]);
+  // ModelPicker.tsx is the CONTENT of BotSettingsPanel's model popover, which calls usePopOrigin itself.
+  const INLINE_OR_COMPOSER = new Set(["CommandPalette.tsx", "NewChat.tsx", "MentionPicker.tsx", "SkillPicker.tsx", "Menus.tsx", "ModelPicker.tsx"]);
   const dir = join(__dirname, "../../src/renderer/components");
   it("uses Menu or usePopOrigin wherever a role=menu/listbox popover is rendered", () => {
     const offenders = readdirSync(dir).filter((f) => f.endsWith(".tsx") && !INLINE_OR_COMPOSER.has(f)).filter((f) => {

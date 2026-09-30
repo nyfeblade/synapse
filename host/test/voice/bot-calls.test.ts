@@ -226,3 +226,18 @@ describe("SendMessage call: (the module's extension of the existing tool)", () =
     expect(Object.keys(wrapped.schema)).toEqual(["call"]); // `call` was already there: drop adds no field
   });
 });
+
+describe("0.1.6: a Bot on a coding CLI (ACP) can't ring the user", () => {
+  it("refuses up front: nothing rings, nothing is counted", () => {
+    const published: BotCallsView[] = [];
+    const bots = {
+      has: () => true, summary: (id: string) => ({ id, profile: { name: "Coder", model: "acp:kimi" }, settings: {} }),
+      updateSettings: () => ({}), auxEntryIds: () => ["x"], appendEntry: () => {},
+    };
+    const svc = new BotCallService({ bots: bots as never, hub: { publish: (e: { payload: BotCallsView }) => published.push(e.payload) } as never, now: () => 1 });
+    expect(svc.request("coder", "done")).toEqual({ placed: false, note: "Not placed: Calls aren't available for Coder yet." });
+    expect(svc.view().calls).toEqual([]);
+    expect(published).toEqual([]);
+  });
+});
+

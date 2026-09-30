@@ -25,11 +25,13 @@ try {
   if (alive && host === os.hostname()) { log({ args, handedOff: true }); process.exit(0); }
   fs.rmSync(lock, { force: true });
 } catch { /* no lock */ }
-fs.symlinkSync(`${os.hostname()}-${process.pid}`, lock);
 const jar = path.join(dir, "Default", "Cookies.fake");
 const found = fs.existsSync(jar) ? fs.readFileSync(jar, "utf8").split("\n").filter(Boolean) : [];
 fs.appendFileSync(jar, `sid=${process.pid}\n`);
+// Record the launch BEFORE taking the lock: a test that sees the lock may read launches.jsonl at once (bug-log 455),
+// so the record must already be there, not a few syscalls behind a preempted process.
 log({ args, pid: process.pid, cookies: found });
+fs.symlinkSync(`${os.hostname()}-${process.pid}`, lock);
 
 let wss = null;
 const quit = () => {

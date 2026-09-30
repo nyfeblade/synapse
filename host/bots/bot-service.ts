@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  AVATAR_COLORS, AVATAR_MATERIALS, AVATAR_MOTIONS, DEFAULT_AVATAR_SHAPE, normalizeAvatarColor, normalizeAvatarShape, LIMITS, STR, activityEntryId, isAgentMessage, isEffortLevel, isModelId, isSafeFolderId,
+  AVATAR_COLORS, AVATAR_MATERIALS, AVATAR_MOTIONS, DEFAULT_AVATAR_SHAPE, normalizeAvatarColor, normalizeAvatarShape, LIMITS, STR, activityEntryId, isAgentMessage, isEffortLevel, isModelId, isProviderModelRef, isAcpModelRef, isSafeFolderId,
   type Activity, type AvatarMaterial, type AvatarMotion, type AvatarShape, type AwaitingUser, type BotProfile, type BotSettings, type BotSummary, type EffortLevel, type ModelId,
   type Presence, type SidebarMarker, type TranscriptEntry, type UserMessageEntry,
 } from "@synapse/shared";
+import type { AcpModelRef, ProviderModelRef } from "@synapse/shared";
+import { isProviderSessionId, isProviderSessionPath, PROVIDER_SESSIONS_DIR, providerSessionFile } from "../brain/provider/session-store";
 import { ANIM_LIMITS, validateAvatarClip, type AvatarClip } from "@synapse/shared";
 import type { HostConfig } from "../config";
 import { GatewayError } from "../gateway/errors";
@@ -77,6 +79,15 @@ export class BotService {
   /** `deleteSession`: removes a real-brain session file through the root-owned helper (box only, gate M-2). */
   constructor(private d: {
     cfg: HostConfig; hub: SseHub; settings: HostSettingsStore; now?: () => number; deleteSession?: (file: string) => void;
+    /** Multi-provider Bots: a provider model ("openai:…") may be set only when this says so (a saved key; spec §4). Absent = Claude only. */
+    providerModelAllowed?: (ref: string) => boolean;
+    /** Wave 3: whether a vendor coding CLI ("acp:<vendor>") may be chosen (its consent was given). */
+    acpModelAllowed?: (ref: string) => boolean;
+    /**
+     * Any-key setup: the model a new Bot runs on when there is no Anthropic key (the account provider's main model);
+     * null = leave it to Claude's default, as before.
+     */
+    newBotModel?: () => ProviderModelRef | null;
     /** Bug #66: per-Bot OS accounts (walls/bot-accounts.ts); absent = every Bot runs as box. */
     accounts?: BotAccounts;
   }) {
@@ -126,13 +137,16 @@ export class BotService {
     writeJsonAtomic(path.join(agentsDir(this.d.cfg), "active-agent.json"), { activeAgentId: id }, 0o640);
   }
 
-  create(a: { name?: string; description?: string; title?: string; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel; model?: ModelId; origin: "user" | "bot"; kickstart: boolean; group?: { memberIds: string[] } }): string {
+  create(a: { name?: string; description?: string; title?: string; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel; model?: ModelId | ProviderModelRef | AcpModelRef; origin: "user" | "bot"; kickstart: boolean; group?: { memberIds: string[] } }): string {
     if (this.bots.size >= LIMITS.maxBots) throw new GatewayError("MAX_BOTS", STR.maxBots, 409);
     const shape = a.avatarShape !== undefined ? checkAvatarShape(a.avatarShape) : undefined;
     const color = a.avatarColor !== undefined ? checkAvatarColor(a.avatarColor) : undefined;
     if (a.avatarMaterial !== undefined) checkAvatarMaterial(a.avatarMaterial);
     if (a.avatarMotion !== undefined) checkAvatarMotion(a.avatarMotion);
     if (a.effort !== undefined && !isEffortLevel(a.effort)) throw new GatewayError("BAD_ARGS", "Unknown effort.");
+    // Any-key setup: with no Anthropic key, a new Bot (or a starter made for Claude) runs on the account's provider.
+    const fallback = a.group ? null : this.d.newBotModel?.() ?? null;
+    const model = fallback && (!a.model || isModelId(a.model)) ? fallback : a.model;
     const id = randomUUID();
     const dir = botDir(this.d.cfg, id);
     fs.mkdirSync(dir, { recursive: true });
@@ -148,7 +162,7 @@ export class BotService {
       avatarMotion: a.avatarMotion ?? "curious",
       ...(a.avatarMaterial ? { avatarMaterial: a.avatarMaterial } : {}),
       ...(a.effort ? { effort: a.effort } : {}),
-      ...(a.model ? { model: a.model } : {}),
+      ...(model ? { model } : {}),
     };
     const settings: BotSettings = { notifyOnAgentUpdates: true, hiddenFromSidebar: false };
     writeJsonAtomic(path.join(dir, "profile.json"), profile, 0o640);
@@ -172,7 +186,7 @@ export class BotService {
     return id;
   }
 
-  update(id: string, patch: { name?: string; title?: string; description?: string; model?: ModelId; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel }): BotSummary {
+  update(id: string, patch: { name?: string; title?: string; description?: string; model?: ModelId | ProviderModelRef | AcpModelRef; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel }): BotSummary {
     const b = this.require(id);
     const next: BotProfile = { ...b.profile };
     if (patch.name !== undefined) {
@@ -183,7 +197,7 @@ export class BotService {
     if (patch.title !== undefined) next.title = patch.title.trim().slice(0, 24);
     if (patch.description !== undefined) next.description = patch.description;
     if (patch.model !== undefined) {
-      if (!isModelId(patch.model)) throw new GatewayError("BAD_MODEL", `Unknown model ${String(patch.model)}`);
+      if (!isModelId(patch.model) && !(isProviderModelRef(patch.model) && this.d.providerModelAllowed?.(patch.model)) && !(isAcpModelRef(patch.model) && this.d.acpModelAllowed?.(patch.model))) throw new GatewayError("BAD_MODEL", `Unknown model ${String(patch.model)}`);
       next.model = patch.model;
     }
     if (patch.avatarShape !== undefined) {
@@ -248,6 +262,8 @@ export class BotService {
     b.store.close();
     this.bots.delete(id);
     fs.rmSync(botDir(this.d.cfg, id), { recursive: true, force: true });
+    // A provider Bot's own conversation files and its subagents' (hostPrivate/provider-sessions/<id>).
+    fs.rmSync(path.join(this.d.cfg.hostPrivate, PROVIDER_SESSIONS_DIR, id), { recursive: true, force: true });
     // A real-brain session file lives under ~/.claude/projects/**, which is box:bots-owned —
     // bothost has no write bits there (see host/brain/conformance/session-file.ts). `{ force: true }`
     // only suppresses ENOENT, not EACCES, so this can throw against the real box (Task 34 Bug 1).
@@ -255,6 +271,8 @@ export class BotService {
     // else still propagates. On the real box, app.ts injects `deleteSession` (the root-owned
     // bot-claude-delete-session helper, gate M-2), which actually removes the file.
     for (const sessionFile of sessionFiles) {
+      // A provider session is bothost's own file in hostPrivate, never under a Bot's ~/.claude.
+      if (isProviderSessionPath(this.d.cfg.hostPrivate, sessionFile)) { fs.rmSync(sessionFile, { force: true }); continue; }
       if (this.d.deleteSession) { this.d.deleteSession(sessionFile); continue; }
       try {
         fs.rmSync(sessionFile, { force: true });
@@ -485,6 +503,7 @@ export class BotService {
   }
   sessionFilePath(id: string): string | null {
     const sid = this.sessionId(id);
+    if (isProviderSessionId(sid)) return providerSessionFile(this.d.cfg.hostPrivate, id, sid); // a provider Bot's own history (spec §7)
     return sid ? cliSessionFile(this.d.cfg, id, sid) : null; // bug #66: the Bot's own config dir once migrated
   }
   recordRequestId(id: string, rec: { id: string; at: number; prompt: string; source: string }): void {

@@ -36,6 +36,11 @@ export interface SynapseBridge {
     /** Pin the Bots' computer's current key ("Trust this computer"). */
     trustComputer(): Promise<{ trusted: boolean }>;
   };
+  /** Settings → Account: a model provider's key, sealed to the box in main; neither answer carries it. */
+  providers: {
+    saveKey(provider: string, value: string): Promise<unknown>;
+    testKey(provider: string, value: string): Promise<unknown>;
+  };
   box: {
     update(force: boolean): Promise<{ status: "done" | "busy"; busyBotIds?: string[] }>;
     recover(): Promise<void>;

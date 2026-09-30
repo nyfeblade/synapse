@@ -1,0 +1,27 @@
+#!/bin/sh
+# Root-owned. Spec 2026-09-29 §3: the file tools (Read, Write, Edit) of a Bot on a model provider, run AS that Bot's
+# own account, so the kernel keeps it out of every other Bot's home and the host's private folder whatever path or link
+# it names. The Claude path gets the same walls by running the CLI as the Bot (bot-claude-as-box).
+# Usage (bothost via sudo): bot-file <bot account> <botId>  -- one JSON request on stdin, one JSON answer on stdout
+# (the protocol is in bot-file-worker.py).
+# Rules: the account is checked exactly as bot-fs-query and bot-claude-as-box check it (reserved uid range, GECOS
+# names the Bot, home /home/bots/<account>); the worker runs as that uid/gid (--init-groups) with an empty environment,
+# whatever the caller's env said, umask 002, and kills itself after 30 s.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+no() { echo "bot-file: $1" >&2; exit 126; }
+[ "${SUDO_USER:-}" = "bothost" ] || no "must be invoked by bothost via sudo"
+[ $# -eq 2 ] || no "usage: bot-file <bot account> <botId>"
+u="$1"; bid="$2"
+case "$u" in bot-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;; *) no "$u is not a Bot account" ;; esac
+case "$bid" in ''|*[!A-Za-z0-9_-]*) no "bad Bot id" ;; esac
+[ "${#bid}" -le 64 ] || no "bad Bot id"
+ent="$(/usr/bin/getent passwd "$u")" || no "$u is not a Bot account"
+uid="$(printf '%s' "$ent" | /usr/bin/cut -d: -f3)"; gid="$(printf '%s' "$ent" | /usr/bin/cut -d: -f4)"
+gecos="$(printf '%s' "$ent" | /usr/bin/cut -d: -f5)"; home="$(printf '%s' "$ent" | /usr/bin/cut -d: -f6)"
+case "$uid$gid" in ''|*[!0-9]*) no "$u is not a Bot account" ;; esac
+[ "$uid" -ge 60200 ] && [ "$uid" -le 61099 ] && [ "$gid" -ge 60200 ] && [ "$gid" -le 61099 ] || no "$u is not a Bot account"
+[ "$gecos" = "synapse-bot $bid" ] && [ "$home" = "/home/bots/$u" ] || no "$u is not this Bot's account"
+cd /
+exec /usr/bin/setpriv --reuid="$uid" --regid="$gid" --init-groups --pdeathsig=KILL -- \
+  /usr/bin/env -i /usr/bin/python3 -I -S /usr/local/libexec/bot-file-worker.py "$home" /home/bots "/home/box/.host:/home/box/agent-data/agents:/home/box/agent-data/agent-transcripts"

@@ -108,7 +108,7 @@ export const STR_AUTH = {
   testConnection: "Test connection",
   testing: "Testing…",
   appliesNext: "Takes effect from each Bot's next turn. Replies already being written finish as they started.",
-  firstRunTitle: "Add your Anthropic API key",
+  firstRunTitle: "Add your AI key",
   firstRunContinue: "Continue",
   // Test connection and turn errors.
   // New-user walk, finding 9: no check mark beside a failure.

@@ -6,6 +6,8 @@ import type {
   FormCardView, SecretRequestView, SecretStatusEntry, SnapshotInfo, SnapshotReason,
 } from "./computer";
 import type { ModelId } from "./models";
+import type { ProviderModelRef } from "./providers";
+import type { AcpModelRef } from "./acp-vendors";
 import type { ComputerPerception } from "./computer";
 import type { MailboxInfo, RoutineView, Trigger } from "./routines";
 import type { StandupCard, StandupSettings, StandupView } from "./schedules";
@@ -109,7 +111,7 @@ export interface GatewayCommands {
     result: { id: string };
   };
   updateAgent: {
-    args: { id: string; name?: string; description?: string; model?: ModelId; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel };
+    args: { id: string; name?: string; description?: string; model?: ModelId | ProviderModelRef | AcpModelRef; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel };
     result: { agent: BotSummary };
   };
   deleteAgent: { args: { id: string }; result: { activeAgentId: string | null } };
@@ -243,6 +245,8 @@ export type SseEvent =
   | { channel: "key-check"; payload: import("./auth").KeyCheckView }
   // 5.7: the header's spend meter (at most a few updates a second, only when a shown cent changes).
   | { channel: "spend-meter"; payload: import("./cost").SpendMeterView }
+  /** Spec §7a: the background safety check's progress (and the reviewer's state once it ends). */
+  | { channel: "safety-check"; payload: import("./providers").SafetyReviewerView }
   // Phase 5 owns "usage" (UsageView, which carries Phase 4's efficiency tiles).
   | Phase5SseEvent
   // Built-in Google connector status (Connect Google sheet, Settings → Connected accounts).

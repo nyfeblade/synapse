@@ -1,0 +1,65 @@
+  <div class="page">
+    <aside class="toc" aria-label="On this page">
+      <a href="#works">What works</a>
+      <a href="#not-yet">Not yet</a>
+      <a href="#cost">Cost</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#setup">Set up</a>
+    </aside>
+
+    <article class="doc">
+      <p class="crumb"><a href="/works-with">Works with</a> / DeepSeek</p>
+      <h1>Synapse with DeepSeek</h1>
+      <p class="intro">Run your Bots on DeepSeek models with your own DeepSeek API key.</p>
+
+      <h2 id="works">What works</h2>
+      <ul>
+        <li>Models: DeepSeek V4.1 Flash and DeepSeek V4 Pro.</li>
+        <li>Chat, tools and replies, through the same approvals as every Bot.</li>
+        <li>Voice calls.</li>
+        <li>Subagents, on the same model.</li>
+        <li>A context window of 1 million tokens.</li>
+      </ul>
+      <p>Every model starts as <b>Not checked</b>. A badge is earned by measurement, not given. See <a href="/works-with#badges">how badges are earned</a>.</p>
+
+      <h2 id="not-yet">Not yet</h2>
+      <ul>
+        <li>Images. DeepSeek's models don't take them.</li>
+        <li>Web search of its own. A DeepSeek Bot borrows search from OpenAI, Gemini or OpenRouter if you've set one up; otherwise it has none.</li>
+        <li>Coding agents. They run on Claude, so they need an Anthropic key.</li>
+        <li>Computer and browser helpers. They still run on Claude, so they need an Anthropic key.</li>
+      </ul>
+
+      <h2 id="cost">Cost</h2>
+      <p>DeepSeek bills your own key. Synapse meters every call and counts it against your spend budget. When the budget is reached, the model isn't called.</p>
+      <table class="fit">
+        <thead><tr><th>Model</th><th>Input</th><th>Cached</th><th>Output</th></tr></thead>
+        <tbody>
+          <tr><td>DeepSeek V4.1 Flash</td><td>$0.30</td><td>$0.006</td><td>$1.20</td></tr>
+          <tr><td>DeepSeek V4 Pro</td><td>$1.32</td><td>$0.044</td><td>$3.96</td></tr>
+        </tbody>
+      </table>
+      <p>US dollars per million tokens. DeepSeek's list prices, checked on <time datetime="2026-09-30">Sep 30, 2026</time>.</p>
+      <ul>
+        <li>These are DeepSeek's peak prices. Off-peak costs half, but Synapse always counts the peak price, so spend is never under-counted.</li>
+        <li>Synapse's own small tasks, like titles and key checks, use DeepSeek V4.1 Flash.</li>
+        <li>The model picker shows what 100 turns like your Bot's recent ones would cost on each model.</li>
+      </ul>
+
+      <h2 id="privacy">Privacy</h2>
+      <ul>
+        <li><b>Consent first.</b> Nothing goes to DeepSeek until you allow it once. The consent says what is sent: the conversation, tool results, files the Bot reads, safety-check inputs, memory notes and call transcripts. DeepSeek's own terms apply.</li>
+        <li><b>Your key stays on your Mac.</b> It is encrypted, and only Synapse's own proxy adds it to a request. Your Bots never see it. Each call gets a one-time token, and the key is removed from anything that comes back.</li>
+        <li><b>The same safety gate.</b> Every action goes through Synapse's fixed rules and approvals, whatever the model. The safety reviewer runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for it in <b>Settings → Auto-review → Safety reviewer</b>. A reviewer on a model other than Claude asks you first until it passes the safety check.</li>
+      </ul>
+
+      <h2 id="setup">Set up</h2>
+      <ol>
+        <li>Create an API key on the <a href="https://platform.deepseek.com">DeepSeek platform</a>, with some credit on the account.</li>
+        <li>In Synapse, open <b>Settings → Account → Model providers</b>. Click <b>Allow</b> next to DeepSeek, read what it sends, and allow it.</li>
+        <li>Paste the key, click <b>Save</b>, then <b>Test key</b>.</li>
+        <li>Open a Bot's settings and pick a DeepSeek model.</li>
+      </ol>
+      <p>You can also start with DeepSeek: pick it in the key step when you first open Synapse, allow it, and paste the key. It's tested before it's saved, and no Anthropic key is needed.</p>
+    </article>
+  </div>

@@ -176,7 +176,8 @@ describe("the Sign in step: the Anthropic API key is the only choice (synapse-pu
     render(<SetupScreen />);
     const signIn = await screen.findByRole("listitem", { name: "Sign in" });
     const input = await within(signIn).findByLabelText("Anthropic API key");
-    expect(within(signIn).queryAllByRole("radio")).toHaveLength(0);
+    // Any-key setup: a provider choice, Anthropic first and chosen; no subscription choice.
+    expect(within(signIn).getByRole("radio", { name: "Anthropic" }).getAttribute("aria-checked")).toBe("true");
     expect(signIn.textContent).not.toMatch(/subscription|Connect Claude/i);
     fireEvent.change(input, { target: { value: KEY } });
     await vi.waitFor(() => expect((within(signIn).getByRole("button", { name: "Save key" }) as HTMLButtonElement).disabled).toBe(false));

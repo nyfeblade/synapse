@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { execCommand } from "../../src/main/box-provider";
 import { orbCall, ORB_LIMITS } from "../../src/main/orb-exec";
 import { resolveOrb } from "../../src/main/orb-path";
+import { realHomeForOrb } from "./orb-live-home";
 
 /**
  * Bug 435, live: OrbStack 2.2.3 now and then leaves a finished command unreaped right after the host restarts, and
@@ -18,6 +19,7 @@ const ROUNDS = Number(process.env.ORB_HANG_ROUNDS ?? 20);
 const BURST = Number(process.env.ORB_HANG_BURST ?? 40);
 
 describe.skipIf(!live)("orb calls right after a host restart, for real (bug 435)", () => {
+  realHomeForOrb();
   it("every call returns: a stuck one is killed and retried", async () => {
     const orb = resolveOrb();
     const call = (args: string[], timeoutMs: number = ORB_LIMITS.read) => orbCall(execCommand, orb, ["-m", machine, "-u", "root", ...args], { timeoutMs, idempotent: true });

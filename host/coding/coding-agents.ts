@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { LIMITS5, STR5, type CodingAgentView } from "@synapse/shared";
+import { DEFAULT_BOT_MODEL, LIMITS5, STR5, STRC, isModelId, type CodingAgentView } from "@synapse/shared";
 import { buildBotEnv } from "../brain/spawn-options";
 import type { ConformanceFlags } from "../brain/conformance/flags";
 import type { TurnUsage } from "../brain/types";
@@ -129,6 +129,11 @@ export async function prepareWorktree(o: { git: Git; workspace: string; source: 
 }
 
 export interface CodingChild { push(text: string): void; interrupt(): Promise<void>; close(): void; messages: AsyncIterable<{ type: string; [k: string]: unknown }> }
+/** 0.1.6: the model a coding agent runs on: the Bot's own when it is a Claude model, else Claude's default. */
+export function codingModelFor(botModel: string | undefined): string {
+  return isModelId(botModel) ? botModel : DEFAULT_BOT_MODEL;
+}
+
 export type ChildFactory = (o: { botId: string; cwd: string; model: string; prompt: string }) => CodingChild;
 
 interface Live { child: CodingChild; timers: ReturnType<typeof setTimeout>[] }
@@ -143,6 +148,8 @@ export class CodingAgents {
    *  its own yet, so the shared /workspace/repos below. */
   constructor(private d: { workspace: string; registryFile: string; now(): number; git: Git; child: ChildFactory; model(botId: string): string; onChange(a: CodingAgentView): void; onDone(a: CodingAgentView): void; wallClockMs?: number; maxPerBot?: number; maxTotal?: number;
     ladder?(): { allowsBackground(kind: "coding"): boolean }; onUsage?(botId: string, model: string, u: TurnUsage): void;
+    /** 0.1.6: coding agents run on Claude whatever the Bot's model; without an Anthropic key none starts. Absent: not checked. */
+    claudeReady?(): boolean;
     prepare?(botId: string, a: { source: string; branch: string; agentId: string }): Promise<{ repoDir: string; worktree: string; note?: string | null } | null> }) {
     for (const a of readJson<{ agents: CodingAgentView[] }>(d.registryFile, { agents: [] }).agents) this.agents.set(a.id, a);
   }
@@ -157,6 +164,7 @@ export class CodingAgents {
 
   async launch(botId: string, a: { repo: string; task: string; title?: string }): Promise<CodingAgentView> {
     this.assertLadder();
+    if (this.d.claudeReady && !this.d.claudeReady()) throw new GatewayError("NEEDS_CLAUDE", STRC.codingNeedsClaude);
     const running = [...this.agents.values()].filter((x) => x.status === "running");
     const perBot = this.d.maxPerBot ?? 4;
     if (running.filter((x) => x.botId === botId).length >= perBot) throw new GatewayError("CAP", `A Bot can run at most ${perBot} coding agents at once. Wait for one to finish.`);

@@ -49,6 +49,7 @@ const IMPLEMENTED: Record<CommandName, true> = {
   getAgentMemories: true, addAgentMemory: true, updateAgentMemory: true, deleteAgentMemory: true, clearAgentMemories: true, getHistoryArchiveStats: true,
   // Settings → Account (sign-in mode, API key):
   getAuth: true, setApiKey: true, clearApiKey: true, testAuthConnection: true, checkApiKey: true,
+  getProviders: true, getSafetyReviewer: true, runSafetyCheck: true, cancelSafetyCheck: true, setSafetyReviewer: true, getModelCatalog: true, getCostPreview: true, runProviderConformance: true, setProviderKey: true, clearProviderKey: true, testProviderKey: true, consentProvider: true, getAcpVendors: true, consentAcpVendor: true, startAcpLogin: true, checkAcpLogin: true, installAcpVendor: true, removeAcpVendor: true,
   listBotCalls: true, answerBotCall: true, setBotCallPermission: true, getCallGreetings: true, wrapUpCall: true, voiceSpeculate: true, voiceSpeculateCancel: true, voiceLatencyNotice: true,
   // 5.6: the Mac's action log, undo and dry run (answered by the coordinator)
   listMacActions: true, exportMacActions: true, undoMacAction: true, getLocalDryRun: true, setLocalDryRun: true,

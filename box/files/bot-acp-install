@@ -1,0 +1,84 @@
+#!/bin/sh
+# Root-owned. 0.1.6: installs or removes one vendor coding CLI for Bots (Settings → Account → Coding CLIs, the owner's
+# Install / Remove; the host runs this only from that gateway command, and no Bot account may sudo it).
+#
+# It installs ONLY the version pinned in /usr/local/lib/synapse-acp-pins/<vendor>/ (package.json + package-lock.json,
+# root-owned, copied there by provision.sh from box/files/acp-pins/). `npm ci` checks every package it downloads against
+# the lockfile's sha512 `integrity`, which is npm's own published `dist.integrity` for that exact version
+# (scripts/acp-pins-verify.mjs checks the lockfiles against the registry), and refuses on any mismatch. Packages come
+# from registry.npmjs.org only, with no user or global npm config, a fresh cache, and install scripts never run.
+# The result is root-owned and writable by no one else, at /usr/local/lib/synapse-acp/<vendor>/, with one launcher
+# named as bot-acp-as-box's table expects; bot-acp-as-box then runs it as a Bot's own account.
+#
+# Usage (bothost via sudo): bot-acp-install <vendor> <install|remove>
+# The vendor names a row of the table below; nothing else comes from the caller.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+umask 022
+no() { echo "bot-acp-install: $1" >&2; exit 126; }
+[ "${SUDO_USER:-}" = "bothost" ] || no "must be invoked by bothost via sudo"
+[ $# -eq 2 ] || no "usage: bot-acp-install <vendor> <install|remove>"
+vendor="$1"; verb="$2"
+case "$verb" in install|remove) ;; *) no "usage: bot-acp-install <vendor> <install|remove>" ;; esac
+case "$(uname -m)" in aarch64|arm64) arch=arm64 ;; x86_64|amd64) arch=x64 ;; *) no "unsupported machine" ;; esac
+# INSTALL-TABLE-BEGIN
+# vendor) package; version; launcher name (= bot-acp-as-box's bin); interpreter (or none); entry, relative to the install
+case "$vendor" in
+  copilot) pkg=@github/copilot; ver=1.0.89; bin=copilot; interp=; entry="node_modules/@github/copilot-linux-$arch/copilot" ;;
+  kimi) pkg=@moonshot-ai/kimi-code; ver=2.1.1; bin=kimi; interp=/usr/local/bin/node; entry=node_modules/@moonshot-ai/kimi-code/dist/main.mjs ;;
+  *) no "there is no pinned install for that coding CLI" ;;
+esac
+# INSTALL-TABLE-END
+ROOT=/usr/local/lib/synapse-acp
+PINS=/usr/local/lib/synapse-acp-pins/$vendor
+dest=$ROOT/$vendor; stage=$ROOT/.stage-$vendor; old=$ROOT/.old-$vendor
+rootonly() { [ -e "$1" ] && [ ! -L "$1" ] && [ "$(stat -c %U "$1")" = root ] && [ -z "$(find "$1" -maxdepth 0 -perm /022)" ]; }
+rootonly "$ROOT" && [ -d "$ROOT" ] || no "$ROOT is missing or not root's"
+exec 9>/run/synapse-acp-install.lock
+flock -w 900 9 || no "another coding CLI install is still running"
+
+if [ "$verb" = remove ]; then
+  [ ! -L "$dest" ] || no "$dest is a link"
+  rm -rf -- "$dest" "$stage" "$old"
+  echo "removed $vendor"
+  exit 0
+fi
+
+rootonly "$PINS" && rootonly "$PINS/package.json" && rootonly "$PINS/package-lock.json" || no "the pinned package list for $vendor is missing (provision the computer first)"
+[ -x /usr/local/bin/npm ] && [ -x /usr/local/bin/node ] || no "Node.js is missing (provision the computer first)"
+lockver="$(jq -r --arg k "node_modules/$pkg" '.packages[$k].version // empty' "$PINS/package-lock.json")"
+integrity="$(jq -r --arg k "node_modules/$pkg" '.packages[$k].integrity // empty' "$PINS/package-lock.json")"
+[ "$lockver" = "$ver" ] || no "the pinned package list doesn't match this helper ($lockver, not $ver)"
+case "$integrity" in sha512-*) ;; *) no "the pinned package list has no sha512 integrity for $pkg" ;; esac
+# Every package must be pinned by sha512 and resolved from the npm registry.
+[ "$(jq '[.packages | to_entries[] | select(.key != "") | select((.value.integrity // "" | startswith("sha512-") | not) or (.value.resolved // "" | startswith("https://registry.npmjs.org/") | not))] | length' "$PINS/package-lock.json")" = 0 ] ||
+  no "the pinned package list has a package without a registry sha512 pin"
+
+rm -rf -- "$stage"
+install -d -m 0700 -o root -g root "$stage"
+cp -- "$PINS/package.json" "$PINS/package-lock.json" "$stage/"
+: > "$stage/.npmrc-user"; : > "$stage/.npmrc-global"
+if ! (cd "$stage" && env -i HOME="$stage/.npm-home" PATH=/usr/local/bin:/usr/bin:/bin LANG=C.UTF-8 \
+    npm_config_userconfig="$stage/.npmrc-user" npm_config_globalconfig="$stage/.npmrc-global" \
+    /usr/local/bin/npm ci --ignore-scripts --omit=dev --no-audit --no-fund --no-update-notifier \
+      --registry=https://registry.npmjs.org/ --cache "$stage/.npm-cache" --loglevel=error >&2); then
+  rm -rf -- "$stage"
+  no "couldn't download and verify $pkg@$ver (no network, or a file didn't match its published checksum)"
+fi
+got="$(jq -r .version "$stage/node_modules/$pkg/package.json" 2>/dev/null || true)"
+[ "$got" = "$ver" ] || { rm -rf -- "$stage"; no "installed $pkg is $got, not $ver"; }
+[ -f "$stage/$entry" ] && [ ! -L "$stage/$entry" ] || { rm -rf -- "$stage"; no "$pkg@$ver has no $entry for this machine"; }
+case "$(readlink -f -- "$stage/$entry")" in "$stage"/*) ;; *) rm -rf -- "$stage"; no "$entry leaves the install" ;; esac
+rm -rf -- "$stage/.npm-home" "$stage/.npm-cache" "$stage/.npmrc-user" "$stage/.npmrc-global"
+printf '#!/bin/sh\n# Written by bot-acp-install: %s@%s\nexec %s"%s" "$@"\n' "$pkg" "$ver" "${interp:+$interp }" "$dest/$entry" > "$stage/$bin"
+printf '{"vendor":"%s","package":"%s","version":"%s","integrity":"%s","source":"https://registry.npmjs.org/%s/%s","installedAt":"%s"}\n' \
+  "$vendor" "$pkg" "$ver" "$integrity" "$pkg" "$ver" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$stage/.installed.json"
+chown -R root:root "$stage"
+chmod -R u+rwX,go+rX,go-w "$stage"
+chmod 0755 "$stage" "$stage/$bin" "$stage/$entry"
+chmod 0644 "$stage/.installed.json"
+rm -rf -- "$old"
+[ ! -e "$dest" ] || mv -- "$dest" "$old"
+mv -- "$stage" "$dest"
+rm -rf -- "$old"
+echo "installed $vendor $ver"

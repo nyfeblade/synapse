@@ -248,6 +248,9 @@ if as_host_q sudo -n $BU ensure verify-walls-a >/dev/null 2>&1 && as_host_q sudo
   check "fs-query answers as the Bot, in its own home"    bash -c "printf '%s' '{\"ops\":[[\"lstat\",\"$HA/code\"],[\"realpath\",\"$HA/code\"]]}' | orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-fs-query $UA verify-walls-a | grep -q '\"$HA/code\"'"
   check "fs-query refuses another Bot's home"            bash -c "! printf '%s' '{\"ops\":[[\"ls\",\"$HB/code\"]]}' | orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-fs-query $UA verify-walls-a"
   check "fs-query refuses a Bot named by another's id"    bash -c "! printf '%s' '{\"ops\":[]}' | orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-fs-query $UB verify-walls-a"
+  check "bot-file reads as the Bot, in its own home"        bash -c "printf '%s' '{\"op\":\"write\",\"path\":\"$HA/.bot-file-probe\",\"content\":\"x\",\"expect\":null}' | orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-file $UA verify-walls-a | grep -q '\"ok\":true'"
+  check "bot-file refuses another Bot's home"               bash -c "printf '%s' '{\"op\":\"read\",\"path\":\"$HB/.bot-file-probe\"}' | orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-file $UA verify-walls-a | grep -q '\"ok\":false'"
+  check "bot-file refuses a Bot named by another's id"       bash -c "! printf '%s' '{\"op\":\"read\",\"path\":\"/etc/hostname\"}' | orb -m $M -u root runuser -u bothost -- sudo -n /usr/local/libexec/bot-file $UB verify-walls-a"
   check "Bot CLI refuses another Bot's account"           bash -c "! orb -m $M -u root runuser -u bothost -- env BOT_UNIX_USER=$UB BOT_ACCOUNT_OF=verify-walls-a sudo -n /usr/local/libexec/bot-claude-as-box --version </dev/null"
   # Follow-up 1: a Bot's Shell transcript is its own (a real bot-shell unit as Bot B, output appended by systemd).
   VS=shell-verifywalls$$

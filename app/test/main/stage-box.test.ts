@@ -44,7 +44,9 @@ describe("stage-box.mjs (what package.mjs hands packager as extraResource)", () 
     const out = fs.mkdtempSync(path.join(os.tmpdir(), "stagebox-out-"));
     expect(spawnSync(process.execPath, [stageScript, r, out]).status).toBe(0);
     const top = fs.readdirSync(path.join(out, "box")).sort();
-    expect(top).toEqual(["check-gateway.sh", "deploy.sh", "desktop.env", "files", "host-dist.tgz", "image-prep.sh", "orb.sh", "provision-from-mac.sh", "provision.sh", "route.env", "verify-box.sh"]);
+    // box/image.json (the ready-made image manifest) ships once a release commits it (0.1.5 on).
+    const manifest = fs.existsSync(path.join(repo, "box", "image.json")) ? ["image.json"] : [];
+    expect(top).toEqual(["check-gateway.sh", "deploy.sh", "desktop.env", "files", "host-dist.tgz", "image-prep.sh", ...manifest, "orb.sh", "provision-from-mac.sh", "provision.sh", "route.env", "verify-box.sh"]);
   });
 
   it("fails loudly when the host was not built", () => {

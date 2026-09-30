@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import { isProviderSessionId, PROVIDER_SESSION_PREFIX } from "../brain/provider/session-store";
+import { ACP_SESSION_PREFIX, isAcpSessionId } from "../brain/acp/acp-sessions";
 import path from "node:path";
 import { LIMITS, STR, type TranscriptEntry } from "@synapse/shared";
 import type { ConformanceFlags } from "../brain/conformance/flags";
@@ -92,7 +94,8 @@ export class Rollover {
     try { tail = tailFromLastBoundary(this.d.readSession(oldFile).toString("utf8")); } catch (e) { unreadable = true; log.warn("rollover: old session unreadable", { botId, error: String(e) }); }
     let copied = false;
     if (tail) {
-      const newId = this.d.newId();
+      // A provider session (spec §7) stays one: same folder, same prefix, so the Bot keeps its brain.
+      const newId = isAcpSessionId(oldId) ? `${ACP_SESSION_PREFIX}${this.d.newId()}` : isProviderSessionId(oldId) ? `${PROVIDER_SESSION_PREFIX}${this.d.newId()}` : this.d.newId();
       try {
         const copy = rewriteSession(tail.records, newId);
         this.d.writeSession(path.join(path.dirname(oldFile), `${newId}.jsonl`), this.d.redact ? Buffer.from(this.d.redact(botId, copy.toString("utf8"))) : copy);

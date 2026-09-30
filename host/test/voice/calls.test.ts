@@ -203,3 +203,22 @@ describe("a Bot taking another Bot off the call (bug 158)", () => {
     expect(r.roster("nova")).toEqual(["nova", "ledger"]);
   });
 });
+
+describe("0.1.6: a Bot on a coding CLI (ACP) can't be on a call yet", () => {
+  const acp = (model: string) => ({ profile: { name: "Coder", description: "", model } } as Partial<BotSummary>);
+  it("the owner's call to it is refused up front; it can't be added; a group call leaves it out", () => {
+    const bots = fakeBots(["Nova", "Coder", "Crew", "Solo"], {
+      coder: acp("acp:copilot"),
+      crew: { group: { memberIds: ["nova", "coder"] } } as unknown as Partial<BotSummary>,
+      solo: { group: { memberIds: ["coder"] } } as unknown as Partial<BotSummary>,
+    });
+    const r = new CallRegistry({ bots, now: () => 1 });
+    expect(() => r.start("coder")).toThrow("Calls aren't available for Coder yet");
+    expect(bots.notices("coder")).toEqual([]);
+    expect(r.start("crew").participantIds).toEqual(["nova"]);
+    expect(() => r.start("solo")).toThrow("Calls aren't available for Solo yet");
+    const v = r.start("nova");
+    expect(() => r.add(v.callId, "coder")).toThrow("Calls aren't available for Coder yet");
+    expect(r.eligible(v.callId, [...bots.sum.values()])).not.toContain("coder");
+  });
+});

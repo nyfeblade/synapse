@@ -1,0 +1,66 @@
+  <div class="page">
+    <aside class="toc" aria-label="On this page">
+      <a href="#keys">Your own key</a>
+      <a href="#local">On your Mac</a>
+      <a href="#plans">Your coding plan</a>
+      <a href="#not-supported">Not supported</a>
+      <a href="#badges">How badges are earned</a>
+      <a href="#privacy">Privacy</a>
+    </aside>
+
+    <article class="doc">
+      <p class="crumb">Works with</p>
+      <h1>Works with</h1>
+      <p class="intro">Run your Bots on the AI provider you choose: your own key, a model on your Mac, or a coding plan you already have.</p>
+
+      <h2 id="keys">Your own key</h2>
+      <ul>
+        <li><a href="/docs#api-key">Claude</a>, with an Anthropic API key.</li>
+        <li><a href="/works-with-openai">OpenAI</a>, with an OpenAI API key.</li>
+        <li><a href="/works-with-openrouter">OpenRouter</a>, with an OpenRouter key.</li>
+        <li><a href="/works-with-gemini">Gemini</a>, with a Gemini API key.</li>
+        <li><a href="/works-with-mistral">Mistral</a>, with a Mistral API key.</li>
+        <li><a href="/works-with-deepseek">DeepSeek</a>, with a DeepSeek API key.</li>
+      </ul>
+      <p>Setup takes any of these, or a model on your Mac. You don't need an Anthropic key unless you want Claude, coding agents or the computer and browser helpers.</p>
+      <p>The provider bills your key. Synapse meters every call against your spend budget, and the model picker shows what a Bot would cost on each model.</p>
+
+      <h2 id="local">On your Mac</h2>
+      <ul>
+        <li><a href="/works-with-local-models">Ollama and LM Studio</a>. No key, no per-token cost.</li>
+      </ul>
+
+      <h2 id="plans">Your coding plan</h2>
+      <ul>
+        <li><a href="/works-with-coding-subscriptions">GitHub Copilot, Cursor, Kimi Code and Mistral Vibe</a>, through their own CLIs. Experimental.</li>
+      </ul>
+
+      <h2 id="not-supported">Not supported</h2>
+      <ul>
+        <li>Signing in with a Claude subscription or a Claude Code login.</li>
+        <li>Signing in with a Google account for the Gemini CLI or Antigravity.</li>
+      </ul>
+
+      <h2 id="badges">How badges are earned</h2>
+      <p>In the model picker, each model outside Claude has a badge. It comes from checks run on that model, never from a list we wrote.</p>
+      <table class="fit">
+        <thead><tr><th>Badge</th><th>Means</th></tr></thead>
+        <tbody>
+          <tr><td>Not checked</td><td>Nothing measured yet. Every model starts here.</td></tr>
+          <tr><td>Experimental</td><td>It passed the must-pass provider checks, such as tool calls, streaming, usage reports, a bad key and stopping mid-reply.</td></tr>
+          <tr><td>Supported</td><td>It also passed the coding benchmark, at 85% or more of Claude's pass rate on the same tasks, with every trap task passed.</td></tr>
+          <tr><td>Blocked</td><td>It failed a must-pass check or a trap task.</td></tr>
+          <tr><td>Local</td><td>It runs on your Mac.</td></tr>
+        </tbody>
+      </table>
+      <p>No model outside Claude is Supported yet. The coding CLIs are Experimental until a live check with a real sign-in passes.</p>
+
+      <h2 id="privacy">Privacy</h2>
+      <ul>
+        <li><b>Consent first.</b> Each provider is allowed once, before anything is sent to it. The consent says what goes there. A new version of the consent asks again.</li>
+        <li><b>Only where you choose.</b> A Bot's conversation goes to the provider you picked for it, under that provider's terms. A Bot's own background work, like its memory notes and summaries, stays on its provider too. Synapse's shared work, like the safety reviewer and reading schedules, runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for the reviewer in Settings.</li>
+        <li><b>Keys stay on your Mac.</b> They are encrypted and added only by Synapse's own proxy. Your Bots never see them.</li>
+        <li><b>The same safety gate.</b> Every action goes through Synapse's fixed rules and approvals, whatever the model. The safety reviewer runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for it in <b>Settings → Auto-review → Safety reviewer</b>. A reviewer on a model other than Claude asks you first until it passes the safety check.</li>
+      </ul>
+    </article>
+  </div>

@@ -38,6 +38,8 @@ export const TEXT = {
     settings_change: "The Auto-review settings changed, so this request was cancelled. Re-run the action for a new review.",
   } as Record<string, string>,
   degraded: "Auto-review can't be reached right now, so this action needs your OK.",
+  /** Spec §7a ask-only mode: the safety reviewer's model hasn't passed the safety check. */
+  reviewerUnqualified: "Asked because automatic review isn't available for this model.",
   /** Bug 432. */
   wakeUnread: "What woke this Bot is longer than Auto-review can read in full, so this action needs your OK.",
   fallbackReason: "Blocked by Auto-review",

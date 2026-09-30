@@ -1,4 +1,4 @@
-import { STR, STR5, STR_HEALTH, STRAL, STRB, STRG, STRMA, STRO, STRS, STRV, STR_AUTH, STR_COST, STR_MCP, STR_PHONE, STR_TELEGRAM } from "@synapse/shared";
+import { STR, STR5, STR_ACP, STR_HEALTH, STRAL, STRB, STRG, STRMA, STRO, STRS, STRV, STR_AUTH, STR_COST, STR_MCP, STR_PHONE, STR_PROVIDER_UI, STR_TELEGRAM } from "@synapse/shared";
 import { slugRow } from "../../deep-links";
 import type { SettingsSectionId } from "./sections";
 
@@ -24,9 +24,13 @@ export function settingEntries(): SettingEntry[] {
     e("general", STRG.connectedAccounts, ["google", "gmail", "calendar", "drive"]),
     e("general", STR5.memory, ["remember", "recall"]),
     e("general", STR_HEALTH.workNotify, ["notifications", "finished", "done", "telegram", "long tasks"]),
-    e("connections", STR_HEALTH.section, ["connectors", "health", "broken", "sign in", "reconnect", "mcp", "google", "composio", "github", "telegram"]),
+    e("connections", STR_HEALTH.section, ["connectors", "health", "broken", "sign in", "reconnect", "mcp", "google", "composio", "github", "telegram", "api key", "openai", "gemini", "openrouter", "mistral", "deepseek"]),
     // Account
     e("account", STR_AUTH.keyLabel, ["api", "key", "anthropic", "sign in", "login"]),
+    // 0.1.6: any AI provider (Wave 2) and subscription coding CLIs (Wave 3), both in Settings → Account.
+    e("account", STR_PROVIDER_UI.sectionTitle, ["provider", "model", "api key", "openai", "gpt", "openrouter", "gemini", "mistral", "deepseek", "ollama", "lm studio", "local model"]),
+    e("auto-review", STR_PROVIDER_UI.safetyTitle, ["reviewer", "auto-review", "safety check", "qualified", "model"]),
+    e("account", STR_ACP.sectionTitle, ["coding cli", "acp", "subscription", "plan", "copilot", "cursor", "kimi", "vibe", "sign in"]),
     e("usage", STR_COST.apiSpend, ["usage", "spend", "billing", "cost"]),
     e("usage", STR_COST.monthlyBudget, ["budget", "spend", "cost", "cap", "limit"]),
     e("usage", STR5.keepConversationsReady, ["savings", "cache", "cost", "ttl"]),

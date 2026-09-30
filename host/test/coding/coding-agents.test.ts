@@ -8,7 +8,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { toSdkMcpServer } from "../../brain/sdk-wiring";
 import type { BrainWiring } from "../../brain/types";
 import { AsyncQueue } from "../../util/async-queue";
-import { CodingAgents, type ChildFactory, repoName, umaskGit } from "../../coding/coding-agents";
+import { CodingAgents, type ChildFactory, codingModelFor, repoName, umaskGit } from "../../coding/coding-agents";
+import { DEFAULT_BOT_MODEL, STRC } from "@synapse/shared";
 import { classifyTool } from "../../review/classify";
 import { codingAgentRule } from "../../coding/review-rule";
 import { createCodingAgentTool } from "../../tools/coding-agent-tool";
@@ -147,3 +148,21 @@ describe("coding agent (TOOL-20)", () => {
     }
   });
 });
+
+describe("0.1.6: coding agents run on Claude, whatever the Bot's model", () => {
+  it("a Claude Bot's agent uses its model; a provider or coding-CLI Bot's agent uses Claude's default, never the provider ref", () => {
+    expect(codingModelFor("claude-opus-5-5")).toBe("claude-opus-5-5");
+    expect(codingModelFor("openai:gpt-6.1-sol")).toBe(DEFAULT_BOT_MODEL);
+    expect(codingModelFor("ollama:qwen3:4b")).toBe(DEFAULT_BOT_MODEL);
+    expect(codingModelFor("acp:copilot")).toBe(DEFAULT_BOT_MODEL);
+    expect(codingModelFor(undefined)).toBe(DEFAULT_BOT_MODEL);
+  });
+
+  it("without an Anthropic key no coding agent starts, and nothing is cloned", async () => {
+    const c = mk({ claudeReady: () => false });
+    await expect(c.launch("bot-a", { repo: "https://github.com/acme/app.git", task: "fix it" })).rejects.toMatchObject({ code: "NEEDS_CLAUDE", message: STRC.codingNeedsClaude });
+    expect(c.list("bot-a")).toEqual([]);
+    expect(fs.existsSync(path.join(ws, "repos"))).toBe(false);
+  });
+});
+

@@ -33,7 +33,7 @@
         </a>
         <a class="btn ghost" href="https://github.com/nyfeblade/synapse">View on GitHub</a>
       </div>
-      <p class="fine"><span data-version>beta</span> · Apple silicon · macOS 14+ · needs OrbStack and an Anthropic API key</p>
+      <p class="fine"><span data-version>beta</span> · Apple silicon · macOS 14+ · needs OrbStack and an AI key to start · <a href="/works-with">works with more</a></p>
     </div>
 
     <div class="wrap wide">
@@ -155,7 +155,7 @@
         <div><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><h3>Approvals in code</h3><p>Risky actions stop until you answer. The app enforces it, not a prompt.</p></div>
         <div><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><h3>Caps that pause</h3><p>At a budget, a Bot pauses or asks before it spends more.</p></div>
         <div><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><h3>Secrets sealed</h3><p>Your key and every secret are encrypted on your Mac.</p></div>
-        <div><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6"/></svg><h3>No middleman</h3><p>Synapse talks straight to Anthropic with your key. There’s no Synapse server in between.</p></div>
+        <div><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6"/></svg><h3>No middleman</h3><p>Synapse talks straight to the AI provider you choose, with your key. There’s no Synapse server in between.</p></div>
       </div>
     </div>
   </section>
@@ -210,14 +210,14 @@
       <div class="head-row"><h2>Three steps, about ten minutes.</h2><a class="count" href="/docs#install">Full install guide →</a></div>
       <div class="steps">
         <div class="step"><b>1</b><h3>Install</h3><p>Install <a href="https://orbstack.dev">OrbStack</a>, then drag Synapse to Applications. The first time, open it with right-click → Open.</p></div>
-        <div class="step"><b>2</b><h3>Add your API key</h3><p>Synapse sets up its Bots' computer, then asks for your key from the <a href="https://console.anthropic.com">Anthropic Console</a>.</p></div>
+        <div class="step"><b>2</b><h3>Add your AI key</h3><p>Synapse sets up its Bots' computer, then asks for your key: from the <a href="https://console.anthropic.com">Anthropic Console</a>, or from OpenAI, OpenRouter, Gemini, Mistral or DeepSeek. Or pick a model on your Mac.</p></div>
         <div class="step"><b>3</b><h3>Meet your first Bot</h3><p>Start talking, or add Bots from the sidebar. Updates arrive in the app, signed and verified.</p></div>
       </div>
       <div class="req" aria-label="Requirements">
         <div><b>Mac</b><span>Apple silicon</span></div>
         <div><b>System</b><span>macOS 14 or later</span></div>
         <div><b>Also needs</b><span><a href="https://orbstack.dev">OrbStack</a> · 8 GB free</span></div>
-        <div><b>Key</b><span><a href="https://console.anthropic.com">Anthropic API key</a></span></div>
+        <div><b>Key</b><span><a href="https://console.anthropic.com">Anthropic</a> or <a href="/works-with">another provider's</a> API key, or a local model</span></div>
       </div>
     </div>
   </section>
@@ -226,11 +226,12 @@
     <div class="wrap faq">
       <h2>Questions</h2>
       <div>
-        <details><summary>What does it cost?</summary><p>Synapse is free and open source under the Apache-2.0 licence. You pay Anthropic for what your Bots use on your API key, and you can set budgets inside the app.</p></details>
+        <details><summary>What does it cost?</summary><p>Synapse is free and open source under the Apache-2.0 licence. You pay your AI provider, such as Anthropic or OpenAI, for what your Bots use on your key, and you can set budgets inside the app.</p></details>
         <details><summary>Why does macOS warn me the first time?</summary><p>Synapse is signed with its own certificate rather than an Apple Developer ID, and isn't notarized by Apple yet. Open it once with right-click → Open, or click Open Anyway in System Settings → Privacy &amp; Security. After that it opens normally.</p></details>
-        <details><summary>What do I need?</summary><p>A Mac with Apple silicon on macOS 14 or later, about 8 GB of free disk, <a href="https://orbstack.dev">OrbStack</a>, and an Anthropic API key.</p></details>
+        <details><summary>What do I need?</summary><p>A Mac with Apple silicon on macOS 14 or later, about 8 GB of free disk, <a href="https://orbstack.dev">OrbStack</a>, and an AI key to finish setup: Anthropic, OpenAI, OpenRouter, Gemini, Mistral or DeepSeek, or a model on your Mac with Ollama or LM Studio.</p></details>
+        <details><summary>Can my Bots use OpenAI, Gemini or a local model?</summary><p>Yes, and you can set up with any of them: pick OpenAI, OpenRouter, Gemini, Mistral, DeepSeek or a model on your Mac in the key step, no Anthropic key needed. Add more in Settings → Account and pick a model for each Bot. Coding agents, and the computer and browser helpers, run on Claude, so they need an Anthropic key. See <a href="/works-with">Works with</a>.</p></details>
         <details><summary>Can two people use it on one Mac?</summary><p>Yes. Since 0.1.1, Synapse runs in two macOS accounts on the same Mac at once. Each account gets its own connection to its own Bots' computer.</p></details>
-        <details><summary>Can I use my Claude subscription instead of an API key?</summary><p>No. Synapse uses an Anthropic API key only; signing in with a Claude subscription or Claude Code login isn't supported.</p></details>
+        <details><summary>Can I use my Claude subscription instead of an API key?</summary><p>No. Synapse reaches Claude with an Anthropic API key only; signing in with a Claude subscription or Claude Code login isn't supported.</p></details>
         <details><summary>Is it finished?</summary><p>It's a beta. It works, and it's been tested on a fresh Mac, but expect rough edges. Please <a href="https://github.com/nyfeblade/synapse/issues">open an issue</a> if something breaks.</p></details>
       </div>
     </div>

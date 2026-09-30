@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { DEFAULT_BOT_MODEL, STR, STR5, STRL, modelLabel, type ModelId } from "@synapse/shared";
+import { BADGE_LABELS, DEFAULT_BOT_MODEL, STR, STR5, STRL, modelLabel, type ModelId } from "@synapse/shared";
 import { call, GatewayCallError } from "../bridge";
 import { BudgetAskCard } from "./BudgetAskCard";
 import { composerState, useComposer, type PendingAttachment } from "../composer-store";
@@ -10,6 +10,7 @@ import { ComposerPlusMenu } from "./ComposerPlusMenu";
 import { MicIcon, SendIcon, StopIcon } from "./Icons";
 import { acceptAgent, useUi } from "../store";
 import { pickableModels, startModelAccessSync, useModelAccess } from "../model-access";
+import { hasProviders, useModelCatalog } from "../model-catalog";
 import { Menu, type MenuItem } from "./Menus";
 import { extractMentions, mentionQuery, MentionPicker, useMentionNames } from "./MentionPicker";
 import { PrivacySettingsButton } from "../voice/PrivacySettingsButton";
@@ -32,8 +33,10 @@ export function ModelModePills({ botId }: { botId: string }) {
   const access = useModelAccess((s) => s.view);
   const [open, setOpen] = useState<null | { kind: "model" | "mode"; x: number; y: number }>(null);
   useEffect(() => { startModelAccessSync(); }, []);
+  const catalog = useModelCatalog((s) => s.view);
+  useEffect(() => { if (open?.kind === "model") void useModelCatalog.getState().load(); }, [open?.kind]);
   if (!bot || bot.group) return null;
-  const current = (bot.profile.model ?? DEFAULT_BOT_MODEL) as ModelId;
+  const current = (bot.profile.model ?? DEFAULT_BOT_MODEL) as string;
   const permMode = bot.settings.permMode ?? "ask";
   const noLimits = permMode === "full-auto" && bot.settings.noLimits === true;
   const mode = noLimits ? STR5.permModeNoLimits : { ask: STR5.permModeAsk, "accept-edits": STR5.permModeAcceptEdits, "full-auto": STR5.permModeFullAuto }[permMode];
@@ -42,15 +45,25 @@ export function ModelModePills({ botId }: { botId: string }) {
     const r = e.currentTarget.getBoundingClientRect();
     setOpen(open?.kind === kind ? null : { kind, x: r.left, y: r.top - 6 });
   };
+  const pick = (m: string) => { if (m !== current) call("updateAgent", { id: botId, model: m as ModelId }).then((r) => acceptAgent(r.agent)).catch(fail); };
+  // Spec §10: with a provider set up, the models come grouped by provider (a separator between groups), each with its badge.
+  const grouped: MenuItem[] | null = hasProviders(catalog)
+    // A provider's long live list (OpenRouter's) stays in Bot settings, where it can be searched; this short menu keeps
+    // the models in use.
+    ? catalog.groups.flatMap((g, i): MenuItem[] => [...(i ? [{ separator: true as const }] : []), ...g.models.filter((m) => !m.liveOnly || m.ref === current).map((m) => ({
+      label: m.ref.includes(":") ? modelLabel(m.ref as never) : m.label, checked: m.ref === current, onSelect: () => pick(m.ref),
+      ...(m.badges[0] ? { badge: BADGE_LABELS[m.badges[0]] } : {}),
+    }))])
+    : null;
   const items: MenuItem[] = open?.kind === "model"
-    ? pickableModels(access, current).map((m) => ({ label: modelLabel(m), checked: m === current, onSelect: () => { if (m !== current) call("updateAgent", { id: botId, model: m }).then((r) => acceptAgent(r.agent)).catch(fail); } }))
+    ? grouped ?? pickableModels(access, current as ModelId).map((m) => ({ label: modelLabel(m), checked: m === current, onSelect: () => pick(m) }))
     : (["ask", "accept-edits", "full-auto"] as const).map((m) => ({
       label: { ask: STR5.permModeAsk, "accept-edits": STR5.permModeAcceptEdits, "full-auto": STR5.permModeFullAuto }[m], checked: !noLimits && m === permMode,
       onSelect: () => { if (noLimits || m !== permMode) call("setAgentPermMode", { id: botId, mode: m }).then((r) => acceptAgent(r.agent)).catch(fail); },
     }));
   return (
     <>
-      <button type="button" className="composer-pill" aria-haspopup="menu" aria-expanded={open?.kind === "model"} onClick={at("model")}>{modelLabel(current)}</button>
+      <button type="button" className="composer-pill" aria-haspopup="menu" aria-expanded={open?.kind === "model"} onClick={at("model")}>{modelLabel(current as ModelId)}</button>
       <button type="button" className="composer-pill" aria-haspopup="menu" aria-expanded={open?.kind === "mode"} onClick={at("mode")}>{mode}</button>
       {open && <Menu label={open.kind === "model" ? STR.model : STR5.permMode} x={open.x} y={open.y} anchor="bottom" items={items} onClose={() => setOpen(null)} />}
     </>

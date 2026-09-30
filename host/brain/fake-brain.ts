@@ -27,7 +27,8 @@ export interface FakeBrainOptions {
   sessionId?: string | null;
   now?: () => number;
   spawnDelayMs?: number;
-  toolRunner?: (name: string, input: Record<string, unknown>) => Promise<string>;
+  /** A tool that isn't one of the Bot's own: its output (or a result that can be an error). */
+  toolRunner?: (name: string, input: Record<string, unknown>) => Promise<string | { text: string; isError?: boolean }>;
 }
 
 const CRASH: ClassifiedError = { code: "BOT-E0403", message: "Claude exited unexpectedly", retryable: true, trayTitle: "Bot failed to respond" };
@@ -175,8 +176,9 @@ export class FakeBrain implements SupervisedBrain {
         isError = Boolean(r.isError);
       } else {
         if (step.delayMs) await new Promise<void>((r) => { const t = setTimeout(r, step.delayMs); signal.addEventListener("abort", () => { clearTimeout(t); r(); }, { once: true }); });
-        output = step.output ?? (this.opts.toolRunner ? await this.opts.toolRunner(call.toolName, input) : `(fake) ${call.toolName} ok`);
-        isError = step.isError === true;
+        const ran = step.output ?? (this.opts.toolRunner ? await this.opts.toolRunner(call.toolName, input) : `(fake) ${call.toolName} ok`);
+        output = typeof ran === "string" ? ran : ran.text;
+        isError = step.isError === true || (typeof ran !== "string" && ran.isError === true);
       }
     } finally {
       this.toolInFlight = false;

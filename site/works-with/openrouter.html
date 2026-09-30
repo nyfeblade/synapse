@@ -1,0 +1,59 @@
+  <div class="page">
+    <aside class="toc" aria-label="On this page">
+      <a href="#works">What works</a>
+      <a href="#not-yet">Not yet</a>
+      <a href="#cost">Cost</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#setup">Set up</a>
+    </aside>
+
+    <article class="doc">
+      <p class="crumb"><a href="/works-with">Works with</a> / OpenRouter</p>
+      <h1>Synapse with OpenRouter</h1>
+      <p class="intro">Run your Bots on models from many companies through one OpenRouter key.</p>
+
+      <h2 id="works">What works</h2>
+      <ul>
+        <li>Every model on OpenRouter's list that can use tools. The model picker lists them with their prices, and you can search them.</li>
+        <li>Chat, tools and replies, through the same approvals as every Bot.</li>
+        <li>Web search, through OpenRouter's web plugin on the Bot's own model.</li>
+        <li>Voice calls.</li>
+        <li>Subagents, on the same model.</li>
+        <li>Your key can also give search to Bots on providers without their own, like Mistral and DeepSeek.</li>
+      </ul>
+      <p>OpenRouter's models vary a lot. Each one starts as <b>Not checked</b>, and images show as Not checked until they are measured. See <a href="/works-with#badges">how badges are earned</a>.</p>
+
+      <h2 id="not-yet">Not yet</h2>
+      <ul>
+        <li>Coding agents. They run on Claude, so they need an Anthropic key.</li>
+        <li>Computer and browser helpers. They still run on Claude, so they need an Anthropic key.</li>
+        <li>A credit balance check. <b>Test key</b> checks that the key works, not how much credit is left.</li>
+      </ul>
+
+      <h2 id="cost">Cost</h2>
+      <p>OpenRouter bills your own key. Synapse meters every call and counts it against your spend budget. When the budget is reached, the model isn't called.</p>
+      <ul>
+        <li>Prices come from OpenRouter's own model list, fetched once a day. The cost OpenRouter reports for each call is what Synapse counts.</li>
+        <li>A model with no known price is counted at the highest rate Synapse knows, $20 in, $2 cached and $75 out per million tokens, so spend is never under-counted.</li>
+        <li>Web search is charged by OpenRouter, inside each call's reported cost.</li>
+        <li>OpenRouter has no small model set aside for Synapse's own tasks, so those run on the Bot's model.</li>
+      </ul>
+
+      <h2 id="privacy">Privacy</h2>
+      <ul>
+        <li><b>Consent first.</b> Nothing goes to OpenRouter until you allow it once. The consent says what is sent: the conversation, tool results, files the Bot reads, safety-check inputs, memory notes and call transcripts. OpenRouter's own terms apply.</li>
+        <li><b>Only companies that don't keep your data.</b> OpenRouter passes each request to the company that runs the model. Synapse asks it to use only companies that don't collect your data.</li>
+        <li><b>Your key stays on your Mac.</b> It is encrypted, and only Synapse's own proxy adds it to a request. Your Bots never see it. Each call gets a one-time token, and the key is removed from anything that comes back.</li>
+        <li><b>The same safety gate.</b> Every action goes through Synapse's fixed rules and approvals, whatever the model. The safety reviewer runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for it in <b>Settings → Auto-review → Safety reviewer</b>. A reviewer on a model other than Claude asks you first until it passes the safety check.</li>
+      </ul>
+
+      <h2 id="setup">Set up</h2>
+      <ol>
+        <li>Create a key on <a href="https://openrouter.ai/keys">OpenRouter</a>, with some credit on the account.</li>
+        <li>In Synapse, open <b>Settings → Account → Model providers</b>. Click <b>Allow</b> next to OpenRouter, read what it sends, and allow it.</li>
+        <li>Paste the key, click <b>Save</b>, then <b>Test key</b>.</li>
+        <li>Open a Bot's settings, search OpenRouter's models in the model picker, and pick one.</li>
+      </ol>
+      <p>You can also start with OpenRouter: pick it in the key step when you first open Synapse, allow it, and paste the key. It's tested before it's saved, and no Anthropic key is needed.</p>
+    </article>
+  </div>

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { providerComplete } from "../helper-model/llm";
 import { meteredQuery } from "../usage/metered-query";
 import { HELPER_MODEL } from "@synapse/shared";
 import { loadPrompt } from "../prompts/index";
@@ -128,4 +129,12 @@ function realOr(p: string): string {
   } catch {
     return path.resolve(p);
   }
+}
+
+/** Spec §7a row 3: the rule compiler on a provider's (qualified) reviewer model. */
+export function providerCompilerCall(ref: string): CompilerCall {
+  return async (input) => {
+    const r = await providerComplete({ purpose: "rule-compile", botId: null, ref, system: `${loadPrompt("orig/rule-compiler.md")}\n\nReply with one JSON object only.`, user: input, schema: RULE_CARD_SCHEMA, timeoutMs: 30_000, maxTokens: 1_000 });
+    return r.json;
+  };
 }

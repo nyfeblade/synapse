@@ -10,7 +10,9 @@
 Synapse is a Mac app where a small team of AI Bots works for you. You chat with them, give them code to
 write, talk to them on voice calls and let them use your Mac, with your approval for anything risky. Each
 Bot has its own name, memory and skills, and its own Linux computer in a sandbox on your Mac. Synapse runs
-on your own Anthropic API key: you pay Anthropic for what the Bots use, and nothing else.
+on your own AI key: an Anthropic API key, or one for OpenAI, OpenRouter, Gemini, Mistral or DeepSeek, or a
+model on your Mac with Ollama or LM Studio ([Works with](https://synapse-site-virid.vercel.app/works-with)). You pay the provider for
+what the Bots use, and nothing else.
 
 **Website:** [synapse-site-virid.vercel.app](https://synapse-site-virid.vercel.app) · [Docs](https://synapse-site-virid.vercel.app/docs) · [Changelog](https://synapse-site-virid.vercel.app/changelog)
 
@@ -36,16 +38,20 @@ with the same certificate.
 ## Requirements
 - A Mac with Apple silicon, macOS 14 or later, and about 8 GB of free disk.
 - [OrbStack](https://orbstack.dev), which runs the sandbox the Bots work in.
-- An Anthropic API key, from the [Anthropic Console](https://console.anthropic.com). Synapse uses an API key
-  only: signing in with a Claude subscription or a Claude Code login is not supported (see
-  [`docs/api-key-auth.md`](docs/api-key-auth.md)).
+- An AI key: an Anthropic API key from the [Anthropic Console](https://console.anthropic.com), or a key for
+  OpenAI, OpenRouter, Gemini, Mistral or DeepSeek, or a model on your Mac with Ollama or LM Studio. Any one
+  of them finishes setup. Coding agents, and the computer and browser helpers, run on Claude, so they need
+  an Anthropic key. Synapse reaches Claude with an API key only: signing in with a Claude subscription or a
+  Claude Code login is not supported (see [`docs/api-key-auth.md`](docs/api-key-auth.md)).
 - An internet connection for the first run and for the Bots' work.
 
 ## First run
 The setup screen walks you through it:
 1. It starts OrbStack and builds the Bots' computer, a small Linux VM (about 1 GB of downloads).
-2. It asks for your Anthropic API key. The key is sealed on your Mac; afterwards the app shows only its
-   last four characters.
+2. It asks for an AI key. Anthropic is the default; you can pick another provider instead, allow it once,
+   and paste its key, or pick **On this Mac** for Ollama or LM Studio. A key is tested before it's saved and
+   sealed on your Mac; afterwards the app shows only part of it. More providers can be added in
+   **Settings → Account**.
 3. You meet your first Bot. Start talking, or add more Bots from the sidebar.
 
 The voice ships inside the app, so voice calls work straight away. macOS asks for the microphone, screen
@@ -83,7 +89,7 @@ recording and accessibility only when you first use a feature that needs them.
   against the real code, with no model and no API key: `npm run security-suite`. Results are filed for
   every release.
 - **Local.** The app and the Bots' computer run on your Mac, in an OrbStack VM. There is no Synapse server
-  in the loop and no telemetry. The Bots' requests go to Anthropic's API with your key, and to the sites and
+  in the loop and no telemetry. The Bots' requests go to Anthropic's API, or the provider you pick, with your key, and to the sites and
   services you ask them to use. Feedback goes to the Synapse website only when you send it, and you see
   what it contains first.
 - **Sandboxed Bots.** Each Bot runs as its own user in the VM, with a private home folder. Bots can reach

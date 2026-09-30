@@ -127,9 +127,22 @@ install -m 0755 -o root -g root "$HERE/files/bot-claude-bwrap" /usr/local/bin/bo
 install -d -m 0755 /usr/local/libexec
 install -m 0755 -o root -g root "$HERE/files/bot-claude-as-box" /usr/local/libexec/bot-claude-as-box
 install -m 0755 -o root -g root "$HERE/files/bot-fs-query" /usr/local/libexec/bot-fs-query
+install -m 0755 -o root -g root "$HERE/files/bot-file" /usr/local/libexec/bot-file
+install -m 0644 -o root -g root "$HERE/files/bot-file-worker.py" /usr/local/libexec/bot-file-worker.py
 install -m 0755 -o root -g root "$HERE/files/bot-reap" /usr/local/libexec/bot-reap
 install -m 0755 -o root -g root "$HERE/files/bot-git-as-box" /usr/local/libexec/bot-git-as-box
 install -m 0755 -o root -g root "$HERE/files/bot-mcp-as-box" /usr/local/libexec/bot-mcp-as-box
+# Wave 3: a vendor coding CLI (ACP) as the Bot. The CLIs themselves go in /usr/local/lib/synapse-acp/<vendor> (root-owned);
+# installing them is a separate, owner-approved step: Settings → Account → Coding CLIs → Install runs bot-acp-install,
+# which installs only the version pinned (with every package's published sha512) in box/files/acp-pins/<vendor>.
+install -m 0755 -o root -g root "$HERE/files/bot-acp-as-box" /usr/local/libexec/bot-acp-as-box
+install -m 0755 -o root -g root "$HERE/files/bot-acp-install" /usr/local/libexec/bot-acp-install
+install -d -m 0755 -o root -g root /usr/local/lib/synapse-acp /usr/local/lib/synapse-acp-pins
+for pins in "$HERE"/files/acp-pins/*/; do
+  v="$(basename "$pins")"
+  install -d -m 0755 -o root -g root "/usr/local/lib/synapse-acp-pins/$v"
+  install -m 0644 -o root -g root "$pins/package.json" "$pins/package-lock.json" "/usr/local/lib/synapse-acp-pins/$v/"
+done
 install -m 0755 -o root -g root "$HERE/files/bot-claude-read-session" /usr/local/libexec/bot-claude-read-session
 install -m 0755 -o root -g root "$HERE/files/bot-claude-write-session" /usr/local/libexec/bot-claude-write-session
 install -m 0755 -o root -g root "$HERE/files/bot-claude-delete-session" /usr/local/libexec/bot-claude-delete-session

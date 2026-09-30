@@ -89,11 +89,14 @@ export function App() {
     void loadDisplays();
     startUsageSync();
     startSpendMeterSync();
-    // host killed mid-connect: the next connect asks again. A host with no Claude sign-in (a new or recreated
-    // box) goes straight to sign-in even when this profile saw the onboarding before.
+    // host killed mid-connect: the next connect asks again. A host with no key set up (a new or recreated box) goes
+    // straight to the key step even when this profile saw the onboarding before. Any-key setup: "a key is set up" is
+    // the host's answer — an Anthropic key, or any provider the user allowed whose key worked (or a model on this Mac
+    // that answered) — so a user with only an OpenAI key is never sent back to the key step.
     void callQuiet("getOnboarding", {}).then((o) => {
-      setOnboardingStep(o.hasSeenOnboarding && !o.tokenConfigured ? "setup" : "splash");
-      setNeedsOnboarding(!o.hasSeenOnboarding || !o.tokenConfigured);
+      const keySetUp = o.tokenConfigured;
+      setOnboardingStep(o.hasSeenOnboarding && !keySetUp ? "setup" : "splash");
+      setNeedsOnboarding(!o.hasSeenOnboarding || !keySetUp);
       setOnboardingKnown(true);
     }).catch(() => {});
   }, [connection.kind]);

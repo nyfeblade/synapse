@@ -1,4 +1,4 @@
-import { LIMITS5, STR5, type BotSummary, type TranscriptEntry, type VoiceCallView } from "@synapse/shared";
+import { LIMITS5, STR5, STRV, isAcpModelRef, type BotSummary, type TranscriptEntry, type VoiceCallView } from "@synapse/shared";
 import { GatewayError } from "../gateway/errors";
 import { roomBotName } from "../groups/member-prompt";
 import type { CommandHandlers } from "../gateway/server";
@@ -43,6 +43,11 @@ let callSeq = 0;
  * the chat it started in; a Bot added mid-call gets a short, redacted context block of the call so far
  * (delivered with its first turn), and a "Joined a call in <chat> · 4m" note in its own chat.
  */
+/** 0.1.6: Bots on a coding CLI can't be on a call yet (ACP ruling 15). */
+function noCalls(b: Pick<BotSummary, "profile">): boolean {
+  return isAcpModelRef(b.profile.model);
+}
+
 export class CallRegistry {
   private calls = new Map<string, Call>();
   private byChat = new Map<string, string>();
@@ -82,10 +87,13 @@ export class CallRegistry {
     const live = this.byChat.get(chatId);
     if (live && this.calls.has(live)) return this.view(this.calls.get(live)!);
     const chat = this.d.bots.summary(chatId);
+    // 0.1.6: a Bot on a coding CLI (ACP) has no voice yet: its call is refused up front, and a group call leaves it out.
+    if (!chat.group && noCalls(chat)) throw new GatewayError("CALLS_UNAVAILABLE", STRV.callsNotAvailable(chat.profile.name));
     const now = this.d.now();
     let ids: string[];
     if (chat.group) {
-      const members = chat.group.memberIds.filter((m) => this.d.bots.has(m));
+      const members = chat.group.memberIds.filter((m) => this.d.bots.has(m) && !noCalls(this.d.bots.summary(m)));
+      if (!members.length) throw new GatewayError("CALLS_UNAVAILABLE", STRV.callsNotAvailable(chat.profile.name));
       const recency = (m: string) => { const s = this.d.bots.summary(m); return Math.max(s.lastBotMessageAt ?? 0, s.updatedAt ?? 0); };
       ids = [...members].sort((a, b) => recency(b) - recency(a)).slice(0, LIMITS5.callMaxBots);
       ids = members.filter((m) => ids.includes(m)); // keep the group's own order on screen
@@ -104,7 +112,7 @@ export class CallRegistry {
   eligible(callId: string, all: BotSummary[]): string[] {
     const c = this.get(callId);
     const on = new Set(c.participants.map((p) => p.botId));
-    return all.filter((b) => !b.group && !b.archived && !on.has(b.id)).map((b) => b.id);
+    return all.filter((b) => !b.group && !b.archived && !on.has(b.id) && !noCalls(b)).map((b) => b.id);
   }
 
   add(callId: string, botId: string): VoiceCallView {
@@ -112,6 +120,7 @@ export class CallRegistry {
     if (!this.d.bots.has(botId)) throw new GatewayError("NOT_FOUND", "That Bot doesn't exist.", 404);
     const b = this.d.bots.summary(botId);
     if (b.group) throw new GatewayError("BAD_ARGS", "A group can't join a call as a Bot.");
+    if (noCalls(b)) throw new GatewayError("CALLS_UNAVAILABLE", STRV.callsNotAvailable(b.profile.name));
     if (c.participants.some((p) => p.botId === botId)) return this.view(c);
     if (c.participants.length >= LIMITS5.callMaxBots) throw new GatewayError("CALL_FULL", STR5.callFull, 400);
     const now = this.d.now();

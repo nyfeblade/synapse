@@ -51,7 +51,7 @@
         <li>A Mac with Apple silicon (M1 or later), on macOS 14 or later.</li>
         <li>About 8 GB of free disk space.</li>
         <li><a href="https://orbstack.dev">OrbStack</a>, which runs the Linux computer your Bots work in. It's free for personal use.</li>
-        <li>An Anthropic API key from the <a href="https://console.anthropic.com">Anthropic Console</a>, with some credit on the account.</li>
+        <li>An AI key with some credit on the account: an Anthropic API key from the <a href="https://console.anthropic.com">Anthropic Console</a>, or a key for OpenAI, OpenRouter, Gemini, Mistral or DeepSeek. Or a model on your Mac with Ollama or LM Studio (see <a href="/works-with">Works with</a>).</li>
         <li>An internet connection for setup and while your Bots work.</li>
       </ul>
 
@@ -71,7 +71,7 @@
       <h2 id="first-run">First run</h2>
       <ol>
         <li><b>The Bots' computer.</b> Synapse starts OrbStack and builds a small Linux computer for your Bots. It downloads about 1 GB, so give it a few minutes. If it stops partway, press <b>Retry</b>.</li>
-        <li><b>Input API Key.</b> Paste your Anthropic API key. Synapse checks it and tells you plainly if something's wrong.</li>
+        <li><b>Add your AI key.</b> Anthropic is chosen; paste your Anthropic API key. Or pick another provider, allow it, and paste its key, or pick <b>On this Mac</b> and click <b>Test</b>. Synapse checks the key and tells you plainly if something's wrong. More providers can be added later, in <b>Settings → Account</b>.</li>
         <li><b>A quick tour</b>, then pick the tools you use every day and <b>meet your first Bot</b>: start from a suggested one or create your own.</li>
       </ol>
       <p class="note">When you first use a feature that needs it, macOS asks for access to the microphone, screen recording or accessibility. Synapse never asks up front.</p>
@@ -89,7 +89,9 @@
         <li><b>Check it:</b> click <b>Check</b> to see whether the key works, which Claude models it can use, and whether web search is on for your account.</li>
         <li><b>Remove it:</b> click <b>Remove</b>. Your Bots stop until you add a key again.</li>
       </ul>
-      <p class="note">Synapse only works with an Anthropic API key. Signing in with a Claude subscription or a Claude Code login isn't supported.</p>
+      <h3>Other AI providers</h3>
+      <p>Your Bots can also run on OpenAI, OpenRouter, Gemini, Mistral or DeepSeek with your own key, or on a local model with Ollama or LM Studio. Pick one in the key step at setup, or later open <b>Settings → Account → Model providers</b>, allow the provider, add its key, then pick a model in a Bot's settings. If you set up without an Anthropic key, new Bots start on your provider's main model, and Synapse's shared work, like the safety reviewer and reading schedules, runs there too; the reviewer asks you until its model passes the safety check. Coding agents, and the computer and browser helpers, run on Claude, so they need an Anthropic key. See <a href="/works-with">Works with</a>.</p>
+      <p class="note">Synapse reaches Claude with an Anthropic API key only. Signing in with a Claude subscription or a Claude Code login isn't supported.</p>
 
       <h2 class="sec">Using Synapse</h2>
       <h2 id="bots">Bots</h2>
@@ -157,13 +159,13 @@
 
       <h2 class="sec">Managing Synapse</h2>
       <h2 id="spending">Spending and budgets</h2>
-      <p>Your Bots use your API key, so Anthropic bills you for what they use. Synapse meters every model call. <b>Settings → Account</b> shows spend per Bot by day, week and month.</p>
+      <p>Your Bots use your own keys, so Anthropic, or the provider you picked, bills you for what they use. Synapse meters every model call. <b>Settings → Account</b> shows spend per Bot by day, week and month.</p>
       <p>Set a weekly or monthly budget there too. When a Bot reaches it, it pauses or asks you before spending more.</p>
 
       <h2 id="settings">Settings at a glance</h2>
       <table>
         <tr><th>General</th><td>Appearance (theme, launch animation and sound) and memory.</td></tr>
-        <tr><th>Account</th><td>Your API key, usage and budgets.</td></tr>
+        <tr><th>Account</th><td>Your API key, other AI providers, usage and budgets.</td></tr>
         <tr><th>Voice</th><td>Voices and call sounds.</td></tr>
         <tr><th>Computer</th><td>The Bots' computer and what Bots may do on your Mac.</td></tr>
         <tr><th>Schedules</th><td>Scheduled and triggered work.</td></tr>
@@ -179,7 +181,7 @@
       <h2 id="privacy">Privacy and your data</h2>
       <p>The full details are in the <a href="/privacy">Privacy Policy</a>.</p>
       <ul>
-        <li><b>No Synapse account or server.</b> Synapse talks straight to Anthropic with your key. The only thing that ever reaches us is feedback you choose to send.</li>
+        <li><b>No Synapse account or server.</b> Synapse talks straight to Anthropic, or the AI provider you choose, with your key. The only thing that ever reaches us is feedback you choose to send.</li>
         <li><b>Your data stays on your Mac</b>, in <span class="path">~/Library/Application Support/Synapse</span>, and in the Bots' computer (an OrbStack machine called <span class="path">box</span>).</li>
         <li><b>Secrets are encrypted</b> with a key kept in the app's own data folder. Bots' sandboxed commands can't read it.</li>
         <li><b>Apps you connect through Composio</b> send their data through Composio, using your own Composio key. See <a href="#composio">Connect apps with Composio</a>.</li>

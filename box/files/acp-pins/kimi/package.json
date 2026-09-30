@@ -1,0 +1,6 @@
+{
+  "name": "synapse-acp-kimi",
+  "private": true,
+  "description": "The pinned @moonshot-ai/kimi-code package Synapse installs for Bots (box/files/bot-acp-install).",
+  "dependencies": { "@moonshot-ai/kimi-code": "2.1.1" }
+}

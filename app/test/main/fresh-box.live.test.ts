@@ -8,6 +8,7 @@ import { resolveOrb } from "../../src/main/orb-path";
 import { boxSteps } from "../../src/main/setup/box-steps";
 import { listMachines } from "../../src/main/setup/orb";
 import { BoxProvisioner } from "../../src/main/setup/provisioner";
+import { realHomeForOrb } from "./orb-live-home";
 
 /**
  * Portable install, the fresh-Mac acceptance run for the Bots' computer (docs/portable-install.md):
@@ -25,6 +26,7 @@ const machine = process.env.FRESH_BOX_MACHINE ?? "";
 const live = process.env.RUN_FRESH_BOX === "1" && /^synapse-accept-[a-z0-9-]+$/.test(machine);
 
 describe.skipIf(!live)("a fresh Bots' computer, for real", () => {
+  realHomeForOrb();
   it("create → start → provision (→ deploy) resumably, and a second run does nothing", async () => {
     const orb = resolveOrb();
     expect((await listMachines(execCommand, orb)).some((m) => m.name === machine), `${machine} already exists; pick a new name`).toBe(false);

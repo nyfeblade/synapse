@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { BOT_CALL_LIMITS, CALL_FEEL, STRV, type BotCallAnswer, type BotCallsView, type BotSettings, type BotSummary, type IncomingCallView, type TranscriptEntry } from "@synapse/shared";
+import { BOT_CALL_LIMITS, CALL_FEEL, STRV, isAcpModelRef, type BotCallAnswer, type BotCallsView, type BotSettings, type BotSummary, type IncomingCallView, type TranscriptEntry } from "@synapse/shared";
 import type { BotToolDef, BotToolResult } from "../brain/types";
 import { GatewayError } from "../gateway/errors";
 import type { SseHub } from "../gateway/sse-hub";
@@ -51,6 +51,8 @@ export class BotCallService {
   request(botId: string, rawReason: string): { placed: boolean; note: string } {
     if (!this.d.bots.has(botId)) return { placed: false, note: "Not placed: this Bot no longer exists." };
     const reason = rawReason.replace(/\s+/g, " ").trim().slice(0, BOT_CALL_LIMITS.reasonMax);
+    // 0.1.6: a Bot on a coding CLI (ACP) has no voice yet, so it can't ring the user.
+    if (isAcpModelRef(this.d.bots.summary(botId).profile.model)) return { placed: false, note: `Not placed: ${STRV.callsNotAvailable(this.name(botId))}.` };
     const mayCall = this.d.bots.summary(botId).settings.mayCall;
     if (mayCall === false) return { placed: false, note: "Not placed: the user has turned off calls from you." };
     if ([...this.rings.values()].some((r) => r.botId === botId)) return { placed: false, note: "Not placed: you are already ringing the user." };
