@@ -82,15 +82,17 @@
         <li>Sign in to the <a href="https://console.anthropic.com">Anthropic Console</a> and add some credit under Billing.</li>
         <li>Open <b>API Keys</b>, create a key and copy it. It starts with <span class="path">sk-ant-</span>.</li>
       </ol>
-      <h3>Adding, changing or removing it</h3>
-      <p>Open <b>Settings → Account</b>. You'll see your saved key with most of it hidden.</p>
+      <h3>Adding, changing or removing keys</h3>
+      <p>Open <b>Settings → Account</b>. You'll see your saved keys with most of each hidden. You can keep several named keys per provider, like "Personal" and "Work".</p>
       <ul>
-        <li><b>Change it:</b> paste the new key and click <b>Replace key</b>.</li>
-        <li><b>Check it:</b> click <b>Check</b> to see whether the key works, which Claude models it can use, and whether web search is on for your account.</li>
-        <li><b>Remove it:</b> click <b>Remove</b>. Your Bots stop until you add a key again.</li>
+        <li><b>Add one:</b> click <b>Add key</b>, name it and paste it. The first key is the default.</li>
+        <li><b>Check it:</b> click <b>Test</b> to see whether the key works.</li>
+        <li><b>Choose the default:</b> click <b>Make default</b>. Each Bot pays with the key picked for it in its settings, or the default.</li>
+        <li><b>Cap it:</b> set a <b>Monthly cap</b>. A key at its cap stops its calls and says so.</li>
+        <li><b>Remove it:</b> click <b>Remove</b>. Its Bots move to the default key. With no Anthropic key left, Claude Bots stop until you add one again.</li>
       </ul>
       <h3>Other AI providers</h3>
-      <p>Your Bots can also run on OpenAI, OpenRouter, Gemini, Mistral or DeepSeek with your own key, or on a local model with Ollama or LM Studio. Pick one in the key step at setup, or later open <b>Settings → Account → Model providers</b>, allow the provider, add its key, then pick a model in a Bot's settings. If you set up without an Anthropic key, new Bots start on your provider's main model, and Synapse's shared work, like the safety reviewer and reading schedules, runs there too; the reviewer asks you until its model passes the safety check. Coding agents, and the computer and browser helpers, run on Claude, so they need an Anthropic key. See <a href="/works-with">Works with</a>.</p>
+      <p>Your Bots can also run on OpenAI, OpenRouter, Gemini, Mistral or DeepSeek with your own key, or on a local model with Ollama or LM Studio. Pick one in the key step at setup, or later open <b>Settings → Account → Model providers</b>, allow the provider, add its key, then pick a model in a Bot's settings. If you set up without an Anthropic key, new Bots start on your provider's main model, and Synapse's shared work, like the safety reviewer and reading schedules, runs there too; the reviewer asks you until its model passes the safety check. Coding agents and Engineering mode run on the Bot's own model. So do the computer and browser helpers. See <a href="/works-with">Works with</a>.</p>
       <p class="note">Synapse reaches Claude with an Anthropic API key only. Signing in with a Claude subscription or a Claude Code login isn't supported.</p>
 
       <h2 class="sec">Using Synapse</h2>
@@ -115,6 +117,12 @@
         <tr><th>Always allow</th><td>Don't ask again for this exact kind of action.</td></tr>
         <tr><th>Deny</th><td>Don't do it. The Bot is told and carries on without it.</td></tr>
       </table>
+      <p>A card a rule raised names that rule. <b>Always allow</b> on it makes that rule skip this person, site or folder from then on. <b>Make this a rule…</b> and <b>Loosen this rule…</b> open <b>Settings → Rules</b>.</p>
+      <h3 id="rules">Rules</h3>
+      <p>Write rules in plain English in <b>Settings → Rules</b>, or for one Bot in its settings. A rule is <b>Always allow</b>, <b>Ask first</b> or <b>Never</b>, and can name a Bot, an app or account, a folder, or a person or site. It can also carry a limit: "Ask before anything over $50", "At most 5 sends an hour", "No sends between 22:00 and 07:00" (your time zone). Synapse turns each rule into an exact check, shows it to you with how many of your last 50 actions it would have changed, and enforces it in code. A rule it can't read exactly is refused with the reason. Never beats Ask first, and Ask first beats Always allow.</p>
+      <p>Start from a preset. <b>Balanced</b> (the default) asks before sends, deletes, payments, uploads to unknown sites, running code from the internet, destructive git, sudo, global installs, app writes, and access or key changes. <b>Careful</b> also asks for sends and app writes you asked for yourself. <b>Hands-off</b> asks only before payments and deletes. A preset sets the preset rules only: Auto-review and Synapse's other built-in checks still run under all three. Presets are ordinary rules you can edit.</p>
+      <p><b>Guidelines</b> ("draft, don't send", "cite sources") go to the Bot and to Auto-review as instructions. They aren't enforced like rules.</p>
+      <p>Some things no rule, preset or mode can change, No limits included: Synapse's own settings, keys and private data; your Mac and your home network (unless you turn on <b>Local network</b>); and the Bots' firewall. In a Bot's settings, <b>Network</b> can limit it to a list of sites; it then can't upload to, or run code from, anywhere else, though it can still read other sites. Synapse's gate enforces this on what the Bot does in the Bots' computer. A per-Bot firewall rule isn't there yet, so a site a script works out as it runs isn't caught.</p>
       <p>Mac permissions and the Bots' computer live in <b>Settings → Computer</b>.</p>
 
       <h2 id="google">Connect Google</h2>
@@ -154,7 +162,7 @@
       </ol>
       <p><b>Connect Gmail in one click.</b> Open the <b>Marketplace</b> and find Gmail. It offers two ways to connect: <b>Connect directly</b> (your own Google app, the private default) and <b>One click with Composio</b>. Press <b>One click with Composio</b>. Slack, GitHub, Notion and Linear are under <b>Apps through Composio</b>, each with one <b>Connect</b>. The first time, Synapse shows one line about your data (see below) and asks you to accept it. Composio's sign-in page opens in your browser. Approve it there, and the row changes to <b>Connected</b>.</p>
       <p><b>Choose which Bots can use it.</b> A newly connected app starts off for every Bot. Turn it on for a Bot in the list that opens under the app, or in that Bot's settings. You can turn it off again at any time, and it takes effect on the Bot's next action.</p>
-      <p><b>What always asks.</b> Reading is quiet: a Bot can search and read your mail, events and files without asking. Anything that sends or changes something asks you first, such as sending an email, creating or deleting an event, posting a message or opening an issue. This happens even with Auto-review off. In Full auto, a Bot does what you just asked for without a card, such as the email you told it to send to the person you named. It still asks before deleting, paying, messaging or inviting people you didn't ask it to, acting on many people or items at once, or doing anything an email, web page, routine or another Bot asked for.</p>
+      <p><b>What asks.</b> Reading is quiet: a Bot can search and read your mail, events and files without asking. With the default Balanced rules, anything that sends or changes something asks you first, such as sending an email, creating or deleting an event, posting a message or opening an issue. This happens even with Auto-review off. In Full auto, a Bot does what you just asked for without a card, such as the email you told it to send to the person you named. It still asks before deleting, paying, messaging or inviting people you didn't ask it to, acting on many people or items at once, or doing anything an email, web page, routine or another Bot asked for.</p>
       <p><b>Privacy.</b> Apps connected through Composio send their data through Composio. Synapse talks to Composio directly from your Mac with your key; there is no Synapse server in between. Your key is stored encrypted with your other secrets. It never appears in chats or logs, and Bots never see it. <b>Disconnect</b> removes the connection from Composio, and <b>Remove key</b> forgets the key.</p>
 
       <h2 class="sec">Managing Synapse</h2>

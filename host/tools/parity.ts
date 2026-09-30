@@ -38,7 +38,9 @@ export const SPEC_GATEWAY_COMMANDS: readonly string[] = [
   // Settings → Account (the API key)
   "setApiKey", "clearApiKey", "testAuthConnection", "checkApiKey",
   // Settings → Account (model provider keys and consent)
-  "setProviderKey", "clearProviderKey", "testProviderKey", "consentProvider", "runSafetyCheck", "cancelSafetyCheck", "setSafetyReviewer", "runProviderConformance",
+  "setProviderKey", "clearProviderKey", "testProviderKey", "consentProvider", "runSafetyCheck",
+  // 0.1.7: several keys per provider, and the model picker's model + key
+  "addKey", "renameKey", "setDefaultKey", "removeKey", "setKeyCap", "testKey", "pickAgentModel", "cancelSafetyCheck", "setSafetyReviewer", "runProviderConformance",
   // Settings → Account, coding CLIs over ACP (Wave 3)
   "consentAcpVendor", "startAcpLogin", "checkAcpLogin", "installAcpVendor", "removeAcpVendor",
   "answerBotCall", "setBotCallPermission",
@@ -56,6 +58,8 @@ export const SPEC_GATEWAY_COMMANDS: readonly string[] = [
   "mcpStartTask",
   // 4.4: the app's own connector (Telegram) reporting its health
   "reportConnectorHealth",
+  // Safety v2: Settings → Rules (the owner's app only)
+  "addSafetyRule", "updateSafetyRule", "deleteSafetyRule", "setSafetyPreset", "setGuidelines", "setBotNetwork",
 ];
 
 /** §4.5 commands (plus Phase 4 additions) that only read. */
@@ -71,7 +75,8 @@ export const READ_ONLY_COMMANDS: readonly string[] = [
   "listMacActions", "exportMacActions", "getLocalDryRun",
   "readLocalFile", "getNetworkStats", "getOnboarding", "listCodingAgents", "getPhase5Settings", "getGoogleStatus", "getGoogleReconnectCheck", "getComposioStatus", "getGitHubStatus",
   "getAuth", "getProviders", "getAcpVendors", "getSafetyReviewer", "getModelCatalog", "getCostPreview", "getModelAccess", "getBudgetPrompt", "getSpendMeter", "macClaudeAuth",
-  "mcpListBots", "mcpTaskStatus", "mcpTaskResult",
+  "getKeys", "getModelPicks",
+  "mcpListBots", "mcpTaskStatus", "mcpTaskResult", "getSafety", "compileSafetyRule",
   // 4.4: connector health
   "getConnectorHealth",
 ];
@@ -215,6 +220,13 @@ export const PARITY: Record<string, ParityEntry> = {
   setProviderKey: { userOnly: "secret values" },
   clearProviderKey: { userOnly: "secret values" },
   testProviderKey: { userOnly: "account sign-in (spends one tiny message)" },
+  addKey: { userOnly: "secret values" },
+  renameKey: { userOnly: "secret values" },
+  setDefaultKey: { userOnly: "which key pays" },
+  removeKey: { userOnly: "secret values" },
+  setKeyCap: { userOnly: "spend limits" },
+  testKey: { userOnly: "account sign-in (spends one tiny message)" },
+  pickAgentModel: { userOnly: "which key pays" },
   consentProvider: { userOnly: "data-sharing consent is the user's own" },
   consentAcpVendor: { userOnly: "data-sharing consent is the user's own" },
   startAcpLogin: { userOnly: "account sign-in" },
@@ -223,6 +235,13 @@ export const PARITY: Record<string, ParityEntry> = {
   removeAcpVendor: { userOnly: "installing software on the Bots' computer as root" },
   runSafetyCheck: { userOnly: "safety settings (spends model calls)" },
   setSafetyReviewer: { userOnly: "safety settings" },
+  // Safety v2: a Bot can never write, loosen or remove a rule, a guideline or its own network list.
+  addSafetyRule: { userOnly: "safety rules" },
+  updateSafetyRule: { userOnly: "safety rules" },
+  deleteSafetyRule: { userOnly: "safety rules" },
+  setSafetyPreset: { userOnly: "safety rules" },
+  setGuidelines: { userOnly: "safety rules" },
+  setBotNetwork: { userOnly: "safety rules" },
   cancelSafetyCheck: { userOnly: "safety settings" },
   runProviderConformance: { userOnly: "model checks (spends model calls)" },
   answerBotCall: { userOnly: "answering a Bot's call" },

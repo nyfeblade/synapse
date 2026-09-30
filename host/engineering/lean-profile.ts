@@ -47,6 +47,15 @@ export const EVERYDAY_UP_FRONT_TOOLS: readonly string[] = Object.freeze([
   "SendMessage", "Shell", "SearchHistory", "SendToAgent", "GetMcpServerStatus", "AuthenticateMcpServer", "RestartMcpServers",
 ]);
 
+/**
+ * 0.1.8 (the coding token gap): the same two profiles on Synapse's own loop (ProviderBrain). There the shell is the Bot
+ * tool Shell (and AwaitShell for a command that went to the background), not the CLI's built-in Bash, so an engineering
+ * Bot loads those two up front as well. Everything else waits behind ToolSearch, as on the CLI path.
+ */
+export function providerUpFrontTools(s: Pick<BotSettings, "engineeringMode">): string[] {
+  return isLean(s) ? [...ENGINEERING_UP_FRONT_TOOLS, "Shell", "AwaitShell"] : [...EVERYDAY_UP_FRONT_TOOLS];
+}
+
 export interface ProfileSpawnFields {
   upFrontBotTools?: string[];
   skillOverrides?: Record<string, SkillListing>;

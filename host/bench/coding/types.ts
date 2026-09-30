@@ -8,7 +8,8 @@ export const addUsage = (a: Usage, b: Usage): Usage => ({
   fresh: a.fresh + b.fresh, cacheRead: a.cacheRead + b.cacheRead, cacheWrite: a.cacheWrite + b.cacheWrite, output: a.output + b.output,
 });
 
-export type RunnerName = "cli" | "synapse";
+/** cli: headless Claude Code; synapse: a Bot on the box; provider-loop: Synapse's own coding engine on a provider model. */
+export type RunnerName = "cli" | "synapse" | "provider-loop";
 
 /**
  * Anything the agent put in front of the (absent) human. Fixed policy, same for both runners:

@@ -132,9 +132,87 @@ function realOr(p: string): string {
 }
 
 /** Spec §7a row 3: the rule compiler on a provider's (qualified) reviewer model. */
+/** The rule compiler on Claude through the Messages adapter (no Agent SDK): the SDK call's prompt and schema, as is. */
+export function claudeMessagesCompilerCall(ref: string = HELPER_MODEL): CompilerCall {
+  return async (input) => {
+    const r = await providerComplete({ purpose: "rule-compile", botId: null, ref, system: loadPrompt("orig/rule-compiler.md"), user: input, schema: RULE_CARD_SCHEMA, timeoutMs: 30_000, maxTokens: 1_000 });
+    return r.json;
+  };
+}
+
 export function providerCompilerCall(ref: string): CompilerCall {
   return async (input) => {
     const r = await providerComplete({ purpose: "rule-compile", botId: null, ref, system: `${loadPrompt("orig/rule-compiler.md")}\n\nReply with one JSON object only.`, user: input, schema: RULE_CARD_SCHEMA, timeoutMs: 30_000, maxTokens: 1_000 });
     return r.json;
   };
+}
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// Safety v2: the same rule compiler, asked for the v2 matcher (shared/safety-rules.ts). It is asked only when the
+// deterministic grammar can't read a rule, and its answer is checked strictly (validateModelRule): anything it didn't
+// read goes in `unmatched`, and anything unmatched or unknown rejects the rule. Never a guess.
+// ---------------------------------------------------------------------------------------------------------------
+
+export const RULE_V2_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["clean", "unmatched", "type", "kinds", "scope", "limits"],
+  properties: {
+    clean: { type: "boolean" },
+    unmatched: { type: "string" },
+    type: { enum: ["allow", "ask", "never"] },
+    kinds: { type: "array", items: { enum: ["send", "delete", "pay", "upload", "fetch-run", "git", "sudo", "global-install", "app-write", "access", "command", "file-write", "browse", "mac", "any"] } },
+    scope: {
+      type: "object", additionalProperties: false, required: ["bots", "apps", "accounts", "paths", "people", "domains"],
+      properties: Object.fromEntries(["bots", "apps", "accounts", "paths", "people", "domains"].map((k) => [k, { type: "array", items: { type: "string" } }])),
+    },
+    limits: {
+      type: "object", additionalProperties: false, required: ["overAmount", "perHour", "between"],
+      properties: {
+        overAmount: { type: ["number", "null"] },
+        perHour: { anyOf: [{ type: "null" }, { type: "object", additionalProperties: false, required: ["max", "per"], properties: { max: { type: "integer" }, per: { enum: ["bot", "all"] } } }] },
+        between: { anyOf: [{ type: "null" }, { type: "object", additionalProperties: false, required: ["from", "to"], properties: { from: { type: "string" }, to: { type: "string" } } }] },
+      },
+    },
+  },
+};
+
+export const RULE_V2_PROMPT = `You turn one plain-English safety rule into an exact matcher. Input: {"text": the rule, "bots": [{id, name}]}.
+Output JSON only, with these fields:
+- type: "allow" (always allow / don't ask), "ask" (ask first), or "never" (never / don't / block / at most N).
+- kinds: what actions it covers, from: send, delete, pay, upload, fetch-run, git, sudo, global-install, app-write, access, command, file-write, browse, mac, any.
+- scope: bots (ids from the input only), apps (gmail, calendar, drive, slack, notion, github, linear, discord, telegram, whatsapp, messages, twitter, jira, trello, asana, dropbox, s3, stripe, shopify, outlook, mac, box, browser, docs, sheets), accounts (email addresses the action is sent FROM), paths (absolute or ~/ folders), people (email addresses), domains (site or email domains like example.com). Use [] for any.
+- limits: overAmount (a number, for "over $50"), perHour ({max, per: "bot" | "all"} for "at most N an hour"), between ({from, to} as HH:MM 24-hour, for a time window). null when absent.
+- unmatched: every word of the rule you could NOT express exactly with the fields above (a person named without an address, "important", "risky", "my boss", "big"). "" when everything was expressed.
+- clean: true only when unmatched is "" and every field is exact. Never guess an address, a site, a folder or an amount.`;
+
+/** The v2 compile call on the reviewer's model, by the same transport the rule compiler uses. */
+export function ruleV2Call(run: { kind: "sdk"; env: Record<string, string>; pathToClaudeCodeExecutable?: string; cwd: string } | { kind: "messages"; ref?: string } | { kind: "provider"; ref: string }): (input: string) => Promise<unknown> {
+  if (run.kind === "sdk") {
+    return async (input) => {
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 30_000);
+      try {
+        for await (const m of meteredQuery({ purpose: "rule-compile", botId: null }, {
+          prompt: input,
+          options: {
+            model: HELPER_MODEL, systemPrompt: RULE_V2_PROMPT, settingSources: [], mcpServers: {}, tools: [], thinking: { type: "disabled" },
+            maxTurns: 2, persistSession: false, cwd: run.cwd, env: { ...run.env, ENABLE_CLAUDEAI_MCP_SERVERS: "false" },
+            pathToClaudeCodeExecutable: run.pathToClaudeCodeExecutable, abortController: ac, outputFormat: { type: "json_schema", schema: RULE_V2_SCHEMA },
+          },
+        })) {
+          const r = m as { type: string; structured_output?: unknown; is_error?: boolean };
+          if (r.type === "result") {
+            if (r.is_error || !r.structured_output) throw new Error("rule compiler returned no structured output");
+            return r.structured_output;
+          }
+        }
+        throw new Error("rule compiler ended without a result");
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+  }
+  const ref = run.kind === "messages" ? (run.ref ?? HELPER_MODEL) : run.ref;
+  const system = run.kind === "provider" ? `${RULE_V2_PROMPT}\n\nReply with one JSON object only.` : RULE_V2_PROMPT;
+  return async (input) => (await providerComplete({ purpose: "rule-compile", botId: null, ref, system, user: input, schema: RULE_V2_SCHEMA, timeoutMs: 30_000, maxTokens: 1_000 })).json;
 }

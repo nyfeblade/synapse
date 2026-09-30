@@ -18,7 +18,9 @@
         <li>Chat, tools and replies, through the same approvals as every Bot.</li>
         <li>Voice calls.</li>
         <li>Subagents, on the same model.</li>
+        <li>Computer and browser helpers, on the same model. They work from text reads of the screen and page instead of screenshots, as <b>Experimental</b>.</li>
         <li>A context window of 1 million tokens.</li>
+        <li>Coding agents and Engineering mode, on the same model, through the same approvals.</li>
       </ul>
       <p>Every model starts as <b>Not checked</b>. A badge is earned by measurement, not given. See <a href="/works-with#badges">how badges are earned</a>.</p>
 
@@ -26,8 +28,6 @@
       <ul>
         <li>Images. DeepSeek's models don't take them.</li>
         <li>Web search of its own. A DeepSeek Bot borrows search from OpenAI, Gemini or OpenRouter if you've set one up; otherwise it has none.</li>
-        <li>Coding agents. They run on Claude, so they need an Anthropic key.</li>
-        <li>Computer and browser helpers. They still run on Claude, so they need an Anthropic key.</li>
       </ul>
 
       <h2 id="cost">Cost</h2>
@@ -50,7 +50,7 @@
       <ul>
         <li><b>Consent first.</b> Nothing goes to DeepSeek until you allow it once. The consent says what is sent: the conversation, tool results, files the Bot reads, safety-check inputs, memory notes and call transcripts. DeepSeek's own terms apply.</li>
         <li><b>Your key stays on your Mac.</b> It is encrypted, and only Synapse's own proxy adds it to a request. Your Bots never see it. Each call gets a one-time token, and the key is removed from anything that comes back.</li>
-        <li><b>The same safety gate.</b> Every action goes through Synapse's fixed rules and approvals, whatever the model. The safety reviewer runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for it in <b>Settings → Auto-review → Safety reviewer</b>. A reviewer on a model other than Claude asks you first until it passes the safety check.</li>
+        <li><b>The same safety gate.</b> Every action goes through Synapse's fixed rules and approvals, whatever the model. The safety reviewer runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for it in <b>Settings → Rules → Safety reviewer</b>. A reviewer on a model other than Claude asks you first until it passes the safety check.</li>
       </ul>
 
       <h2 id="setup">Set up</h2>

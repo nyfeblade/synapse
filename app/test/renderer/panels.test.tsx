@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENGINEERING_MODE_EXTRA_TOKENS, type BotSummary } from "@synapse/shared";
 import { BotSettingsPanel } from "../../src/renderer/components/BotSettingsPanel";
 import { SettingsModal } from "../../src/renderer/components/SettingsModal";
 import "../../src/renderer/components/UpdatesSection"; // registers Settings → Updates (Phase 5 registry, as main.tsx does)
 import { initialState } from "../../src/renderer/reducer";
+import { safetyFixture } from "./fake-bridge";
 import { useUi } from "../../src/renderer/store";
 
 const bot: BotSummary = {
@@ -20,7 +21,7 @@ beforeEach(() => {
   (window as unknown as { synapse: unknown }).synapse = {
     call: vi.fn(async (cmd: string, args: Record<string, unknown>) => {
       // FollowupsToggle's, GoogleToggle's, GitHubRow's, BrowserRow's, MacAppRow's and the Composio row's mount-time reads; not under test here
-      if (cmd !== "getModelAccess" && cmd !== "getModelCatalog" && cmd !== "getSafetyReviewer" && cmd !== "getPhase5Settings" && cmd !== "getGoogleStatus" && cmd !== "getGitHubStatus" && cmd !== "getLocalBrowserAllowed" && cmd !== "getLocalMacAppAllowed" && cmd !== "getLocalDryRun" && cmd !== "getComposioStatus") calls.push([cmd, args]);
+      if (cmd !== "getModelAccess" && cmd !== "getModelCatalog" && cmd !== "getModelPicks" && cmd !== "getSafetyReviewer" && cmd !== "getPhase5Settings" && cmd !== "getGoogleStatus" && cmd !== "getGitHubStatus" && cmd !== "getLocalBrowserAllowed" && cmd !== "getLocalMacAppAllowed" && cmd !== "getLocalDryRun" && cmd !== "getComposioStatus" && cmd !== "getSafety" && cmd !== "listMacActions") calls.push([cmd, args]);
       if (cmd === "setHostSettings") return { ok: true, result: { ...useUi.getState().settings, ...args } };
       return { ok: true, result: { agent: bot } };
     }),
@@ -40,6 +41,20 @@ describe("Bot settings panel (SET-15, BOT-25, BOT-18)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Model: Sonnet 5" }));
     fireEvent.click(screen.getByRole("option", { name: "Opus 5" }));
     await vi.waitFor(() => expect(calls).toEqual([["updateAgent", { id: "a", name: "Courier 2" }], ["updateAgent", { id: "a", model: "claude-opus-5" }]]));
+  });
+
+  it("one Engine control: inside the model picker beside Claude models, none as a separate field", async () => {
+    const { useModelCatalog } = await import("../../src/renderer/model-catalog");
+    useModelCatalog.setState({ view: { groups: [{ provider: "anthropic", label: "Anthropic", models: [{ ref: "claude-sonnet-5", label: "Sonnet 5", badges: [], whatWorks: [], contextWindow: 1 }] }] }, load: async () => {} });
+    try {
+      render(<BotSettingsPanel botId="a" />);
+      expect(document.querySelector('[data-setting="engine"]')).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Model: Sonnet 5" }));
+      const engine = screen.getByRole("radiogroup", { name: "Engine" });
+      expect(screen.getAllByRole("radiogroup", { name: "Engine" })).toHaveLength(1);
+      fireEvent.click(within(engine).getByRole("radio", { name: "Synapse (Experimental)" }));
+      await vi.waitFor(() => expect(calls).toContainEqual(["updateAgent", { id: "a", engine: "synapse" }]));
+    } finally { useModelCatalog.setState({ view: null }); }
   });
 
   it("edits the avatar through the editor; Set avatar stays disabled until something changes", async () => {
@@ -115,21 +130,34 @@ describe("Settings nav and close (T1)", () => {
   });
 });
 
-describe("Settings → General → Auto-review (SET-05, SET-06)", () => {
-  it("toggles Auto-review, adds, edits and deletes rules", async () => {
-    useUi.setState({ settingsFocus: "auto-review" }); // new-user walk finding 22: its own section
+describe("Settings → Rules (was Auto-review; SET-05, SET-06, safety v2)", () => {
+  it("toggles Auto-review, compiles a rule in plain English, adds it, and deletes a reviewer rule", async () => {
+    const view = safetyFixture();
+    const added = { ...view, rules: [...view.rules, { id: "rule-1", type: "ask" as const, text: "Ask me before anything over $50", kinds: ["pay" as const], scope: {}, limits: { overAmount: 50 }, except: [], source: "owner" as const, enabled: true, createdAt: 1, words: ["Ask first", "Payments", "over $50"] }] };
+    (window as unknown as { synapse: { call: unknown } }).synapse.call = vi.fn(async (cmd: string, args: Record<string, unknown>) => {
+      if (!cmd.startsWith("get") && cmd !== "listMacActions") calls.push([cmd, args]);
+      if (cmd === "setHostSettings") return { ok: true, result: { ...useUi.getState().settings, ...args } };
+      if (cmd === "getSafety") return { ok: true, result: view };
+      if (cmd === "compileSafetyRule") return { ok: true, result: { ok: true, type: "ask", words: ["Ask first", "Payments", "over $50"], preview: { changed: 2, of: 40, examples: [] }, conflicts: [] } };
+      if (cmd === "addSafetyRule") return { ok: true, result: added };
+      return { ok: true, result: {} };
+    });
+    useUi.setState({ settingsFocus: "auto-review" });
     render(<SettingsModal />);
     fireEvent.click(screen.getByRole("switch", { name: "Auto-review" }));
-    const input = screen.getByLabelText("When a Bot wants to:");
+    const input = await screen.findByLabelText("Add rule");
     const add = screen.getByRole("button", { name: "Add rule" }) as HTMLButtonElement;
     expect(add.disabled).toBe(true);
-    fireEvent.change(input, { target: { value: "Ask before anything that spends money" } });
-    fireEvent.change(screen.getByLabelText("It should:"), { target: { value: "ask" } });
+    fireEvent.change(input, { target: { value: "Ask me before anything over $50" } });
+    await screen.findByText("Would have changed 2 of your last 40 actions");
+    expect(screen.getByLabelText("Compiled rule").textContent).toContain("over $50");
     fireEvent.click(add);
-    fireEvent.click(screen.getAllByRole("button", { name: "Delete rule" })[0]!);
+    await screen.findByRole("switch", { name: "Rule on: Ask me before anything over $50" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete rule: Use the Bash tool to run the test suite" }));
     await vi.waitFor(() => expect(calls).toEqual([
       ["setHostSettings", { autoReviewEnabled: false }],
-      ["setHostSettings", { blockInstructions: ["Ask before anything that spends money"] }],
+      ["compileSafetyRule", { text: "Ask me before anything over $50", botId: null }],
+      ["addSafetyRule", { text: "Ask me before anything over $50", botId: null, asExceptionTo: null }],
       ["setHostSettings", { allowInstructions: [] }],
     ]));
     expect(screen.queryByText("Your rules are private to you. The built-in safety checks apply no matter what.")).toBeNull(); // UI polish pass: no subtitles

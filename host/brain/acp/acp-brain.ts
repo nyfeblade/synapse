@@ -151,6 +151,9 @@ export class AcpBrain implements SupervisedBrain {
 
   pushUserMessage(msg: ModelMessage): void { this.pushed.push(msg); }
 
+  /** Messages pushed that no prompt has taken yet (they join the next turn). */
+  get pendingMessages(): number { return this.pushed.length; }
+
   async interrupt(_reason: string): Promise<void> {
     if (this.procState !== "running" || !this.turn) return;
     this.setState("interrupted");

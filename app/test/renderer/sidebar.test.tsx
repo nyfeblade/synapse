@@ -161,7 +161,7 @@ describe("New chat (BOT-03, UI-04)", () => {
     // New-user walk, finding 16: the typed name filters the Bots.
     expect(screen.queryByRole("option", { name: /Courier/ })).toBeNull();
     fireEvent.keyDown(window, { key: "1", metaKey: true });
-    await vi.waitFor(() => expect(calls.filter((c) => c[0] !== "listStarterTemplates")[0]).toEqual(["createAgent", { name: "Tutor", isKickstartRequested: true }]));
+    await vi.waitFor(() => expect(calls.filter((c) => !["listStarterTemplates", "getModelCatalog", "getModelPicks"].includes(c[0]))[0]).toEqual(["createAgent", { name: "Tutor", isKickstartRequested: true }]));
   });
 
   // Traceability N5 (gate §4): the New chat composer is "Message Bot" with Attach and the mic, and no voice-chat button (NewBot board).

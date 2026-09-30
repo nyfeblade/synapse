@@ -7,6 +7,8 @@ import { useMarketplace } from "../marketplace/store";
 import { useUi } from "../store";
 import { nativeCall } from "../native";
 import { useTemplates } from "./store";
+import { applyNewBotChoice, NewBotModelStep } from "../components/NewBotModelStep";
+import type { NewBotChoice } from "../model-picks";
 
 export function ImportSheet() {
   const { sheet, close } = useTemplates();
@@ -27,6 +29,8 @@ function ImportBody() {
   const [error, setError] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(true);
   const [adding, setAdding] = useState(false);
+  // 0.1.7: the Bot's model (and paying key, with several keys), chosen before it's added.
+  const [choice, setChoice] = useState<NewBotChoice | null>(null);
   if (!sheet || sheet.kind !== "import") return null;
   const p = sheet.preview;
   const add = async () => {
@@ -34,6 +38,7 @@ function ImportBody() {
     setAdding(true);
     try {
       const { id } = await call("importTemplate", { token: p.token });
+      await applyNewBotChoice(id, choice);
       const after = useTemplates.getState().afterAdd;
       close();
       useMarketplace.getState().close(); // the new Bot opens in view, not behind the Marketplace
@@ -82,6 +87,7 @@ function ImportBody() {
         )}
         {p.thirdParty && <p className="warning" role="note">{STRSH.addedAsShared}</p>}
         {p.alreadyAdded && <p className="muted" role="note">{STRSH.alreadyHave}</p>}
+        <NewBotModelStep choice={choice} onChange={setChoice} />
         {error && <span className="error" role="alert">{error}</span>}
         <div className="sheet-actions">
           <button type="button" className="btn-secondary" onClick={close}>{STR.cancel}</button>

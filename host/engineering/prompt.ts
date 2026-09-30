@@ -12,11 +12,14 @@ const utcMinute = (ms: number) => `${new Date(ms).toISOString().slice(0, 16).rep
  * prompt appended, and this section, at the end of that append, tells it so. The preset already
  * carries the whole coding workflow, so this explains the mode; it does not re-teach coding.
  */
-export function engineeringModeSection(sinceMs?: number): string {
+export function engineeringModeSection(sinceMs?: number, synapsePrompt = false): string {
   return [
     "# ENGINEERING MODE",
     `You are in engineering mode. The user turned it on${sinceMs ? ` (${utcMinute(sinceMs)})` : ""}.`,
-    "Your system prompt is Claude Code's full engineering prompt (everything above your Bot instructions) plus your Bot instructions, instead of your standard assistant prompt.",
+    // A Bot on another provider's model runs Synapse's own engineering prompt (prompts/engineering-provider.md).
+    synapsePrompt
+      ? "Your system prompt is Synapse's engineering prompt (everything above your Bot instructions) plus your Bot instructions, instead of your standard assistant prompt."
+      : "Your system prompt is Claude Code's full engineering prompt (everything above your Bot instructions) plus your Bot instructions, instead of your standard assistant prompt.",
     "Work as a software engineer: follow those coding practices in full. Read code before you change it and match its conventions; use git carefully (check status and diffs, commit only when asked, never rewrite shared history); run the tests and type checks before you say something works.",
     // cost-diet-2: the `cd <absolute project path> &&` line is gone. The gate now reads the built-in Bash's real cwd
     // from the CLI's PreToolUse input (bash-cwd.cli.integration.test.ts), so a bare `npm test` in the work tree takes
@@ -39,9 +42,9 @@ export const PRESET_STANDARD_MODE_LINE =
   "Mode: standard mode (engineering mode is off). The user can turn engineering mode on in this Bot's settings.";
 
 /** The one-time hidden notice on the turn after a switch, so the change is explicit in the conversation. */
-export function modeChangeNotice(on: boolean, offMode: SystemPromptMode): string {
+export function modeChangeNotice(on: boolean, offMode: SystemPromptMode, synapsePrompt = false): string {
   if (on) {
-    return "Engineering mode was turned ON by the user just now; your system prompt changed to Claude Code's full engineering prompt plus your Bot instructions (see the ENGINEERING MODE section). Work as a software engineer from here on.";
+    return `Engineering mode was turned ON by the user just now; your system prompt changed to ${synapsePrompt ? "Synapse's engineering prompt" : "Claude Code's full engineering prompt"} plus your Bot instructions (see the ENGINEERING MODE section). Work as a software engineer from here on.`;
   }
   const standard = offMode === "standalone" ? "your standard assistant prompt" : "the standard Claude Code prompt";
   return `Engineering mode was turned OFF by the user just now; your system prompt changed back to ${standard} plus your Bot instructions. You are in standard mode.`;
@@ -57,7 +60,8 @@ export function engineeringOfferHint(canAsk: boolean): string {
 }
 
 /** `offMode` is the prompt this Bot runs while the switch is OFF (standalone unless the box owner forced the preset). */
-export function engineeringSystemExtra(s: BotSettings, offMode: SystemPromptMode = "standalone"): string {
-  const mode = s.engineeringMode ? engineeringModeSection(s.engineeringModeSince) : offMode === "preset" ? PRESET_STANDARD_MODE_LINE : "";
+/** `synapsePrompt`: the Bot runs on another provider's model, so engineering mode is Synapse's own prompt, not Claude Code's. */
+export function engineeringSystemExtra(s: BotSettings, offMode: SystemPromptMode = "standalone", synapsePrompt = false): string {
+  const mode = s.engineeringMode ? engineeringModeSection(s.engineeringModeSince, synapsePrompt) : offMode === "preset" && !synapsePrompt ? PRESET_STANDARD_MODE_LINE : "";
   return [mode, engineeringOfferHint(canOfferEngineering(s))].filter(Boolean).join("\n\n");
 }

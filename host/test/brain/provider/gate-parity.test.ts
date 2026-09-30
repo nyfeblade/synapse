@@ -29,12 +29,16 @@ import { localBotFile } from "../../../walls/bot-file";
 import { outsideLog } from "../../../review/outside-log";
 import { createRestoreHooks } from "../../../context/restore";
 import { finish, startFakeChatServer, textChunks, toolChunks, usageChunk, type FakeReply } from "./fake-chat-server";
+import { promptOf, startFakeMessagesServer, type MsgReply } from "./fake-messages-server";
 
 /**
  * Gate parity (spec §13 test plan; the most important provider test): the SAME scripted tool calls, made by FakeBrain
  * and by ProviderBrain (driven by a fake Chat Completions server), against the REAL ApprovalGate behind the real
  * TurnRunner wiring, must give identical gate decisions, identical approval cards, identical tool results and
  * handler runs, and identical defer → approval-resume behaviour.
+ *
+ * 2026-09-30: every case runs a third time with ProviderBrain on a CLAUDE model through the Anthropic Messages adapter
+ * (a fake Messages API behind the real auth proxy): Claude on Synapse's own loop must decide and card exactly alike.
  */
 type ModelMsg = { calls: { name: string; input: Record<string, unknown> }[] } | { text: string };
 /** What the "model" does for a turn whose prompt contains `when` (first match). */
@@ -53,7 +57,7 @@ function planFor(plan: Plan, prompt: string): ModelMsg[] {
   return plan.find((p) => prompt.includes(p.when))?.msgs ?? [];
 }
 
-type Kind = "fake" | "provider";
+type Kind = "fake" | "provider" | "claude";
 interface Observed {
   gate: string[];
   cards: unknown[];
@@ -121,6 +125,12 @@ async function runScenario(kind: Kind, o0: { plan: Plan; planFor?: (ws: string, 
     expireAll: real.expireAll.bind(real), forgetBot: real.forgetBot.bind(real), pendingCount: real.pendingCount.bind(real),
   };
   let url = "";
+  if (kind === "claude") {
+    const server = await startFakeMessagesServer((req) => claudeReply(o.plan, req.body));
+    servers.push(server);
+    const rt = await startProviderRuntime({ anthropicUpstream: server.url });
+    servers.push({ close: rt.stop });
+  }
   if (kind === "provider") {
     const server = await startFakeChatServer((req) => providerReply(o.plan, req.body));
     servers.push(server);
@@ -147,6 +157,7 @@ async function runScenario(kind: Kind, o0: { plan: Plan; planFor?: (ws: string, 
   runner.addObserver({ onTurnStart: (_b, slot) => sources.push(slot.source) });
   const id = bots.create({ origin: "user", kickstart: false, name: "Piper", ...(kind === "provider" ? {} : {}) });
   const model = kind === "provider" ? "openai:gpt-parity" : "claude-sonnet-5";
+  if (kind === "claude") (bots as unknown as { require(id: string): { profile: { engine?: string } } }).require(id).profile.engine = "synapse";
   (bots as unknown as { require(id: string): { profile: { model?: string } } }).require(id).profile.model = model;
   const cards = () => bots.tail(id, 200).filter((e): e is SendMessageEntry => e.kind === "send-message" && e.message.type === "auto-review-approval")
     .map((e) => (e.message as unknown as { approval: Record<string, unknown> }).approval);
@@ -198,6 +209,15 @@ function stripVolatile(v: unknown): unknown {
   if (!v || typeof v !== "object") return v;
   return Object.fromEntries(Object.entries(v).filter(([k]) => !VOLATILE.has(k)).map(([k, x]) => [k, stripVolatile(x)]));
 }
+/** The Claude "model": the same plan, answered as Messages blocks. */
+function claudeReply(plan: Plan, body: Record<string, unknown>): MsgReply {
+  const { prompt, after } = promptOf(body);
+  const m = planFor(plan, prompt)[after];
+  if (!m) return { blocks: [], stop: "end_turn", output: 1 };
+  if ("text" in m) return { blocks: [{ text: m.text }] };
+  return { blocks: m.calls.map((c) => ({ tool: c.name, id: `call_${++callSeq}`, input: c.input })) };
+}
+
 /** Tool-use ids differ between the brains (toolu_fake_N vs call_N): renamed in order of first appearance. */
 function normalizeIds(v: unknown): unknown {
   const map = new Map<string, string>();
@@ -217,10 +237,15 @@ const RM = "rm -rf /workspace/old";
 const reply = (content: string): ModelMsg => ({ calls: [{ name: "SendMessage", input: { content } }] });
 const reviewBy = (cmd: string): ReviewOutcome => (cmd.includes("rm -rf") ? BLOCK : ALLOW);
 
-async function both(o: Parameters<typeof runScenario>[1]): Promise<{ fake: Observed; provider: Observed }> {
+/** The loop tray's detail carries what the loop cost, which differs per model price: compared without the amount. */
+const noSpend = (o: Observed): Observed => ({ ...o, loop: { stopped: o.loop?.stopped ?? false, tray: o.loop?.tray ? { ...o.loop.tray, detail: o.loop.tray.detail?.replace(/ · .*spent$/, " · <spent>") ?? null } : null } });
+async function both(o: Parameters<typeof runScenario>[1]): Promise<{ fake: Observed; provider: Observed; claude: Observed }> {
   const fake = await runScenario("fake", o);
   const provider = await runScenario("provider", o);
-  return { fake, provider };
+  const claude = await runScenario("claude", o);
+  // Claude on the own loop decides, cards and runs exactly as the provider brain (which each case checks against FakeBrain).
+  expect(noSpend(claude)).toEqual(noSpend(provider));
+  return { fake, provider, claude };
 }
 
 describe("gate parity: FakeBrain and ProviderBrain against the real ApprovalGate", () => {
@@ -374,9 +399,11 @@ describe("gate parity: the built-in tools (Read, Write, Edit, WebFetch, TodoWrit
 });
 
 /** Like `both`, but the plan is built from each run's own workspace and host-private paths. */
-async function bothWs(plan: (ws: string, hostPrivate: string) => Plan, act?: (h: Harness) => Promise<void>): Promise<{ fake: Observed; provider: Observed }> {
+async function bothWs(plan: (ws: string, hostPrivate: string) => Plan, act?: (h: Harness) => Promise<void>): Promise<{ fake: Observed; provider: Observed; claude: Observed }> {
   const review = (req: string) => (req.includes("rm -rf") ? BLOCK : ALLOW);
   const fake = await runScenario("fake", { review, plan: [], planFor: plan, ...(act ? { act } : {}) });
   const provider = await runScenario("provider", { review, plan: [], planFor: plan, ...(act ? { act } : {}) });
-  return { fake, provider };
+  const claude = await runScenario("claude", { review, plan: [], planFor: plan, ...(act ? { act } : {}) });
+  expect(noSpend(claude)).toEqual(noSpend(provider));
+  return { fake, provider, claude };
 }

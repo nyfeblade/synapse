@@ -22,7 +22,7 @@
         <li><a href="/works-with-mistral">Mistral</a>, with a Mistral API key.</li>
         <li><a href="/works-with-deepseek">DeepSeek</a>, with a DeepSeek API key.</li>
       </ul>
-      <p>Setup takes any of these, or a model on your Mac. You don't need an Anthropic key unless you want Claude, coding agents or the computer and browser helpers.</p>
+      <p>Setup takes any of these, or a model on your Mac. You don't need an Anthropic key unless you want Claude.</p>
       <p>The provider bills your key. Synapse meters every call against your spend budget, and the model picker shows what a Bot would cost on each model.</p>
 
       <h2 id="local">On your Mac</h2>
@@ -60,7 +60,7 @@
         <li><b>Consent first.</b> Each provider is allowed once, before anything is sent to it. The consent says what goes there. A new version of the consent asks again.</li>
         <li><b>Only where you choose.</b> A Bot's conversation goes to the provider you picked for it, under that provider's terms. A Bot's own background work, like its memory notes and summaries, stays on its provider too. Synapse's shared work, like the safety reviewer and reading schedules, runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for the reviewer in Settings.</li>
         <li><b>Keys stay on your Mac.</b> They are encrypted and added only by Synapse's own proxy. Your Bots never see them.</li>
-        <li><b>The same safety gate.</b> Every action goes through Synapse's fixed rules and approvals, whatever the model. The safety reviewer runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for it in <b>Settings → Auto-review → Safety reviewer</b>. A reviewer on a model other than Claude asks you first until it passes the safety check.</li>
+        <li><b>The same safety gate.</b> Every action goes through Synapse's fixed rules and approvals, whatever the model. The safety reviewer runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for it in <b>Settings → Rules → Safety reviewer</b>. A reviewer on a model other than Claude asks you first until it passes the safety check.</li>
       </ul>
     </article>
   </div>

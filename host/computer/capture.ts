@@ -15,9 +15,9 @@ const KEEP = 200;
  * the tool text that tells it the save path. `path` is null when the write is refused (a swapped directory, or a
  * same-millisecond name collision) — the webp/dataUrl are still returned.
  */
-export async function captureScreen(o: { displays: DisplayManager; botId: string; workspace: string; now(): number }): Promise<CaptureResult> {
+export async function captureScreen(o: { displays: DisplayManager; botId: string; workspace: string; now(): number; size?: { w: number; h: number } }): Promise<CaptureResult> {
   const info = await o.displays.ensure(o.botId);
-  const webp = await o.displays.x(o.botId).screenshotWebp();
+  const webp = await o.displays.x(o.botId).screenshotWebp(o.size);
   const dir = path.join(hostOutDir(o.workspace, "screens"), o.botId);
   const file = writeHostOwnedFile(o.workspace, dir, `${o.now()}.webp`, webp, 0o640);
   if (file) {

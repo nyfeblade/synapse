@@ -1,0 +1,58 @@
+{
+  "text": "It shipped yesterday.",
+  "reasoning": "",
+  "finishReason": "stop",
+  "usage": {
+    "inputTokens": 2900,
+    "outputTokens": 55,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "promptTokens": 2900,
+    "webSearchRequests": 1
+  },
+  "toolCalls": [],
+  "providerMeta": {
+    "anthropic": {
+      "blocks": [
+        {
+          "type": "redacted_thinking",
+          "data": "EmwKAhgBEgy3va3pzix/LafPsn4a"
+        },
+        {
+          "type": "server_tool_use",
+          "id": "srvtoolu_01",
+          "name": "web_search",
+          "input": {
+            "query": "synapse release"
+          }
+        },
+        {
+          "type": "web_search_tool_result",
+          "tool_use_id": "srvtoolu_01",
+          "content": [
+            {
+              "type": "web_search_result",
+              "title": "Release notes",
+              "url": "https://example.org/notes",
+              "encrypted_content": "EqgfCioIARgB",
+              "page_age": "1 day"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "It shipped yesterday.",
+          "citations": [
+            {
+              "type": "web_search_result_location",
+              "url": "https://example.org/notes",
+              "title": "Release notes",
+              "encrypted_index": "Eo8BCioIAhgB",
+              "cited_text": "0.1.6 shipped"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

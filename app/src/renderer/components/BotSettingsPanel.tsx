@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { DEFAULT_EFFORT, EFFORT_LABELS, EFFORT_LEVELS, NO_LIMITS_CONFIRM, STR, STR5, modelLabel, parseAcpModelRef, type EffortLevel, type ModelId, type PermMode } from "@synapse/shared";
+import { BOT_ENGINE_LABELS, BOT_ENGINES, DEFAULT_EFFORT, EFFORT_LABELS, EFFORT_LEVELS, NO_LIMITS_CONFIRM, STR, STR5, STR_KEYS, botEngineOf, keyedProviderOf, isClaudeModel, modelLabel, parseAcpModelRef, type EffortLevel, type ModelId, type PermMode } from "@synapse/shared";
 import { setNotify } from "../bot-actions";
 import { nativeCall } from "../native";
 import { call, callQuiet } from "../bridge";
@@ -20,13 +20,15 @@ import { McpAccountRows } from "../marketplace/McpAccountRows";
 import { GitHubRow } from "../github/GitHubRow";
 import { askConfirm } from "./ConfirmDialog";
 import { BackIcon, CheckIcon, ChevronDownIcon, CloseIcon } from "./Icons";
+import { BotRulesBlock } from "./settings/RulesSection";
 import { SecretsSection } from "./SecretsSection";
 import { SettingLinksLayer } from "./settings/SettingLinksLayer";
 import { overlaysOpen } from "../overlay-stack";
 import { usePopOrigin } from "../pop-origin";
 import { pickableModels, startModelAccessSync, useModelAccess } from "../model-access";
-import { hasProviders, useModelCatalog } from "../model-catalog";
-import { ModelPickerList } from "./ModelPicker";
+import { useModelCatalog } from "../model-catalog";
+import { ModelPicker } from "./ModelPicker";
+import { useModelPicks } from "../model-picks";
 import { RatingsRow } from "../feedback/Ratings";
 import { AcpSignInRow } from "./AcpSignInRow";
 
@@ -130,6 +132,8 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
   // Spec §10: with a model provider set up, the picker groups models by provider, with badges and What works.
   const catalog = useModelCatalog((s) => s.view);
   useEffect(() => { if (modelOpen) void useModelCatalog.getState().load(); }, [modelOpen]);
+  // 0.1.7: keys (a model per key), recent and in-use models; asked again each time the picker opens.
+  const picks = useModelPicks(botId, modelOpen);
   // The grouped picker is tall: it opens fully visible — the trigger scrolled into view first, then below it when
   // there's room, else above it (whichever side has more), capped to that side's space and scrolling inside.
   const [placement, setPlacement] = useState<{ up: boolean; max: number } | null>(null);
@@ -138,6 +142,10 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
     const btn = modelRef.current?.querySelector(".select") as HTMLElement | null;
     if (!btn) return;
     btn.scrollIntoView?.({ block: "nearest" });
+    // The whole trigger stays in view above its open list (never clipped at the panel's top edge).
+    const panel = btn.closest(".panel") as HTMLElement | null;
+    const pr = panel?.getBoundingClientRect();
+    if (panel && pr && btn.getBoundingClientRect().top < pr.top + 12) panel.scrollTop -= pr.top + 12 - btn.getBoundingClientRect().top;
     const r = btn.getBoundingClientRect();
     const below = window.innerHeight - r.bottom - 12;
     const above = r.top - 12;
@@ -183,6 +191,18 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
   if (!bot) return null;
   const model = (bot.profile.model ?? "claude-sonnet-5") as ModelId;  // a provider ref reads the same way (modelLabel)
   const effort = (bot.profile.effort ?? DEFAULT_EFFORT) as EffortLevel;
+  const keyedP = keyedProviderOf(model);
+  // A model whose provider has no key left says so here (its turns fail with the same words).
+  const noKey = !!picks && !!keyedP && !picks.keys[keyedP]?.length;
+  const pickModel = (m: string, keyId: string | null) => {
+    const cur = keyedP ? bot.profile.modelKeys?.[keyedP] ?? null : null;
+    if (m === model && keyId === cur) return;
+    setError(null);
+    call("pickAgentModel", { id: botId, model: m, keyId })
+      .then((r) => acceptAgent(r.agent))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : STR.statusUnavailable));
+  };
+  const engine = botEngineOf(bot.profile);
   const save = (patch: Record<string, unknown>) => {
     setError(null);
     call("updateAgent", { id: botId, ...patch })
@@ -223,13 +243,15 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
         <button type="button" aria-haspopup="listbox" aria-expanded={modelOpen} aria-label={`Model: ${modelLabel(model)}`} className={modelOpen ? "dropdown select open" : "dropdown select"} onClick={() => setModelOpen(!modelOpen)}>
           <span>{modelLabel(model)}</span><ChevronDownIcon />
         </button>
-        {modelOpen && hasProviders(catalog) && (
+        {modelOpen && catalog && (
           <div ref={modelList as unknown as React.RefObject<HTMLDivElement>} className={placement?.up ? "listbox model-pop up" : "listbox model-pop"}
             style={placement ? { maxHeight: placement.max } : undefined}>
-            <ModelPickerList view={catalog} current={model} botId={botId} onPick={(m) => { setModelOpen(false); if (m !== model) save({ model: m }); }} />
+            <ModelPicker view={catalog} picks={picks} current={{ ref: model, keyId: keyedP ? bot.profile.modelKeys?.[keyedP] ?? null : null }} botId={botId}
+              onPick={(m, keyId) => { setModelOpen(false); pickModel(m, keyId); }}
+              engine={{ value: engine, options: BOT_ENGINES.map((e) => ({ id: e, label: BOT_ENGINE_LABELS[e] })), onChange: (e) => { if (e !== engine) save({ engine: e }); } }} />
           </div>
         )}
-        {modelOpen && !hasProviders(catalog) && (
+        {modelOpen && !catalog && (
           <ul ref={modelList} role="listbox" aria-labelledby="model-label" className="listbox">
             {pickableModels(access, model).map((m) => (
               <li key={m} role="option" aria-selected={m === model} className={m === model ? "opt selected" : "opt"} onClick={() => { setModelOpen(false); if (m !== model) save({ model: m }); }}>
@@ -239,6 +261,7 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
           </ul>
         )}
       </div>
+      {noKey && <p className="muted small model-no-key" role="status">{STR_KEYS.noKeyForModelTitle}</p>}
       {parseAcpModelRef(model) && <AcpSignInRow botId={botId} vendor={parseAcpModelRef(model)!} />}
       <div className="field model-field" ref={effortRef}>
         <span id="effort-label">{STR.effort}</span>
@@ -286,6 +309,8 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
       <McpAccountRows botId={botId} />
       <GitHubRow botId={botId} />
       <SecretsSection botId={botId} />
+      {/* Safety v2: this Bot's network, its own rules and its guidelines (the global ones are in Settings → Rules). */}
+      <BotRulesBlock botId={botId} />
       <FollowupsToggle botId={botId} />
       <AdvancedSection botId={botId} />
       <SettingLinksLayer key={botId} />

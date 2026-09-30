@@ -61,6 +61,27 @@ for req in "{\"op\":\"read\",\"path\":\"$HB/secret.txt\"}" "{\"op\":\"read\",\"p
   if printf '%s' "$kout" | grep -q 'Permission denied' && ! printf '%s' "$kout" | grep -qE 'B-SECRET|HOST-SECRET'; then ok "kernel alone refuses: $short"; else bad "kernel alone refuses: $short ($kout)"; fi
 done
 R test ! -e $HB/planted && R test ! -e /home/box/.host/planted && ok "nothing was planted" || bad "nothing was planted"
+
+# Glob and Grep (the provider Bots' and coding agents' search tools): the same walls, through the helper and by the
+# kernel alone. A search never shows another Bot's or the host's files, whatever folder it starts from.
+own_glob() { H $A $A_ID "{\"op\":\"glob\",\"path\":\"$HA\",\"pattern\":\"**/*.txt\"}" | grep -q "$HA/mine.txt"; }
+check "A globs its own home" own_glob
+# (not vacuous: a search from above every home does run, and finds A's own file)
+home_glob() { H $A $A_ID '{"op":"glob","path":"/home","pattern":"**/*"}' | grep -q "$HA/mine.txt"; }
+home_grep() { H $A $A_ID '{"op":"grep","path":"/home/bots","pattern":"mine","mode":"files"}' | grep -q "$HA/mine.txt"; }
+check "a glob from /home runs and finds A's own file" home_glob
+check "a grep from /home/bots runs and finds A's own file" home_grep
+for req in "{\"op\":\"grep\",\"path\":\"/home/bots\",\"pattern\":\"SECRET\",\"mode\":\"content\"}" "{\"op\":\"grep\",\"path\":\"/home/box\",\"pattern\":\"SECRET\",\"mode\":\"content\"}" \
+  "{\"op\":\"glob\",\"path\":\"/home\",\"pattern\":\"**/*\"}" "{\"op\":\"grep\",\"path\":\"/workspace\",\"pattern\":\"SECRET\",\"mode\":\"content\"}" \
+  "{\"op\":\"grep\",\"path\":\"$HA\",\"pattern\":\"SECRET\",\"mode\":\"content\"}"; do
+  short="$(printf '%s' "$req" | sed -E 's#/home/bots/bot-[0-9a-f]+#~#g' | cut -c1-70)"
+  out="$(H $A $A_ID "$req" 2>&1)"
+  if ! printf '%s' "$out" | grep -qE 'B-SECRET|HOST-SECRET|secret.txt|vault.key'; then ok "helper search shows nothing walled: $short"; else bad "helper search shows nothing walled: $short ($out)"; fi
+  kout="$(K "$req" 2>&1)"
+  if ! printf '%s' "$kout" | grep -qE 'B-SECRET|HOST-SECRET'; then ok "kernel alone hides it: $short"; else bad "kernel alone hides it: $short ($kout)"; fi
+done
+b_glob() { H $A $A_ID "{\"op\":\"glob\",\"path\":\"$HB\",\"pattern\":\"*\"}" | grep -q '"ok":false'; }
+check "A's glob of B's home is refused" b_glob
 R grep -qx B-SECRET $HB/secret.txt && ok "B's file is untouched" || bad "B's file is untouched"
 wrong_id() { ! H $A $B_ID "{\"op\":\"read\",\"path\":\"$HA/mine.txt\"}"; }
 not_bot() { ! H box $A_ID '{"op":"read","path":"/etc/hostname"}'; }

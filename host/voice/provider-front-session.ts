@@ -1,6 +1,6 @@
-import { isProviderModelRef, parseProviderModelRef } from "@synapse/shared";
-import { ChatCompletionsAdapter } from "../brain/provider/adapters/chat-completions";
-import type { CanonMessage } from "../brain/provider/adapters/types";
+import { isProviderModelRef } from "@synapse/shared";
+import { adapterFor, modelTarget } from "../brain/provider/adapters/index";
+import type { CanonMessage, ProviderAdapter } from "../brain/provider/adapters/types";
 import { providerFetch } from "../usage/metered-provider";
 import { ZERO_FRONT_USAGE, type FrontSession, type FrontSpec, type FrontTurn, type FrontUsage } from "./front-session";
 
@@ -25,14 +25,16 @@ export class ProviderFrontSession implements FrontSession {
   private history: CanonMessage[] = [];
   private chain: Promise<unknown> = Promise.resolve();
   private ac = new AbortController();
-  private adapter: ChatCompletionsAdapter;
+  private adapter: ProviderAdapter;
   private model: string;
+  private claude: boolean;
 
   constructor(private spec: FrontSpec, private o: { now?: () => number } = {}) {
-    const p = parseProviderModelRef(spec.model);
+    const p = modelTarget(spec.model);
     if (!p) throw new Error(`not a provider model: ${spec.model}`);
-    this.adapter = new ChatCompletionsAdapter(p.provider);
+    this.adapter = adapterFor(p.provider);
     this.model = p.model;
+    this.claude = p.provider === "anthropic";
   }
 
   turn(message: string, onText: (sofar: string) => void, onDelegate: (task: string) => void, signal?: AbortSignal, onBegin?: () => void): Promise<FrontTurn> {
@@ -51,6 +53,8 @@ export class ProviderFrontSession implements FrontSession {
         const body = this.adapter.encode({
           model: this.model, system: this.spec.system, messages: this.history, wireName: (n) => n, maxOutputTokens: 600,
           tools: [{ name: "delegate", description: DELEGATE_DESC, parameters: DELEGATE_SCHEMA, strict: false }],
+          // Claude: low effort and no thinking where the model allows it off, as the SDK front runs.
+          ...(this.claude ? { claudeEffort: "low" as const, thinkingOff: true, cacheTtl: "5m" as const } : {}),
         });
         const s = await providerFetch({ purpose: "voice-front", botId: this.spec.botId }, this.adapter, {
           ref: this.spec.model, body, signal: this.ac.signal,
@@ -104,6 +108,7 @@ function trimToUser(h: CanonMessage[]): CanonMessage[] {
  * The voice's session for a call participant: a provider Bot's voice runs on its own provider (in both brain modes),
  * a Claude Bot's on Claude as before (spec §7a row 8).
  */
-export function frontSessionFor(spec: FrontSpec, claude: (spec: FrontSpec) => FrontSession, o: { now?: () => number } = {}): FrontSession {
-  return isProviderModelRef(spec.model) ? new ProviderFrontSession(spec, o) : claude(spec);
+export function frontSessionFor(spec: FrontSpec, claude: (spec: FrontSpec) => FrontSession, o: { now?: () => number; ownLoop?: (spec: FrontSpec) => boolean } = {}): FrontSession {
+  // A Claude Bot on Synapse's own loop speaks through the Messages adapter too (no Agent SDK).
+  return isProviderModelRef(spec.model) || (o.ownLoop?.(spec) && modelTarget(spec.model)?.provider === "anthropic") ? new ProviderFrontSession(spec, o) : claude(spec);
 }

@@ -3,9 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { ACP_INSTALL_PINS, ACP_VENDOR_IDS, ACP_VENDORS } from "@synapse/shared";
-import { ProviderEvidenceStore } from "../../../brain/provider/conformance/evidence";
+import { CONFORMANCE_VERSION, ProviderEvidenceStore } from "../../../brain/provider/conformance/evidence";
 import { whatWorks } from "../../../brain/provider/catalog-view";
 import { quirksFor } from "../../../brain/provider/adapters/quirks";
+import { pickCodingEngine } from "../../../coding/engines/registry";
 import { HelperRouter } from "../../../helper-model/router";
 
 /** 0.1.6: the "Works with" pages say what the code does (checked when the pages were drafted, kept true here). */
@@ -22,12 +23,45 @@ describe("the Works with pages match the product", () => {
     expect(state("gemini:gemini-3.8-flash", "Web search", (p) => p === "gemini")).toBe("experimental");
   });
 
-  it("coding agents and computer helpers: every provider page says they need an Anthropic key, and no provider Bot has them in What works", () => {
+  it("coding agents run on the Bot's own model: every provider page says so, What works follows the model's tool use", () => {
     for (const f of ["openai.html", "gemini.html", "openrouter.html", "mistral.html", "deepseek.html", "local-models.html"]) {
-      expect(text(f), f).toContain("Coding agents. They run on Claude, so they need an Anthropic key.");
-      expect(text(f), f).toContain("Computer and browser helpers. They still run on Claude, so they need an Anthropic key.");
+      expect(text(f), f).toContain("Coding agents and Engineering mode, on the same model, through the same approvals.");
+      expect(text(f), f).not.toContain("Coding agents. They run on Claude");
     }
-    expect(state("openai:gpt-6.1-sol", "Coding agents")).toBe("no");
+    for (const f of ["../docs.html", "../index.html"]) expect(text(f), f).toContain("Coding agents and Engineering mode run on the Bot's own model.");
+    expect(text("coding-subscriptions.html")).toContain("Coding agents, as Experimental.");
+    expect(text("coding-subscriptions.html")).not.toContain("Synapse's coding agents on these Bots");
+    // What works: a provider model's coding agents follow its tool-use check (unchecked until measured, never refused).
+    expect(state("openai:gpt-6.1-sol", "Coding agents")).toBe("unchecked");
+    expect(state("acp:cursor", "Coding agents")).toBe("experimental");
+    expect(pickCodingEngine("openai:gpt-6.1-sol", undefined, { claudeReady: () => false })).toEqual({ engine: "provider-loop", model: "openai:gpt-6.1-sol" });
+    expect(pickCodingEngine("acp:cursor", undefined, { claudeReady: () => false })).toEqual({ engine: "acp:cursor", model: "acp:cursor" });
+  });
+
+  it("computer and browser helpers run on the Bot's own model: screenshots where it reads images, text reads (Experimental) where it doesn't", () => {
+    for (const f of ["openai.html", "gemini.html", "openrouter.html", "mistral.html", "deepseek.html", "local-models.html", "index.html", "../docs.html", "../index.html"]) {
+      expect(text(f), f).not.toMatch(/helpers[^.]*run on Claude|helpers\. They still run on Claude/);
+    }
+    for (const f of ["openai.html", "gemini.html"]) expect(text(f), f).toContain("Computer and browser helpers, on the same model. They see the screen in screenshots.");
+    expect(text("deepseek.html")).toContain("Computer and browser helpers, on the same model. They work from text reads of the screen and page instead of screenshots, as Experimental.");
+    expect(text("mistral.html")).toContain("Medium and Large see the screen in screenshots; Small works from text reads of the screen and page instead, as Experimental.");
+    for (const f of ["openrouter.html", "local-models.html"]) expect(text(f), f).toContain("A model not known to read images works from text reads of the screen and page instead of screenshots, as Experimental.");
+    // What works, with conformance measured (tools pass), agrees with each page.
+    const passed = (ref: string, flags: { vision: boolean | null; toolImages: boolean | null }) => {
+      const e = new ProviderEvidenceStore(path.join(dir, `${ref.replace(/[^a-z0-9]/gi, "_")}.json`));
+      e.saveConformance({ ref, at: 1, version: CONFORMANCE_VERSION, mustPass: true, results: [{ id: "PC-02", status: "pass", detail: "", ms: 1 }], flags: { parallelTools: null, cachedTokens: null, reasoningEffort: null, structuredOutput: null, streamedArgs: null, ...flags } });
+      return whatWorks(ref, { usable: () => true, evidence: e, reviewerQualified: () => false }).find((w) => w.label === "Computer and browser")!.state;
+    };
+    expect(passed("openai:gpt-6.1-sol", { vision: null, toolImages: null })).toBe("yes");
+    expect(passed("gemini:gemini-3.8-flash", { vision: null, toolImages: null })).toBe("yes");
+    expect(passed("mistral:mistral-medium-latest", { vision: null, toolImages: null })).toBe("yes");
+    expect(passed("mistral:mistral-small-latest", { vision: null, toolImages: null })).toBe("experimental");
+    expect(passed("deepseek:deepseek-flash", { vision: null, toolImages: null })).toBe("experimental");
+    expect(passed("ollama:qwen3:4b", { vision: null, toolImages: null })).toBe("experimental");
+    expect(passed("ollama:qwen3-vl:8b", { vision: true, toolImages: true })).toBe("yes");
+    // Not measured yet: Not checked, like every other row that needs tools.
+    expect(state("openai:gpt-6.1-sol", "Computer and browser")).toBe("unchecked");
+    expect(state("acp:copilot", "Computer and browser")).toBe("no");
   });
 
   it("voice calls: yes on cloud providers, Experimental on local ones, not on coding CLIs, as the pages say", () => {

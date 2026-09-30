@@ -1,0 +1,167 @@
+{
+  "model": "claude-sonnet-5",
+  "max_tokens": 32000,
+  "stream": true,
+  "system": [
+    {
+      "type": "text",
+      "text": "SYS",
+      "cache_control": {
+        "type": "ephemeral",
+        "ttl": "1h"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "what's in my folder? here's a photo"
+        },
+        {
+          "type": "image",
+          "source": {
+            "type": "base64",
+            "media_type": "image/jpeg",
+            "data": "/9j/AAA"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Check the folder first.",
+          "signature": "c2lnLTE="
+        },
+        {
+          "type": "text",
+          "text": "Checking."
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_1",
+          "name": "Shell",
+          "input": {
+            "command": "ls"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_1",
+          "content": [
+            {
+              "type": "text",
+              "text": "a.txt\nshot.png"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBOR"
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "<system-reminder>\nKeep it short.\n</system-reminder>",
+          "cache_control": {
+            "type": "ephemeral",
+            "ttl": "1h"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_2",
+          "name": "SendMessage",
+          "input": {
+            "content": "Two files."
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_2",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sent."
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "and the second one?",
+          "cache_control": {
+            "type": "ephemeral",
+            "ttl": "1h"
+          }
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "name": "SendMessage",
+      "description": "Send a message",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "eager_input_streaming": true
+    },
+    {
+      "name": "Shell",
+      "description": "Run a command",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      },
+      "eager_input_streaming": true,
+      "cache_control": {
+        "type": "ephemeral",
+        "ttl": "1h"
+      }
+    }
+  ],
+  "thinking": {
+    "type": "adaptive"
+  },
+  "output_config": {
+    "effort": "high"
+  }
+}

@@ -4,7 +4,7 @@ import { providerLabel, type ProviderId } from "./providers";
 export const STR_PROVIDER = {
   keyRejectedTitle: "Key rejected",
   keyRejected: (p: ProviderId) => `${providerLabel(p)} rejected the saved key. Check it in Settings → Account.`,
-  noKeyTitle: "No key saved",
+  noKeyTitle: "No key for this model",
   noKey: (p: ProviderId) => `There's no ${providerLabel(p)} key saved. Add one in Settings → Account.`,
   forbiddenTitle: "Not allowed",
   forbidden: (p: ProviderId, detail: string) => `${providerLabel(p)} refused this request${detail ? `: ${detail}` : "."}`,
@@ -17,6 +17,9 @@ export const STR_PROVIDER = {
   rateLimitedTitle: "Rate limited",
   rateLimited: (p: ProviderId, sec?: number) => `${providerLabel(p)} is rate limiting this key${sec ? `; try again in about ${sec} s` : ""}.`,
   modelMissingTitle: "Model not available",
+  /** The one hard stop for coding and Engineering mode: the provider's API refuses tools for this model. */
+  noToolsTitle: "This model can't use tools",
+  noTools: (p: ProviderId, model: string) => `${providerLabel(p)}'s "${model}" can't use tools, so it can't do work that needs them, like coding. Pick another model in this Bot's settings, one whose What works says Tools and replies: Yes.`,
   modelMissing: (p: ProviderId, model: string) => `${providerLabel(p)} doesn't offer "${model}" to this key.`,
   contextTitle: "Conversation too long",
   context: (p: ProviderId) => `The conversation is longer than this ${providerLabel(p)} model can read.`,

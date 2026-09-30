@@ -1,3 +1,4 @@
+import type { MacRulesView } from "@synapse/shared";
 import { BROWSER_PERMISSION_PREFIX, LIMITS5, MACAPP_PERMISSION_PREFIX, LOCAL_NEEDS_APPROVAL, NO_LIMITS_CONFIRM, STR5, type BrowserArgs, type BrowserReply, type MacAppArgs, type MacAppReply, type LocalAction, type LocalAskChoice, type LocalExecRequest, type PermMode, type SseEvent } from "@synapse/shared";
 import fs from "node:fs";
 import { LOCAL_ADOPT_MODE, STRAL, browserReadOnly, dryRunTally, macAppReadOnly, provenFileEffects, type DryRunMode, type MacActionFilter, type MacActionKind, type MacActionVia, type ProvenEffect } from "@synapse/shared";
@@ -22,11 +23,11 @@ type Call = (cmd: string, args: unknown) => Promise<unknown>;
 /** mac-browser: one Browser action as the app's controller (main process) takes it, after this Mac's own gate. */
 /** full-auto-quiet: `mode` is the Bot's permission mode on THIS Mac; the controller applies the five-category
  *  policy to the live page with it (a "Save changes" is not one of the five; "Pay now" is). */
-export interface BrowserCall { botId: string; botName: string; args: BrowserArgs; approved: boolean; origins: string[]; explicit: boolean; turn?: string; userTurn?: boolean; mode?: PermMode }
+export interface BrowserCall { botId: string; botName: string; args: BrowserArgs; approved: boolean; origins: string[]; explicit: boolean; turn?: string; userTurn?: boolean; mode?: PermMode; rules?: MacRulesView | null }
 export type BrowserResult = { ok: true; reply: BrowserReply } | { ok: false; error: string; needsApproval?: boolean };
 
 /** mac-apps: one MacApp action as the app's controller (main process) takes it, after this Mac's own gate. */
-export interface MacAppCallMsg { botId: string; botName: string; args: MacAppArgs; approved: boolean }
+export interface MacAppCallMsg { botId: string; botName: string; args: MacAppArgs; approved: boolean; rules?: MacRulesView | null }
 export type MacAppResultMsg = { ok: true; reply: MacAppReply } | { ok: false; error: string; needsApproval?: boolean; summary?: string };
 
 export class LocalExecDaemon {
@@ -493,7 +494,7 @@ export class LocalExecDaemon {
     if (!this.d.browser || !req.browser) return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: "This app can't drive a browser." }));
     const via: MacActionVia = v.approved ? "card" : "permission";
     try {
-      const r = await this.d.browser({ botId: req.botId, botName: req.botName ?? "Bot", args: req.browser, approved: v.approved, origins: v.origins, mode: v.mode, explicit: req.explicit === true, turn: req.turn, userTurn: req.userTurn === true });
+      const r = await this.d.browser({ botId: req.botId, botName: req.botName ?? "Bot", args: req.browser, approved: v.approved, origins: v.origins, mode: v.mode, rules: v.rules, explicit: req.explicit === true, turn: req.turn, userTurn: req.userTurn === true });
       if (r.ok) {
         this.log(req, { ...plan, targets: r.reply.url ? [r.reply.url] : plan.targets }, { outcome: "done", via });
         await this.post("localExecDone", { execId: req.execId, exitCode: 0, result: JSON.stringify(r.reply) });
@@ -531,7 +532,7 @@ export class LocalExecDaemon {
     if (!this.d.macapp || !req.macapp) return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: "This app can't drive the apps on this Mac." }));
     const via: MacActionVia = v.approved ? "card" : "permission";
     try {
-      const r = await this.d.macapp({ botId: req.botId, botName: req.botName ?? "Bot", args: req.macapp, approved: v.approved });
+      const r = await this.d.macapp({ botId: req.botId, botName: req.botName ?? "Bot", args: req.macapp, approved: v.approved, rules: v.rules });
       if (r.ok) {
         this.log(req, plan, { outcome: "done", via });
         await this.post("localExecDone", { execId: req.execId, exitCode: 0, result: JSON.stringify(r.reply) });

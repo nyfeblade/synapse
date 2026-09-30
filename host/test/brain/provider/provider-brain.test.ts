@@ -210,9 +210,10 @@ describe("ProviderBrain", () => {
     expect(sent).toEqual(["hi"]);
   });
 
-  it("refuses a model that isn't a provider ref, and a routed Claude model is ignored", async () => {
+  it("refuses a model it can't place, and a routed Claude model is ignored (it's another provider)", async () => {
     const s = await setup(() => reply({ text: "ok" }));
-    expect((await s.run(s.brain, "hi", { model: "claude-sonnet-5" })).error?.code).toBe("BOT-MODEL");
+    // 2026-09-30: a Claude model is a provider now (the Messages adapter); a ref no provider owns is still refused.
+    expect((await s.run(s.brain, "hi", { model: "gpt-without-a-provider" })).error?.code).toBe("BOT-MODEL");
     const r = await s.run(s.brain, "hi", { routedModel: "claude-haiku-4-5-20251001" });
     expect(r.model).toBe("openai:gpt-test");
     expect(s.server.requests.at(-1)!.body.model).toBe("gpt-test");

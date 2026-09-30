@@ -18,6 +18,8 @@ import { onPostToolUse } from "../runner/discipline";
 import { newSlot, type TurnSlot } from "../runner/turn-slot";
 import { HostSettingsStore } from "../store/host-settings";
 import { initLayout } from "../store/layout";
+import { SafetyService } from "../review/safety";
+import type { BotNetwork, PresetName } from "@synapse/shared";
 
 /**
  * The security suite's test bench: the real approval gate and the real Auto-review pipeline (floors, fast path, exact
@@ -61,6 +63,16 @@ export interface BenchOpts {
   sent?: string[];
   /** Who a Composio send really reaches, looked up on the host. */
   composioRecipients?: GateDeps["composioRecipients"];
+  /** Safety v2: No limits (with Full auto). */
+  noLimits?: boolean;
+  /** Safety v2: the owner's rules, in plain English (compiled by the real compiler). */
+  rules?: string[];
+  /** Safety v2: a preset other than Balanced. */
+  preset?: PresetName;
+  /** Safety v2: the Bot's network list. */
+  network?: BotNetwork;
+  /** Safety v2: Settings → Local network. */
+  lanOpen?: boolean;
 }
 
 export interface Bench {
@@ -70,6 +82,8 @@ export interface Bench {
   botId: string;
   slot: TurnSlot;
   model: FooledModel;
+  safety: SafetyService;
+  settings: HostSettingsStore;
   /** One tool call through the gate: "allow", "ask" (a card for the owner), "deny" or "defer". */
   call(toolName: string, input: Record<string, unknown>): Promise<{ decision: string; reason?: string }>;
   /** The Bot reads outside content (a web page, an email) through the real post-tool path. */
@@ -96,6 +110,10 @@ export function bench(o: BenchOpts = {}): Bench {
   });
   const bots = new BotService({ cfg, hub: new SseHub(), settings });
   const botId = bots.create({ origin: "user", kickstart: false, name: "Piper" });
+  const safety = new SafetyService({ settings });
+  if (o.preset) safety.setPreset(o.preset);
+  if (o.network) safety.setNetwork(botId, o.network);
+  const setup = o.rules ? Promise.all(o.rules.map((t) => safety.addRule(t, { bots: [{ id: botId, name: "Piper" }] }))) : Promise.resolve([]);
   const now = Date.now();
   bots.appendEntry(botId, { kind: "message", id: "t1u", role: "user", content: o.owner ?? "Tidy up the project.", clientNonce: "n1", createdAt: now });
   const source = o.source ?? "user";
@@ -111,6 +129,7 @@ export function bench(o: BenchOpts = {}): Bench {
   });
   const gate = new ApprovalGate({
     cfg, bots, settings, reviewer, slot: () => slot, flags: () => DEFAULT_FLAGS, readFile: () => null, onDeferredResolution: () => {},
+    safety, lanOpen: () => o.lanOpen === true, noLimits: () => o.noLimits === true,
     permMode: () => o.mode ?? "ask", googleEmail: () => OWNER_EMAIL, googleBuiltin: () => true, composioBuiltin: () => true,
     macEnv: () => ({ home: MAC.home, projectDirs: MAC.projectDirs, userData: MAC.userData }),
     mcpReadOnly: () => false,
@@ -122,8 +141,9 @@ export function bench(o: BenchOpts = {}): Bench {
   });
   let n = 0;
   return {
-    cfg, gate, bots, botId, slot, model,
+    cfg, gate, bots, botId, slot, model, safety, settings,
     async call(toolName, input) {
+      await setup;
       const d = await gate.preToolUse(botId, { toolName, input, toolUseId: `sec${++seq}-${++n}` });
       return { decision: d.decision, ...("reason" in d && d.reason ? { reason: d.reason } : {}) };
     },

@@ -19,8 +19,8 @@ export function summarizeCu(results: CuRun[], filter: (r: CuRun) => boolean = ()
   });
 }
 
-export function renderReport(o: { meta: { startedAt: string; model: string; modes: Mode[]; tasks: string[]; notes: string[] }; parity: typeof PARITY; results: CuRun[] }): string {
-  const L: string[] = [`# Computer-use bench: Screenshots vs Live`, "", `Started ${o.meta.startedAt} · model ${o.meta.model} · modes ${o.meta.modes.join(", ")} · ${o.meta.tasks.length} tasks`, "",
+export function renderReport(o: { meta: { startedAt: string; model: string; runner?: string; modes: Mode[]; tasks: string[]; notes: string[] }; parity: typeof PARITY; results: CuRun[] }): string {
+  const L: string[] = [`# Computer-use bench: Screenshots vs Live`, "", `Started ${o.meta.startedAt} · ${o.meta.runner ?? "claude"} runner · model ${o.meta.model} · modes ${o.meta.modes.join(", ")} · ${o.meta.tasks.length} tasks`, "",
     "Success is the gate: Live only becomes the default if it completes at least as many tasks as Screenshots.", ""];
   const head = "| Mode | Success | Tokens | Weighted input | Fresh | Cache read | Cache write | Output | Calls | Images | Wall | Interventions |";
   const sep = "|---|---|---|---|---|---|---|---|---|---|---|---|";

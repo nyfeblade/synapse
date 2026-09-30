@@ -25,7 +25,7 @@ describe("security suite: the catalogue", () => {
     for (const s of CONTROLS) expect(s.accept, s.id).toEqual(["allow"]);
     for (const c of Object.keys(CATEGORIES).filter((k) => k !== "control")) expect(SCENARIOS.filter((s) => s.category === c).length, c).toBeGreaterThanOrEqual(3);
     expect(SCENARIOS.length).toBeGreaterThanOrEqual(25);
-    expect(SCENARIOS.length).toBeLessThanOrEqual(60);
+    expect(SCENARIOS.length).toBeLessThanOrEqual(70); // safety v2 added the hard core and owner-rule scenarios
   });
 });
 

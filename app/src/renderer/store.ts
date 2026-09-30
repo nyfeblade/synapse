@@ -5,6 +5,7 @@ import { messageOf, setErrorSink } from "./error-channel";
 import { applyEvent, fresherBot, fresherSettings, initialState, type UiState } from "./reducer";
 import { timeOf } from "./transcript-items";
 import { withViewChange } from "./view-transition";
+import type { NewBotChoice } from "./model-picks";
 
 interface Actions {
   setConnection(c: ConnectionState): void;
@@ -12,7 +13,8 @@ interface Actions {
   loadAll(): Promise<void>;
   openBot(id: string): Promise<void>;
   openNewChat(): void;
-  createBot(name?: string): Promise<string>;
+  /** `choice`: the model and key the owner picked while creating it (NewBotModelStep), saved as the picker saves it. */
+  createBot(name?: string, choice?: NewBotChoice | null): Promise<string>;
   deleteBot(id: string): Promise<void>;
   setPinned(id: string, pinned: boolean): Promise<void>;
   loadTranscript(id: string): Promise<void>;
@@ -117,8 +119,12 @@ export const useUi = create<UiState & Actions>((set, get) => ({
     if (agent) acceptAgent(agent);
   },
   openNewChat: () => withViewChange(() => set({ view: { kind: "new-chat" } })),
-  createBot: async (name) => {
+  createBot: async (name, choice) => {
     const { id } = await call("createAgent", name ? { name, isKickstartRequested: true } : { isKickstartRequested: true });
+    if (choice?.touched) {
+      const r = await call("pickAgentModel", { id, model: choice.model, keyId: choice.keyId });
+      if (r?.agent) acceptAgent(r.agent);
+    }
     await get().openBot(id);
     return id;
   },

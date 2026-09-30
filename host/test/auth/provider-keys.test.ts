@@ -30,8 +30,8 @@ describe("ProviderKeyStore", () => {
     expect(again.key("openai")).toBe(KEY);
     expect(again.has("gemini")).toBe(true);
     // the openai entry can't be opened as gemini's (per-provider subkeys): swap them on disk and both fail
-    const j = JSON.parse(raw) as { keys: Record<string, unknown> };
-    fs.writeFileSync(path.join(dir, "keys.json"), JSON.stringify({ keys: { openai: j.keys.gemini, gemini: j.keys.openai } }));
+    const j = JSON.parse(raw) as { v: 2; rings: Record<string, unknown> };
+    fs.writeFileSync(path.join(dir, "keys.json"), JSON.stringify({ v: 2, rings: { openai: j.rings.gemini, gemini: j.rings.openai } }));
     const swapped = new ProviderKeyStore({ dir, vaultKey: vault });
     expect(swapped.has("openai") || swapped.has("gemini")).toBe(false);
     expect(new ProviderKeyStore({ dir, vaultKey: randomBytes(32) }).has("openai")).toBe(false); // another vault key

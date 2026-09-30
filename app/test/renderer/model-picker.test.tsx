@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ModelCatalogView, SafetyReviewerView } from "@synapse/shared";
-import { ModelPickerList } from "../../src/renderer/components/ModelPicker";
+import type { ModelCatalogView, ModelPicksView, SafetyReviewerView } from "@synapse/shared";
+import { ModelPicker, ModelPickerList } from "../../src/renderer/components/ModelPicker";
 import { SafetyReviewerBlock } from "../../src/renderer/components/settings/SafetyReviewerBlock";
 
 const VIEW: ModelCatalogView = { groups: [
@@ -36,7 +36,7 @@ afterEach(cleanup);
 describe("the grouped model picker (spec §10)", () => {
   it("groups by provider with badges from evidence; Claude models carry none", () => {
     render(<ModelPickerList view={VIEW} current="openai:gpt-6.1-sol" botId="b1" onPick={() => {}} />);
-    expect(screen.getAllByRole("group").map((g) => g.getAttribute("aria-labelledby"))).toEqual(["model-group-anthropic", "model-group-openai", "model-group-ollama"]);
+    expect(screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual(["Anthropic", "OpenAI", "Ollama"]);
     expect(screen.getByRole("option", { name: "Sonnet 5" }).textContent).toBe("Sonnet 5");
     expect(screen.getByRole("option", { name: /GPT-6 Astra/ }).textContent).toBe("GPT-6 AstraNot checked");
     expect(screen.getByRole("option", { name: /qwen3/ }).textContent).toBe("qwen3:4bExperimentalLocal");
@@ -64,16 +64,17 @@ describe("OpenRouter's live list in the picker", () => {
     { ref: "openrouter:other/used", label: "Other: Used", badges: ["unchecked"], whatWorks: [], contextWindow: 128_000, price: { input: 0.1, output: 0.4 } }, ...many,
   ] }] };
 
-  it("shows a search box, prices from the live list, Not checked badges, and a capped list until searched", async () => {
+  it("one search box, prices from the live list, Not checked badges, and a capped list until searched", async () => {
     const onPick = vi.fn();
     render(<ModelPickerList view={OR} current="openrouter:maker/m-149" botId="b1" onPick={onPick} />);
-    const box = screen.getByRole("searchbox", { name: "Search OpenRouter models" });
+    const box = screen.getByRole("combobox", { name: "Search models" });
     // 60 rows, plus the current model kept in view past the cap.
     expect(screen.getAllByRole("option")).toHaveLength(61);
     expect(screen.getByText("61 of 151")).toBeTruthy();
     expect(screen.getByRole("option", { name: /Other: Used/ }).textContent).toBe("Other: Used$0.10 / $0.40Not checked");
     fireEvent.change(box, { target: { value: "model 7" } });
-    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+    // The name as typed first (7, 70–79), then every other row holding both words.
+    expect(screen.getAllByRole("option").slice(0, 11).map((o) => o.textContent)).toEqual([
       "Maker: Model 7$0.00050 / $15.00Not checked", ...[70, 71, 72, 73, 74, 75, 76, 77, 78, 79].map((i) => `Maker: Model ${i}$3.00 / $15.00Not checked`),
     ]);
     fireEvent.mouseEnter(screen.getByRole("option", { name: /Model 7\$/ }));
@@ -83,10 +84,95 @@ describe("OpenRouter's live list in the picker", () => {
     fireEvent.change(box, { target: { value: "nothing like this" } });
     expect(screen.getByText("No matches")).toBeTruthy();
   });
+});
 
-  it("a group without a live list has no search box", () => {
-    render(<ModelPickerList view={VIEW} current="openai:gpt-6.1-sol" botId="b1" onPick={() => {}} />);
-    expect(screen.queryByRole("searchbox")).toBeNull();
+describe("0.1.7: one searchable list across providers and keys", () => {
+  const w = { whatWorks: [], contextWindow: 128_000 };
+  const ALL: ModelCatalogView = { groups: [
+    { provider: "anthropic", label: "Anthropic", models: [{ ref: "claude-sonnet-5", label: "Sonnet 5", badges: [], ...w }, { ref: "claude-opus-5-5", label: "Opus 5.5", badges: [], ...w }] },
+    { provider: "openai", label: "OpenAI", models: [{ ref: "openai:gpt-6.1-sol", label: "GPT-6.1 Sol", badges: ["supported"], ...w }, { ref: "openai:gpt-6-luna", label: "GPT-6 Luna", badges: ["unchecked"], ...w }] },
+    { provider: "gemini", label: "Gemini", models: [{ ref: "gemini:gemini-3.5-flash", label: "Gemini 3.5 Flash", badges: ["experimental"], ...w }] },
+    { provider: "ollama", label: "Ollama", models: [{ ref: "ollama:qwen3:4b", label: "qwen3:4b", badges: ["local"], ...w }] },
+  ] };
+  const PICKS: ModelPicksView = {
+    keys: { anthropic: [{ id: "k1", label: "Anthropic", isDefault: true }], openai: [{ id: "k1", label: "Personal", isDefault: true }, { id: "kwork", label: "Work", isDefault: false }], gemini: [{ id: "k1", label: "Gemini", isDefault: true }] },
+    recent: [{ ref: "openai:gpt-6.1-sol", keyId: "kwork", at: 30, mine: true }, { ref: "claude-opus-5-5[1m]", keyId: "k1", at: 20, mine: false }, { ref: "openai:gone-model", keyId: null, at: 10, mine: true }],
+    inUse: [],
+  };
+
+  it("lists a model once per key where a provider has two, with the key's label; Recent on top", () => {
+    render(<ModelPicker view={ALL} picks={PICKS} current={{ ref: "openai:gpt-6.1-sol", keyId: "kwork" }} botId="b1" onPick={() => {}} />);
+    expect(screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual(["Recent", "Anthropic", "OpenAI", "Gemini", "Ollama"]);
+    const recent = screen.getByRole("group", { name: "Recent" });
+    // A dated or long-context id lands on its model; a model no longer offered is left out.
+    expect(within(recent).getAllByRole("option").map((o) => o.getAttribute("aria-label") ?? o.textContent)).toEqual(["GPT-6.1 Sol · Work", "Opus 5.5"]);
+    const openai = screen.getByRole("group", { name: "OpenAI" });
+    expect(within(openai).getAllByRole("option").map((o) => o.getAttribute("aria-label"))).toEqual(["GPT-6.1 Sol · Personal", "GPT-6.1 Sol · Work", "GPT-6 Luna · Personal", "GPT-6 Luna · Work"]);
+    // Only the Work row of GPT-6.1 Sol is the current choice (in Recent and in its group).
+    expect(screen.getAllByRole("option", { selected: true }).map((o) => o.getAttribute("aria-label"))).toEqual(["GPT-6.1 Sol · Work", "GPT-6.1 Sol · Work"]);
+    // One key: no label beside the model.
+    expect(within(screen.getByRole("group", { name: "Gemini" })).getByRole("option").textContent).toBe("Gemini 3.5 FlashExperimental");
+  });
+
+  it("type to search across providers and key labels; arrows and Enter pick the model and its key", () => {
+    const onPick = vi.fn();
+    render(<ModelPicker view={ALL} picks={PICKS} current={{ ref: "claude-sonnet-5", keyId: null }} botId="b1" onPick={onPick} />);
+    const box = screen.getByRole("combobox", { name: "Search models" });
+    expect(document.activeElement).toBe(box); // typing searches at once
+    fireEvent.change(box, { target: { value: "work" } });
+    expect(screen.getAllByRole("option").map((o) => o.getAttribute("aria-label"))).toEqual(["GPT-6.1 Sol · Work", "GPT-6 Luna · Work"]);
+    expect(screen.queryByRole("group", { name: "Recent" })).toBeNull();
+    fireEvent.change(box, { target: { value: "luna work" } });
+    expect(screen.getAllByRole("option").map((o) => o.getAttribute("aria-label"))).toEqual(["GPT-6 Luna · Work"]);
+    fireEvent.change(box, { target: { value: "gpt" } });
+    // The first match is active; arrows move it (aria-activedescendant follows) and Enter picks.
+    const active = () => document.getElementById(box.getAttribute("aria-activedescendant")!)!.getAttribute("aria-label");
+    expect(active()).toBe("GPT-6.1 Sol · Personal");
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+    expect(active()).toBe("GPT-6 Luna · Personal");
+    fireEvent.keyDown(box, { key: "ArrowUp" });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(onPick).toHaveBeenCalledWith("openai:gpt-6.1-sol", "kwork");
+  });
+
+  it("badges are quiet labels: a Blocked or Not checked model can still be picked", () => {
+    const onPick = vi.fn();
+    const view: ModelCatalogView = { groups: [{ provider: "openai", label: "OpenAI", models: [{ ref: "openai:gpt-x", label: "GPT X", badges: ["blocked"], whatWorks: [], contextWindow: 1 }] }] };
+    render(<ModelPicker view={view} picks={null} current={{ ref: "claude-sonnet-5", keyId: null }} botId="b1" onPick={onPick} />);
+    const row = screen.getByRole("option", { name: /GPT X/ });
+    expect(row.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(row);
+    expect(onPick).toHaveBeenCalledWith("openai:gpt-x", null);
+  });
+
+  it("the Engine hook shows beside Claude models only, when Bot settings passes it", () => {
+    const onChange = vi.fn();
+    const engine = { value: "synapse", options: [{ id: "synapse", label: "Synapse" }, { id: "claude-code", label: "Claude Code" }], onChange };
+    render(<ModelPicker view={ALL} picks={PICKS} current={{ ref: "claude-sonnet-5", keyId: null }} botId="b1" onPick={() => {}} engine={engine} />);
+    const group = screen.getByRole("radiogroup", { name: "Engine" });
+    fireEvent.click(within(group).getByRole("radio", { name: "Claude Code" }));
+    expect(onChange).toHaveBeenCalledWith("claude-code");
+    fireEvent.mouseEnter(screen.getByRole("option", { name: "GPT-6 Luna · Work" }));
+    expect(screen.queryByRole("radiogroup", { name: "Engine" })).toBeNull();
+  });
+
+  it("compact: recent and in-use models, then All models… opens the full list in place", () => {
+    const onPick = vi.fn();
+    render(<ModelPicker compact view={ALL} picks={{ ...PICKS, inUse: [{ ref: "gemini:gemini-3.5-flash", keyId: null }, { ref: "ollama:qwen3:4b", keyId: null }] }}
+      current={{ ref: "claude-sonnet-5", keyId: null }} botId="b1" onPick={onPick} />);
+    expect(screen.getAllByRole("option").map((o) => o.getAttribute("aria-label") ?? o.textContent)).toEqual(
+      ["GPT-6.1 Sol · Work", "Opus 5.5", "Sonnet 5", "Gemini 3.5 FlashExperimental", "qwen3:4bLocal", "All models…"]);
+    expect(screen.queryByRole("region", { name: /what works/ })).toBeNull(); // compact: no details
+    const box = screen.getByRole("combobox", { name: "Search models" });
+    for (let i = 0; i < 5; i++) fireEvent.keyDown(box, { key: "ArrowDown" });
+    fireEvent.keyDown(box, { key: "Enter" }); // All models…
+    expect(screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual(["Recent", "Anthropic", "OpenAI", "Gemini", "Ollama"]);
+    expect(onPick).not.toHaveBeenCalled();
+    // Typing in the compact form searches every model.
+    fireEvent.change(box, { target: { value: "flash" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(onPick).toHaveBeenCalledWith("gemini:gemini-3.5-flash", null);
   });
 });
 

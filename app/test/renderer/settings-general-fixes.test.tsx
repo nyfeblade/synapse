@@ -9,8 +9,8 @@ import { AutoReviewSection as GeneralSection } from "../../src/renderer/componen
 import { initialState } from "../../src/renderer/reducer";
 import { useUi } from "../../src/renderer/store";
 import { COPY, installBridge, settings } from "./settings-fixtures";
+import { safetyFixture } from "./fake-bridge";
 
-const RULE_FIELD = /When a Bot wants to/;
 let h: ReturnType<typeof installBridge>;
 beforeEach(() => {
   h = installBridge();
@@ -18,39 +18,48 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("Settings → General → auto-review rules", () => {
-  const mount = (over: Partial<HostSettingsView> = {}) => {
+// Safety v2: Settings → Rules replaced the free-text rule editor. Rules are compiled before they're added.
+describe("Settings → Rules", () => {
+  const view = safetyFixture();
+  const mount = (over: Partial<HostSettingsView> = {}, gw: (cmd: string, args: Record<string, unknown>) => unknown = () => ({})) => {
     useUi.setState({ settings: settings(over) });
-    h.gateway = (cmd, args) => (cmd === "setHostSettings" ? { ...useUi.getState().settings!, ...(args as Partial<HostSettingsView>) } : {});
+    h.gateway = (cmd, args) => (cmd === "setHostSettings" ? { ...useUi.getState().settings!, ...(args as Partial<HostSettingsView>) } : cmd === "getSafety" ? view : gw(cmd, args));
     return render(<GeneralSection />);
   };
 
-  it("swaps the button to Save Rule and offers a Cancel while a rule is being edited", () => {
-    mount({ allowInstructions: ["reply to emails"] });
-    fireEvent.click(screen.getByRole("button", { name: "Edit rule" }));
-    expect(screen.getByRole("button", { name: COPY.saveRule })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("button", { name: COPY.saveRule })).toBeNull();
-    expect((screen.getByLabelText(RULE_FIELD) as HTMLInputElement).value).toBe("");
+  it("a rule that can't be read exactly says why and can't be added", async () => {
+    mount({}, (cmd) => (cmd === "compileSafetyRule" ? { ok: false, reason: "I couldn't turn “boss” into an exact rule." } : {}));
+    fireEvent.change(await screen.findByLabelText(COPY.addRule), { target: { value: "Ask before emailing my boss" } });
+    await screen.findByText("I couldn't turn “boss” into an exact rule.");
+    expect((screen.getByRole("button", { name: COPY.addRule }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("leaves edit mode on Escape", () => {
-    mount({ allowInstructions: ["reply to emails"] });
-    fireEvent.click(screen.getByRole("button", { name: "Edit rule" }));
-    expect(screen.getByRole("button", { name: COPY.saveRule })).toBeTruthy();
-    fireEvent.keyDown(screen.getByLabelText(RULE_FIELD), { key: "Escape" });
-    expect(screen.queryByRole("button", { name: COPY.saveRule })).toBeNull();
-    expect(screen.getByRole("button", { name: COPY.addRule })).toBeTruthy();
+  it("Escape clears a half-typed rule", async () => {
+    mount();
+    const field = await screen.findByLabelText(COPY.addRule) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "Never send" } });
+    fireEvent.keyDown(field, { key: "Escape" });
+    expect(field.value).toBe("");
   });
 
-  it("edits the rule the pencil was clicked on even after another rule is deleted", async () => {
-    mount({ allowInstructions: ["one", "two", "three"] });
-    fireEvent.click(screen.getAllByRole("button", { name: "Edit rule" })[2]!);
-    fireEvent.click(screen.getAllByRole("button", { name: "Delete rule" })[0]!);
-    await waitFor(() => expect(useUi.getState().settings!.allowInstructions).toEqual(["two", "three"]));
-    fireEvent.change(screen.getByLabelText(RULE_FIELD), { target: { value: "three edited" } });
-    fireEvent.click(screen.getByRole("button", { name: COPY.saveRule }));
-    await waitFor(() => expect(useUi.getState().settings!.allowInstructions).toEqual(["two", "three edited"]));
+  it("picking a preset shows what changes before it switches", async () => {
+    mount({}, (cmd, args) => (cmd === "setSafetyPreset" ? { ...view, preset: args.preview ? "balanced" : "hands-off", diff: { adds: [], removes: ["Sends", "Uploads to unknown sites"], changes: [] } } : {}));
+    fireEvent.click(await screen.findByRole("radio", { name: "Hands-off" }));
+    const group = await screen.findByRole("group", { name: "Switch to Hands-off" });
+    expect(group.textContent).toContain("Stops asking");
+    expect(group.textContent).toContain("Sends, Uploads to unknown sites");
+    expect(h.calls.filter(([c]) => c === "setSafetyPreset")).toEqual([["setSafetyPreset", { preset: "hands-off", preview: true }]]);
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Hands-off" }));
+    await waitFor(() => expect(h.calls.filter(([c]) => c === "setSafetyPreset").at(-1)).toEqual(["setSafetyPreset", { preset: "hands-off" }]));
+  });
+
+  it("lists the preset rules with their type, and reviewer rules as Checked by Auto-review", async () => {
+    mount({ allowInstructions: ["reply to emails"] });
+    expect(await screen.findByRole("switch", { name: "Rule on: Sends" })).toBeTruthy();
+    expect((screen.getByRole("combobox", { name: "Type of rule: Sends" }) as HTMLSelectElement).value).toBe("ask");
+    expect(screen.getAllByText("Checked by Auto-review").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Delete rule: reply to emails" }));
+    await waitFor(() => expect(useUi.getState().settings!.allowInstructions).toEqual([]));
   });
 });
 

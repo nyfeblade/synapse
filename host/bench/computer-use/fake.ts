@@ -1,3 +1,4 @@
+import { isProviderModelRef } from "@synapse/shared";
 import { isBenchCuName, NONCE_RE, type BoxEvent, type CuBox, type UsageRow } from "./box";
 import type { Mode } from "./metrics";
 import { TASKS, type CuTask, type PromptCtx, type SystemState } from "./tasks";
@@ -102,12 +103,21 @@ export class FakeCuBox implements CuBox {
     for (const [k, v] of Object.entries(turn.state.submissions)) this.state.submissions[k] = [...(this.state.submissions[k] ?? []), ...v];
     Object.assign(this.state.files, turn.state.files);
     if (turn.state.xfconf.after !== null) this.xml = turn.state.xfconf.after;
-    // One child transcript: `calls` assistant messages, `images` image tool results.
+    // One child transcript: `calls` assistant messages, `images` image tool results. A provider Bot's child writes the
+    // provider session shape (no message id, one record per model call, keyed by uuid; host/brain/provider/session-store.ts).
     const lines: string[] = [];
     const calls = turn.calls ?? 3;
+    const provider = isProviderModelRef(this.bots.get(id)?.model ?? "");
     for (let i = 0; i < calls; i++) {
-      lines.push(JSON.stringify({ type: "assistant", message: { id: `m${i}`, usage: { input_tokens: 2, cache_read_input_tokens: 5_000, cache_creation_input_tokens: 800, output_tokens: 120 }, content: [{ type: "tool_use", name: mode === "live" ? "mcp__computer__Act" : "mcp__computer__Computer" }] } }));
-      lines.push(JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", content: i < (turn.images ?? 0) ? [{ type: "image", source: {} }] : [{ type: "text", text: "ok" }] }] } }));
+      const tool = mode === "live" ? "mcp__computer__Act" : "mcp__computer__Computer";
+      const result = { type: "user", message: { content: [{ type: "tool_result", content: i < (turn.images ?? 0) ? [{ type: "image", source: {} }] : [{ type: "text", text: "ok" }] }] } };
+      if (provider) {
+        lines.push(JSON.stringify({ uuid: `u-${id}-a${i}`, type: "assistant", message: { role: "assistant", model: this.bots.get(id)!.model, usage: { input_tokens: 5_802, output_tokens: 120, cache_read_input_tokens: 5_000 }, content: [{ type: "tool_use", id: `call_${i}`, name: tool, input: {} }] }, provider: { calls: {} } }));
+        lines.push(JSON.stringify({ uuid: `u-${id}-r${i}`, ...result, provider: { toolName: tool } }));
+      } else {
+        lines.push(JSON.stringify({ type: "assistant", message: { id: `m${i}`, usage: { input_tokens: 2, cache_read_input_tokens: 5_000, cache_creation_input_tokens: 800, output_tokens: 120 }, content: [{ type: "tool_use", name: tool }] } }));
+        lines.push(JSON.stringify(result));
+      }
     }
     this.transcripts.set(id, [lines.join("\n")]);
     if (turn.hang) {

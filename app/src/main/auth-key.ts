@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { STR, STR_AUTH, type AuthTestResult, type AuthView, type ProviderTestResult, type ProvidersView } from "@synapse/shared";
+import { STR, STR_AUTH, type AuthTestResult, type AuthView, type KeyedProvider, type KeysView, type ProviderTestResult, type ProvidersView } from "@synapse/shared";
 import type { BoxPin } from "./box-pin";
 import type { Call } from "./gateway-call";
 
@@ -11,6 +11,16 @@ const PIN_MISMATCH = STR_AUTH.pinMismatch;
  * over the parent port.
  */
 export interface MacKeyCopy { save(key: string): Promise<{ ok: boolean; error?: string }>; clear(): Promise<void>; has(): Promise<boolean> }
+/**
+ * 0.1.7, several Anthropic keys: the Mac's copy follows the box's DEFAULT key. Keys added from this Mac that aren't the
+ * default wait beside it as spares (kept by the coordinator, sealed like the copy); Make default promotes one.
+ */
+export interface MacSpareKeys {
+  saveSpare(keyId: string, key: string): Promise<void>;
+  dropSpare(keyId: string): Promise<void>;
+  /** `keyId` is the default now; the copy it replaces is kept as `oldId`'s spare (null: it was removed). */
+  promote(keyId: string, oldId: string | null): Promise<boolean>;
+}
 
 /** What a save answers: the host's view, and whether this Mac kept its copy (and why not). */
 export type SavedKeyView = AuthView & { macSaved: boolean; macError?: string };
@@ -135,7 +145,14 @@ export function registerAuthIpc(ipc: IpcLike, sender: () => ApiKeySender | null,
  * box's public key (the same pin check as the Anthropic key). The Mac keeps no copy (spec §4); the host answers with
  * the masked key at most.
  */
-export function createProviderKeySender(o: { call: Call; pin: Pick<BoxPin, "check">; seal(publicKey: string, value: string): Promise<string> }) {
+export function createProviderKeySender(o: { call: Call; pin: Pick<BoxPin, "check">; seal(publicKey: string, value: string): Promise<string>; mac?: Pick<MacKeyCopy, "save" | "clear"> & MacSpareKeys; log?(s: string): void }) {
+  const anthropic = (v: KeysView) => v.rings.find((r) => r.provider === "anthropic")?.keys ?? [];
+  const defaultOf = (v: KeysView) => anthropic(v).find((k) => k.isDefault)?.id ?? null;
+  // The Mac copy is a convenience for the Bots' claude on this Mac: a failure to follow is logged, never fails the change.
+  const onMac = async (what: string, fn: (m: NonNullable<typeof o.mac>) => Promise<unknown>) => {
+    if (!o.mac) return;
+    try { await fn(o.mac); } catch (e) { o.log?.(`api key: the Mac copy couldn't be ${what} (${e instanceof Error ? e.message : String(e)})`); }
+  };
   const sealed = async (value: string): Promise<string> => {
     const { boxPublicKey } = await o.call("getProviders", {});
     if (o.pin.check(boxPublicKey) === "mismatch") throw new Error(PIN_MISMATCH);
@@ -145,6 +162,37 @@ export function createProviderKeySender(o: { call: Call; pin: Pick<BoxPin, "chec
   return {
     save: async (provider: P, value: string): Promise<ProvidersView> => o.call("setProviderKey", { provider, sealed: await sealed(value) }),
     test: async (provider: P, value: string): Promise<ProviderTestResult> => o.call("testProviderKey", value ? { provider, sealed: await sealed(value) } : { provider }),
+    /** 0.1.7: another named key for a provider (Anthropic too), sealed to the box like every key. */
+    addKey: async (provider: KeyedProvider, value: string, label: string): Promise<KeysView> => {
+      const { boxPublicKey } = await o.call("getKeys", {});
+      if (o.pin.check(boxPublicKey) === "mismatch") throw new Error(PIN_MISMATCH);
+      const before = await o.call("getKeys", {});
+      const key = String(value ?? "").trim();
+      const v = await o.call("addKey", { provider, sealed: await o.seal(boxPublicKey, key), label: String(label ?? "") });
+      if (provider === "anthropic") {
+        const added = anthropic(v).find((k) => !anthropic(before).some((b) => b.id === k.id));
+        // The first key is the default: it becomes the Mac's copy. Another waits as a spare for Make default.
+        if (added) await onMac("saved", (m) => (added.isDefault ? m.save(key) : m.saveSpare(added.id, key)));
+      }
+      return v;
+    },
+    /** 0.1.7: Make default; for Anthropic the Mac's copy follows the new default. */
+    makeDefault: async (provider: KeyedProvider, keyId: string): Promise<KeysView> => {
+      const old = provider === "anthropic" ? defaultOf(await o.call("getKeys", {})) : null;
+      const v = await o.call("setDefaultKey", { provider, keyId });
+      if (provider === "anthropic" && old !== keyId) await onMac("moved", (m) => m.promote(keyId, old));
+      return v;
+    },
+    /** 0.1.7: Remove; for Anthropic the Mac's copy goes with the default and follows the next one, or a spare goes. */
+    removeKey: async (provider: KeyedProvider, keyId: string): Promise<KeysView> => {
+      const wasDefault = provider === "anthropic" && defaultOf(await o.call("getKeys", {})) === keyId;
+      const v = await o.call("removeKey", { provider, keyId });
+      if (provider === "anthropic") {
+        const next = defaultOf(v);
+        await onMac("removed", (m) => (!wasDefault ? m.dropSpare(keyId) : next ? m.promote(next, null) : m.clear()));
+      }
+      return v;
+    },
   };
 }
 export type ProviderKeySender = ReturnType<typeof createProviderKeySender>;
@@ -158,6 +206,9 @@ export function registerProviderIpc(ipc: IpcLike, sender: () => ProviderKeySende
   const routes: Array<[string, (...a: never[]) => Promise<unknown>]> = [
     ["providers:save-key", async (p: string, value: string) => need().save(p as never, value)],
     ["providers:test-key", async (p: string, value: string) => need().test(p as never, value)],
+    ["keys:add", async (p: string, value: string, label: string) => need().addKey(p as never, value, label)],
+    ["keys:make-default", async (p: string, keyId: string) => need().makeDefault(p as never, String(keyId))],
+    ["keys:remove", async (p: string, keyId: string) => need().removeKey(p as never, String(keyId))],
   ];
   for (const [ch, fn] of routes) {
     ipc.removeHandler(ch);

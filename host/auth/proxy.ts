@@ -64,8 +64,13 @@ export class AuthProxy {
   constructor(private o: {
     /** https://api.anthropic.com in production; a local fake Messages API in tests. */
     upstream: string;
-    /** The live API key, read per request (a replaced key applies at once), or null. */
-    credential(): string | null;
+    /**
+     * The live API key, read per request (a replaced key applies at once), or null. 0.1.7: the key the grant's Bot pays
+     * with (its chosen Anthropic key, else the default; app.ts), on both engines, so the right key is used per Bot.
+     */
+    credential(botId?: string | null): string | null;
+    /** 0.1.7: the status of each Messages answer, for the paying key's health. */
+    onStatus?(botId: string | null, status: number): void;
     port: number;
     now?: () => number;
     /** A grant nobody used for this long is dead (revocation at process end is the main path). */
@@ -175,7 +180,7 @@ export class AuthProxy {
     if (!ALLOWED.some((a) => a.method === req.method && a.path === pathname)) { deny(404, "not_found_error", "Not found"); return; }
     const g = this.grantFor(req);
     if (!g) { deny(401, "authentication_error", "invalid proxy token"); return; }
-    const cred = this.o.credential();
+    const cred = this.o.credential(g.botId);
     if (!cred) { deny(401, "authentication_error", "no API key saved"); return; }
     const isMessages = pathname === "/v1/messages";
     if (isMessages && this.o.allow) {
@@ -199,6 +204,7 @@ export class AuthProxy {
     ttft.mark(g.botId, "proxy: request forwarded upstream");
     const upReq = lib.request(target, { method: req.method, headers, agent: this.agent }, (upRes) => {
       ttft.mark(g.botId, "proxy: upstream response headers");
+      if (isMessages && this.o.onStatus) { try { this.o.onStatus(g.botId, upRes.statusCode ?? 502); } catch { /* health is advisory */ } }
       if (ttft.enabled) upRes.once("data", () => ttft.mark(g.botId, "proxy: upstream first body byte"));
       const out: http.OutgoingHttpHeaders = {};
       for (const [k, v] of Object.entries(upRes.headers)) if (!HOP.has(k) && v !== undefined) out[k] = v;
@@ -206,6 +212,9 @@ export class AuthProxy {
       res.writeHead(upRes.statusCode ?? 502, out);
       res.flushHeaders();
       if (isMessages && (upRes.statusCode ?? 0) < 300 && !upRes.headers["content-encoding"]) this.meter(g, upRes, String(upRes.headers["content-type"] ?? "").startsWith("text/event-stream"));
+      // An upstream that drops the stream partway drops ours too (pipe alone would leave the caller waiting).
+      upRes.on("aborted", () => res.destroy());
+      upRes.on("error", (e) => res.destroy(e));
       upRes.pipe(res);
     });
     upReq.setNoDelay(true);

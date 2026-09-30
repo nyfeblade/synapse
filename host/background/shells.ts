@@ -210,7 +210,12 @@ export class ShellService {
     createTerminalFile(this.file(id, botId), botOsUser(this.d.cfg, botId) ? 0o640 : 0o664, text); // bug #66: readable by the Bot's group, never writable
   }
 
-  async run(botId: string, a: ShellArgs, o: { childId?: string } = {}): Promise<BotToolResult> {
+  /**
+   * `signal` (a coding agent's Stop): the command is stopped when it aborts. `stopAtLimit` (a coding agent's Bash): a
+   * command still running after block_until_ms is stopped and reported, never moved to the background (nothing would
+   * wake the agent for it).
+   */
+  async run(botId: string, a: ShellArgs, o: { childId?: string; signal?: AbortSignal; stopAtLimit?: boolean } = {}): Promise<BotToolResult> {
     if (this.retired.has(botId)) return { text: "This Bot was deleted.", isError: true };
     const command = String(a.command ?? "");
     if (!command.trim()) return { text: "command is required.", isError: true };
@@ -275,9 +280,18 @@ export class ShellService {
     rec.blocking = block > 0;
     let f: Awaited<ReturnType<ShellService["waitFor"]>> = null;
     try {
-      if (block > 0) f = await this.waitFor(id, block);
+      if (block > 0) f = await this.waitFor(id, block, undefined, o.signal);
     } finally {
       rec.blocking = false;
+    }
+    if (!f && (o.signal?.aborted || o.stopAtLimit)) {
+      await this.d.spawner.stop(id).catch(() => {});
+      rec.status = "error";
+      rec.endedAt = this.now();
+      this.d.pending.remove(id);
+      const body = this.tail(this.read(id).body, id);
+      if (o.signal?.aborted) return { text: `${body}\n[stopped: the coding agent was stopped]`, isError: true };
+      return { text: `${body}\n[stopped after ${Math.round(block / 1000)} s: the command ran past its time limit]`, isError: true };
     }
     if (f) {
       this.finish(rec, f.footer as Footer);
@@ -291,13 +305,13 @@ export class ShellService {
     return { text: `${block > 0 ? `Still running after ${secs} s, so the command was moved to the background` : "Started in the background"} (task ${id}). Output streams to ${this.file(id)}. You'll be revived when it finishes; use AwaitShell to wait for it or to watch for a pattern.` };
   }
 
-  private async waitFor(id: string, ms: number, pattern?: RegExp): Promise<ReturnType<ShellService["read"]> & { matched?: boolean } | null> {
+  private async waitFor(id: string, ms: number, pattern?: RegExp, signal?: AbortSignal): Promise<ReturnType<ShellService["read"]> & { matched?: boolean } | null> {
     const until = this.now() + ms;
     for (;;) {
       const r = this.read(id);
       if (r.footer) return r;
       if (pattern && pattern.test(r.body)) return { ...r, matched: true };
-      if (this.now() >= until) return null;
+      if (this.now() >= until || signal?.aborted) return null;
       await new Promise((res) => setTimeout(res, this.d.pollMs ?? 200));
     }
   }

@@ -8,14 +8,21 @@
 #        | {"ok": true, "kind": "image", "mime": m, "data": "<base64>", "sha": h}
 #   {"op": "write", "path": P, "content": s, "expect": h | null}  -> {"ok": true, "sha": h, "created": bool}
 #   {"op": "edit",  "path": P, "old": s, "new": s, "all": bool, "expect": h | null}  -> {"ok": true, "sha": h, "count": n}
+#   {"op": "glob",  "path": P, "pattern": g}  -> {"ok": true, "kind": "paths", "paths": [...], "cut"?: true}
+#   {"op": "grep",  "path": P, "pattern": re, "glob"?: g, "mode"?: "files"|"content"|"count", "ignoreCase"?: bool,
+#                   "context"?: n, "limit"?: n}  -> {"ok": true, "kind": "grep", "text": s, "matches": n, "files": n, "cut"?: true}
 #   any failure -> {"ok": false, "error": "<why>"}
+#
+# glob and grep (the Glob and Grep tools) walk a folder as the Bot: a link is never followed into a folder, a linked file
+# counts only when its real path passes the walls below, ".git" is skipped, and "node_modules" unless the pattern names
+# it. The glob syntax, the limits and the answer text are the same as host/walls/bot-file.ts (tested against both).
 #
 # Walls: the kernel's, first (this runs as the Bot: another Bot's 0700 home, the host's 0700 private folder and root
 # files are closed to it whatever path or link is used). On top, every path is absolute and its REAL path (all links
 # resolved) must not be inside another Bot's home, the host's private folder, the managed skills tree, or /proc, /sys
 # and /dev. `expect` is the sha256 of the file when the Bot last read or wrote it: an existing file is only written or
 # edited when it matches (the CLI's "read it first, and it hasn't changed since" rule).
-import base64, hashlib, json, os, signal, stat, sys, tempfile
+import base64, hashlib, json, os, re, signal, stat, sys, tempfile
 
 signal.alarm(30)
 HOME = sys.argv[1]
@@ -221,6 +228,246 @@ def do_edit(req):
     out({"ok": True, "sha": sha(data), "count": n if req.get("all") else 1})
 
 
+# ---- glob and grep (host/walls/bot-file.ts SEARCH_LIMITS and globRegex: keep the two the same) ----
+WALK_MAX = 50000
+GLOB_MAX = 1000
+GREP_FILE_BYTES = 2 * 1024 * 1024
+OUTPUT_MAX = 64 * 1024
+MATCH_LINE_MAX = 500
+CONTEXT_MAX = 10
+CONTENT_LIMIT = 250
+FILES_LIMIT = 1000
+LIMIT_MAX = 5000
+RE_SPECIAL = set("\\^$.|?*+()[]{}/")
+
+
+def escape_re(s):
+    return "".join("\\" + c if c in RE_SPECIAL else c for c in s)
+
+
+def glob_regex(pattern):
+    out = ""
+    i = 0
+    n = len(pattern)
+    while i < n:
+        c = pattern[i]
+        if c == "*" and pattern[i + 1:i + 2] == "*":
+            if pattern[i + 2:i + 3] == "/":
+                out += "(?:.*/)?"
+                i += 3
+            else:
+                out += ".*"
+                i += 2
+            continue
+        if c == "*":
+            out += "[^/]*"
+            i += 1
+            continue
+        if c == "?":
+            out += "[^/]"
+            i += 1
+            continue
+        if c == "{":
+            end = pattern.find("}", i)
+            if end > i:
+                out += "(?:" + "|".join(escape_re(x) for x in pattern[i + 1:end].split(",")) + ")"
+                i = end + 1
+                continue
+        if c == "[":
+            end = pattern.find("]", i + 2)
+            if end > i:
+                body = pattern[i + 1:end]
+                out += "[" + ("^" + body[1:] if body.startswith("!") else body) + "]"
+                i = end + 1
+                continue
+        out += escape_re(c)
+        i += 1
+    return re.compile("^" + out + "$", re.S)
+
+
+def walls_ok(real):
+    for d in ALWAYS_DENY + DENY:
+        if under(real, d):
+            return False
+    # The folder of all homes may be walked through (to reach the Bot's own); another Bot's home never.
+    return not (under(real, BOTS) and real != BOTS.rstrip("/") and not under(real, HOME))
+
+
+def walk(given, real, node_modules):
+    files = []
+    stack = [(given, real, "")]
+    seen = 0
+    while stack:
+        d, dreal, rel = stack.pop()
+        try:
+            names = sorted(os.listdir(dreal))
+        except OSError:
+            continue
+        sub = []
+        for name in names:
+            seen += 1
+            if seen > WALK_MAX:
+                return files, True
+            if name == ".git" or (name == "node_modules" and not node_modules):
+                continue
+            p = os.path.join(dreal, name)
+            r = p
+            try:
+                st = os.lstat(p)
+                if stat.S_ISLNK(st.st_mode):
+                    r = os.path.realpath(p)
+                    st = os.stat(r)
+                    if not stat.S_ISREG(st.st_mode):
+                        continue
+            except OSError:
+                continue
+            if not walls_ok(r):
+                continue
+            reln = rel + "/" + name if rel else name
+            if stat.S_ISDIR(st.st_mode):
+                sub.append((os.path.join(d, name), p, reln))
+            elif stat.S_ISREG(st.st_mode):
+                files.append({"abs": os.path.join(d, name), "rel": reln, "real": r, "mtime": st.st_mtime_ns / 1e6, "size": st.st_size})
+        for x in reversed(sub):
+            stack.append(x)
+    return files, False
+
+
+def search_root(p):
+    # A search may start at the folder of all homes itself (it walks through to the Bot's own); anything else is walled
+    # exactly as for Read.
+    if isinstance(p, str) and p.startswith("/") and "\0" not in p and os.path.realpath(p) == BOTS.rstrip("/"):
+        real = os.path.realpath(p)
+    else:
+        real = resolve(p)
+    try:
+        st = os.stat(real)
+    except OSError:
+        fail("Path does not exist.")
+    return os.path.normpath(p), real, st
+
+
+def newest_first(f):
+    return (-f["mtime"], f["rel"])
+
+
+def do_glob(req):
+    given, real, st = search_root(req.get("path"))
+    if not stat.S_ISDIR(st.st_mode):
+        fail("path must be a folder.")
+    pat = req.get("pattern") if isinstance(req.get("pattern"), str) else ""
+    if pat.startswith("/"):
+        if not pat.startswith(given + "/"):
+            fail("pattern must be relative to path.")
+        pat = pat[len(given) + 1:]
+    while pat.startswith("./"):
+        pat = pat[2:]
+    if not pat or len(pat) > 1000:
+        fail("pattern is required.")
+    rx = glob_regex(pat)
+    files, cut = walk(given, real, "node_modules" in pat)
+    hits = sorted([f for f in files if rx.match(f["rel"])], key=newest_first)
+    res = {"ok": True, "kind": "paths", "paths": [h["abs"] for h in hits[:GLOB_MAX]]}
+    if cut or len(hits) > GLOB_MAX:
+        res["cut"] = True
+    out(res)
+
+
+def as_int(v, default):
+    try:
+        n = int(float(v))
+    except (TypeError, ValueError):
+        return default
+    return n or default
+
+
+def do_grep(req):
+    given, real, st = search_root(req.get("path"))
+    pattern = req.get("pattern")
+    if not isinstance(pattern, str) or not pattern or len(pattern) > 1000:
+        fail("pattern is required.")
+    try:
+        rx = re.compile(pattern, re.I if req.get("ignoreCase") else 0)
+    except re.error:
+        fail("Invalid regular expression: " + pattern)
+    mode = req.get("mode") if req.get("mode") in ("content", "count") else "files"
+    ctx = max(0, min(as_int(req.get("context"), 0), CONTEXT_MAX))
+    limit = max(1, min(as_int(req.get("limit"), CONTENT_LIMIT if mode == "content" else FILES_LIMIT), LIMIT_MAX))
+    g = req.get("glob") if isinstance(req.get("glob"), str) and req.get("glob") else None
+    cut = False
+    if stat.S_ISDIR(st.st_mode):
+        files, cut = walk(given, real, "node_modules" in (g or ""))
+        grx = glob_regex(g) if g else None
+        files = sorted([f for f in files if not grx or grx.match(f["rel"] if "/" in g else f["rel"].rsplit("/", 1)[-1])], key=lambda f: f["rel"])
+    elif stat.S_ISREG(st.st_mode):
+        files = [{"abs": given, "rel": os.path.basename(given), "real": real, "mtime": st.st_mtime_ns / 1e6, "size": st.st_size}]
+    else:
+        fail("That is not a regular file.")
+    lines_out = []
+    state = {"bytes": 0, "cut": cut}
+
+    def emit(line):
+        if len(lines_out) >= limit or state["bytes"] + len(line) + 1 > OUTPUT_MAX:
+            state["cut"] = True
+            return False
+        lines_out.append(line)
+        state["bytes"] += len(line) + 1
+        return True
+
+    def clip(l):
+        return l[:MATCH_LINE_MAX] + "…" if len(l) > MATCH_LINE_MAX else l
+
+    matches = 0
+    hit_files = []
+    for f in files:
+        if f["size"] > GREP_FILE_BYTES:
+            continue
+        try:
+            with open(f["real"], "rb") as fh:
+                data = fh.read(GREP_FILE_BYTES + 1)
+        except OSError:
+            continue
+        if b"\0" in data[:8000]:
+            continue
+        lines = data.decode("utf-8", errors="replace").split("\n")
+        if lines and lines[-1] == "":
+            lines.pop()
+        hit = [i for i, l in enumerate(lines) if rx.search(l)]
+        if not hit:
+            continue
+        matches += len(hit)
+        hit_files.append((f, len(hit)))
+        if mode != "content" or state["cut"]:
+            continue
+        show = set()
+        for i in hit:
+            for j in range(max(0, i - ctx), min(len(lines) - 1, i + ctx) + 1):
+                show.add(j)
+        is_hit = set(hit)
+        prev = -2
+        for j in sorted(show):
+            if ctx > 0 and prev != -2 and j != prev + 1 and not emit("--"):
+                break
+            if ctx > 0 and prev == -2 and lines_out and not emit("--"):
+                break
+            sep = ":" if j in is_hit else "-"
+            if not emit(f["abs"] + sep + str(j + 1) + sep + clip(lines[j])):
+                break
+            prev = j
+    if mode == "files":
+        for f in sorted([h[0] for h in hit_files], key=newest_first):
+            if not emit(f["abs"]):
+                break
+    elif mode == "count":
+        for f, n in hit_files:
+            if not emit(f["abs"] + ":" + str(n)):
+                break
+    res = {"ok": True, "kind": "grep", "text": "\n".join(lines_out), "matches": matches, "files": len(hit_files)}
+    if state["cut"]:
+        res["cut"] = True
+    out(res)
+
+
 os.umask(0o002)
 raw = sys.stdin.buffer.read(MAX_WRITE * 2 + 1)
 if len(raw) > MAX_WRITE * 2:
@@ -237,6 +484,10 @@ try:
         do_write(req)
     elif op == "edit":
         do_edit(req)
+    elif op == "glob":
+        do_glob(req)
+    elif op == "grep":
+        do_grep(req)
     else:
         fail("bad op")
 except UnicodeDecodeError:

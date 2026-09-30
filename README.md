@@ -40,8 +40,8 @@ with the same certificate.
 - [OrbStack](https://orbstack.dev), which runs the sandbox the Bots work in.
 - An AI key: an Anthropic API key from the [Anthropic Console](https://console.anthropic.com), or a key for
   OpenAI, OpenRouter, Gemini, Mistral or DeepSeek, or a model on your Mac with Ollama or LM Studio. Any one
-  of them finishes setup. Coding agents, and the computer and browser helpers, run on Claude, so they need
-  an Anthropic key. Synapse reaches Claude with an API key only: signing in with a Claude subscription or a
+  of them finishes setup. Coding agents, Engineering mode and the computer and browser helpers run on the
+  Bot's own model, so none of them needs Claude. Synapse reaches Claude with an API key only: signing in with a Claude subscription or a
   Claude Code login is not supported (see [`docs/api-key-auth.md`](docs/api-key-auth.md)).
 - An internet connection for the first run and for the Bots' work.
 
@@ -64,12 +64,13 @@ recording and accessibility only when you first use a feature that needs them.
 - **Real work.** Bots run multi-step tasks on their own computer, with files, the shell, the web and the
   accounts you connect, including more than one account per app. You see every step.
 - **Any AI model.** Anthropic, OpenAI, OpenRouter, Gemini, Mistral, DeepSeek, or a model on your Mac with
-  Ollama or LM Studio. Each Bot has its own model. The picker shows what has been measured to work on each
-  one (Supported, Experimental, Not checked) and its price.
+  Ollama or LM Studio. Each Bot has its own model, and you can keep several named keys per provider. The picker shows what has been measured to work on each
+  one (Supported, Experimental, Not checked) and its price. A Claude Bot can also run on Synapse's own
+  engine instead of Claude Code (Experimental, in Bot settings).
 - **Code.** Point a Bot at a repository: it works on its own branch in a separate worktree, runs the tests
   and hands back the branch or a pull request.
-- **Coding subscriptions (Experimental).** A Bot can run on GitHub Copilot or Kimi Code with your own
-  subscription. Install them in Settings → Account → Coding CLIs.
+- **Coding subscriptions (Experimental).** A Bot can run on GitHub Copilot, Kimi Code, Cursor or Mistral
+  Vibe with your own subscription. Install Copilot and Kimi Code in Settings → Account → Coding CLIs.
 - **Voice calls.** Call a Bot and talk. Speech is transcribed on your Mac and the voice is generated on your
   Mac. If your Mac can't transcribe your language itself, Synapse asks before using Apple's servers.
 - **Your Mac, with approval.** A Bot can use your Mac's apps and screen and run commands in a sandbox.
@@ -87,10 +88,21 @@ recording and accessibility only when you first use a feature that needs them.
 | <img alt="A Bot fixes a failing test" src="docs/media/screenshot-code.png"> | <img alt="The model picker" src="docs/media/screenshot-models.png"> | <img alt="A voice call" src="docs/media/screenshot-call.png"> |
 
 ## Privacy and security
-- **The approval gate.** Risky actions stop and show a card: Allow once, Always allow or Deny. Choose how
-  much asks first, from Ask to Full auto. Even Full auto asks before deleting, spending money, changing
-  security or access, and sending anything you didn't ask for. Nothing an email, a web page or another app
-  says counts as your approval.
+- **The approval gate.** Risky actions stop and show a card: Allow once, Always allow or Deny. A card a
+  rule raised names that rule. Choose how much asks first, from Ask to Full auto. With the default
+  Balanced rules, even Full auto asks before deleting, spending money, changing security or access, and
+  sending anything you didn't ask for. Nothing an email, a web page or another app says counts as your
+  approval.
+- **Your rules, in code.** Write rules in plain English: Always allow, Ask first or Never, for every Bot or
+  one, an app or account, a folder, or a person or site, with money, rate and time limits ("Ask before
+  anything over $50", "At most 5 sends an hour", "No sends between 22:00 and 07:00"). Synapse turns each
+  one into an exact check, shows it to you with what it would have changed, and enforces it in code. A
+  rule it can't read exactly is refused, never guessed. Start from Careful, Balanced or Hands-off.
+  Guidelines ("draft, don't send") go to the Bot as instructions.
+- **A hard core no rule or mode can change.** Synapse's own settings and keys, your Mac and your home
+  network, and the Bots' firewall are off limits in every mode, No limits included. Limit a Bot's network
+  to a list of sites and it can't upload to, or run code from, anywhere else. Synapse's gate enforces
+  that; a per-Bot firewall rule isn't there yet.
 - **Tests you can run.** The [security suite](security/README.md) turns these claims into attacks that run
   against the real code, with no model and no API key: `npm run security-suite`. Each release's results
   are in [`security/results/`](security/results).
@@ -142,7 +154,8 @@ How it fits together:
 ```
 Mac: Electron app (app/) ──gateway (Bearer, SSE)──► VM: host service (host/)
                                                       └─ each Bot = a Claude Code session (Agent SDK),
-                                                         Synapse's own loop for other providers, or a coding CLI
+                                                         Synapse's own loop (other providers, or Claude on the
+                                                         Experimental engine), or a coding CLI
 ```
 
 | Folder | What |

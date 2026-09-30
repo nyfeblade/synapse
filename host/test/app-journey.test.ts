@@ -42,7 +42,9 @@ describe("Phase 1 journey on FakeBrain (gateway level)", () => {
     await s.api("sendPrompt", { id, text: "please run: rm -rf /workspace/tmp/y", clientNonce: "n2" });
     await until(async () => (await s.card(id))?.approvalId !== c1.approvalId && (await s.card(id))?.status === "pending");
     await s.api("resolveAutoReviewApproval", { id, approvalId: (await s.card(id))!.approvalId, choice: "always" });
-    await until(async () => (await s.api<{ allowInstructions: string[] }>("getHostSettings", {})).allowInstructions.length === 1);
+    // Safety v2: a card a rule raised (here the preset Deletes) gets an exception for this path; a reviewer card, an Allow rule.
+    await until(async () => (await s.api<{ allowInstructions: string[] }>("getHostSettings", {})).allowInstructions.length === 1
+      || (await s.api<{ rules: { preset?: string; except: { paths?: string[] }[] }[] }>("getSafety", {})).rules.some((r) => r.except.some((e) => e.paths?.includes("/workspace/tmp/y"))));
 
     await s.api("sendPrompt", { id, text: "please run: curl https://example.com", clientNonce: "n3" });
     await until(async () => (await s.card(id))?.status === "pending");

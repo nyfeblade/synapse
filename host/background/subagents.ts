@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { APP_NAME, COMPUTER_NAME, DEFAULT_BOT_MODEL, LIMITSC, STRC, SUBAGENT_TYPES, activityEntryId, formatDuration, type AsyncTaskView, type ComputerPerception, type SubagentType, type ToolCallEntry } from "@synapse/shared";
+import { APP_NAME, COMPUTER_NAME, DEFAULT_BOT_MODEL, LIMITSC, STRC, SUBAGENT_TYPES, activityEntryId, formatDuration, isProviderModelRef, type AsyncTaskView, type ComputerPerception, type ScreenView, type SubagentType, type ToolCallEntry } from "@synapse/shared";
 import type { BotService } from "../bots/bot-service";
 import type { BotToolResult, SupervisedBrain, TurnEvent, WakeSource } from "../brain/types";
 import { bodyFor, iconFor, isHiddenActivity, metricFor, stepText } from "../presence/activity";
@@ -8,6 +8,8 @@ import type { Redactor } from "../history/archive";
 import { fillTemplate, loadPrompt } from "../prompts";
 import type { TurnContext } from "../runner/turn-context";
 import type { RoomReview } from "../groups/member-prompt";
+import { NATIVE_VIEW } from "../computer/screen-view";
+import { LoopGuard, type LoopTrip } from "../runner/loop-guard";
 import { newSlot, type TurnSlot } from "../runner/turn-slot";
 import type { Supervisor } from "../supervisor/supervisor";
 import type { PendingWakes } from "./pending-wakes";
@@ -17,6 +19,10 @@ import type { Revivals } from "./revivals";
 export interface ChildSpec { id: string; parentBotId: string; type: SubagentType; title: string; model: string; systemAppend: string; rehearsal?: boolean;
   /** "Computer perception: Live (beta)" for a computerUse child: Look/Act/Screenshot instead of the Computer tool. */
   perception?: "live";
+  /** A computer or browser child whose model can't read images: text reads of the screen and page, no screenshots. */
+  textOnly?: true;
+  /** A computer child's screen as its model sees it (screenshot size = coordinate space); absent = the display, 1:1. */
+  view?: ScreenView;
   origin?: { source: WakeSource; wakeText: string; context: Pick<TurnContext, "wake" | "routineRun">; roomReview?: RoomReview } }
 export interface ChildHooks { slot(): TurnSlot; setSessionId(id: string): void; getSessionId(): string | null; onAction(line: string): void }
 export interface SubagentDeps {
@@ -47,31 +53,41 @@ export interface SubagentDeps {
    *  fix round 2, finding 1: `Redactor` (host/history/archive.ts) answers `null` while it cannot
    *  redact yet — that must mean "no body", never "store it unredacted". */
   redact?: Redactor;
-  /** 0.1.6: whether Claude can be called (an Anthropic key is saved). Computer and browser children always run on
-   *  Claude, so without it they're refused up front instead of failing inside the child. Absent: not checked (tests,
-   *  the fake brain). */
-  claudeReady?(): boolean;
+  /** Whether this model reads images in tool results (catalog, then measured evidence). A computer or browser child on
+   *  a model that doesn't gets the text-only tools. Absent: every model does (Claude, tests). */
+  seesImages?(modelRef: string): boolean;
+  /** The screen as this model sees it (host/computer/screen-view.ts). Absent: the display, 1:1. */
+  screenView?(modelRef: string): ScreenView;
 }
 interface Child {
   spec: ChildSpec; brain: SupervisedBrain | null; slot: TurnSlot; status: AsyncTaskView["status"]; startedAt: number; runningSince: number | null;
   endedAt: number | null; sessionId: string | null; toolCalls: number; actions: string[]; report: string; steering: string[];
   stopped: boolean; timedOut: boolean; steeredForTime: boolean;
+  /** 5.7: the loop guard stopped it (the same step kept failing); every brain, Claude or provider, alike. */
+  loop: LoopTrip | null;
 }
 const COMPUTER_TYPES: ReadonlySet<SubagentType> = new Set(["computerUse", "browserUse"]);
 const PROMPT: Record<SubagentType, string> = { generalPurpose: "subagents/general-purpose.md", computerUse: "subagents/computer-use.md", browserUse: "subagents/browser-use.md" };
+const TEXT_PROMPT: Partial<Record<SubagentType, string>> = { computerUse: "subagents/computer-use-text.md", browserUse: "subagents/browser-use-text.md" };
+/** Computer and browser children run on the Bot's own provider model; a Claude Bot's run on this Claude model. */
+export const CLAUDE_COMPUTER_MODEL = "claude-sonnet-5";
 
-export function childSystemAppend(type: SubagentType, perception?: "live"): string {
-  const file = type === "computerUse" && perception === "live" ? "subagents/computer-use-live.md" : PROMPT[type];
-  return fillTemplate(loadPrompt(file), { APP_NAME, COMPUTER_NAME });
+export function childSystemAppend(type: SubagentType, perception?: "live", o: { textOnly?: boolean; view?: ScreenView } = {}): string {
+  const file = type === "computerUse" && perception === "live" ? "subagents/computer-use-live.md" : (o.textOnly && TEXT_PROMPT[type]) || PROMPT[type];
+  const v = o.view ?? NATIVE_VIEW;
+  return fillTemplate(loadPrompt(file), { APP_NAME, COMPUTER_NAME, SCREEN_W: String(v.w), SCREEN_H: String(v.h), MAX_X: String(v.w - 1), MAX_Y: String(v.h - 1) });
 }
 
 export class SubagentService {
   private children = new Map<string, Child>();
   private retired = new Set<string>(); // I6: deleted Bots never start another child
   private now: () => number;
+  /** 5.7: the runner's loop guard, over each child's own events (keyed by child id). */
+  private loops: LoopGuard;
 
   constructor(private d: SubagentDeps) {
     this.now = d.now ?? Date.now;
+    this.loops = new LoopGuard(this.now);
   }
 
   private live(c: Child) { return c.status === "queued" || c.status === "running"; }
@@ -96,18 +112,26 @@ export class SubagentService {
     const type = (a.subagent_type ?? "generalPurpose") as SubagentType;
     if (!SUBAGENT_TYPES.includes(type)) return { text: `Unknown subagent_type "${String(a.subagent_type)}". Use generalPurpose, computerUse or browserUse.`, isError: true };
     const mine = [...this.children.values()].filter((c) => c.spec.parentBotId === botId && this.live(c));
-    if (COMPUTER_TYPES.has(type) && this.d.claudeReady && !this.d.claudeReady()) return { text: STRC.computerNeedsClaude, isError: true };
     if (COMPUTER_TYPES.has(type) && this.activeComputerChild(botId)) return { text: STRC.computerUseBusy, isError: true };
     if (mine.length >= LIMITSC.childrenPerBot || [...this.children.values()].filter((c) => this.live(c)).length >= LIMITSC.childrenTotal) return { text: STRC.tooManyTasks, isError: true };
     const id = `subagent-${randomUUID()}`;
     const title = String(a.description ?? "").replace(/\s+/g, " ").trim().slice(0, LIMITSC.taskTitleMax) || "Task";
-    const model = COMPUTER_TYPES.has(type) ? "claude-sonnet-5" : this.d.bots.summary(botId).profile.model ?? DEFAULT_BOT_MODEL;
+    const own = this.d.bots.summary(botId).profile.model ?? DEFAULT_BOT_MODEL;
+    // No feature needs Claude: a provider Bot's computer and browser children run on its own model.
+    const computer = COMPUTER_TYPES.has(type);
+    const model = computer && !isProviderModelRef(own) ? CLAUDE_COMPUTER_MODEL : own;
+    const textOnly = computer && this.d.seesImages ? !this.d.seesImages(model) : false;
+    const view = type === "computerUse" && this.d.screenView ? this.d.screenView(model) : NATIVE_VIEW;
     const p = this.d.parentSlot?.(botId) ?? null;
     const origin = p ? { source: p.reviewSource ?? p.source, wakeText: p.wakeText, context: { wake: p.context.wake, routineRun: p.context.routineRun }, ...(p.roomReview ? { roomReview: p.roomReview } : {}) } : undefined;
     const perception = type === "computerUse" && this.d.perception?.(botId) === "live" ? ("live" as const) : undefined;
-    const spec: ChildSpec = { id, parentBotId: botId, type, title, model, systemAppend: childSystemAppend(type, perception), ...(perception ? { perception } : {}), ...(a.rehearsal === true ? { rehearsal: true } : {}), ...(origin ? { origin } : {}) };
+    const spec: ChildSpec = {
+      id, parentBotId: botId, type, title, model, systemAppend: childSystemAppend(type, perception, { textOnly, view }), ...(perception ? { perception } : {}),
+      ...(textOnly ? { textOnly: true as const } : {}), ...(view.w !== NATIVE_VIEW.w || view.h !== NATIVE_VIEW.h ? { view } : {}),
+      ...(a.rehearsal === true ? { rehearsal: true } : {}), ...(origin ? { origin } : {}),
+    };
     const slot = this.freshSlot(spec);
-    const c: Child = { spec, brain: null, slot, status: "queued", startedAt: this.now(), runningSince: null, endedAt: null, sessionId: null, toolCalls: 0, actions: [], report: "", steering: [], stopped: false, timedOut: false, steeredForTime: false };
+    const c: Child = { spec, brain: null, slot, status: "queued", startedAt: this.now(), runningSince: null, endedAt: null, sessionId: null, toolCalls: 0, actions: [], report: "", steering: [], stopped: false, timedOut: false, steeredForTime: false, loop: null };
     this.children.set(id, c);
     this.d.onWork?.(botId);
     if (a.rehearsal === true) this.d.rehearsals?.start(botId, id); // I3: ended in run() whatever way the child finishes
@@ -144,9 +168,12 @@ export class SubagentService {
         c.status = "running";
         c.runningSince ??= this.now();
         this.publish(c.spec.parentBotId);
+        this.loops.turnStart(c.spec.id, "subagent-done");
         const sink = (e: TurnEvent) => {
           if (e.kind === "tool_start") c.toolCalls += 1;
           this.mirror(c, e);
+          const trip = this.loops.event(c.spec.id, e);
+          if (trip && !c.loop && !c.stopped) { c.loop = trip; void c.brain?.interrupt("loop guard"); }
         };
         const r = await (c.brain as SupervisedBrain).runTurn({
           prompt: [{ text }], hidden: true, lane: "background", source: "subagent-done", silenceAllowed: true, requestId: `child:${c.spec.id}`,
@@ -154,6 +181,11 @@ export class SubagentService {
         }, sink);
         lease.release();
         if (r.finalText) c.report = r.finalText;
+        if (c.loop) {
+          c.report = `Stopped by ${APP_NAME}: “${c.loop.step}” kept failing (${c.loop.tries} tries in a row).${c.report ? `\nLast words before the stop:\n${c.report}` : ""}`;
+          c.status = "error";
+          break;
+        }
         const steer = c.steering.shift();
         if (!c.stopped && !c.timedOut && steer !== undefined) {
           text = fillTemplate(loadPrompt("subagents/steer.md"), { TEXT: steer }).trimEnd();
@@ -169,6 +201,7 @@ export class SubagentService {
       c.report ||= (e as Error).message;
     }
     c.endedAt = this.now();
+    this.loops.forget(c.spec.id);
     if (c.spec.rehearsal) this.d.rehearsals?.end(c.spec.id);
     await c.brain?.cool("child finished").catch(() => {});
     await this.d.supervisor.forget(`child:${c.spec.id}`).catch(() => {});

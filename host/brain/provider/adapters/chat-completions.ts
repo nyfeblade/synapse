@@ -68,10 +68,11 @@ function encodeMessages(q: ProviderQuirks, req: CanonRequest): Obj[] {
       if (m.toolCalls.length) {
         msg.tool_calls = m.toolCalls.map((c) => ({
           id: c.id, type: "function", function: { name: req.wireName(c.name), arguments: c.arguments.trim() ? c.arguments : "{}" },
-          ...(isObj(c.providerMeta) ? c.providerMeta : {}),
+          ...(isObj(c.providerMeta) ? echoOf(c.providerMeta) ?? {} : {}),
         }));
       }
-      if (isObj(m.providerMeta)) Object.assign(msg, m.providerMeta);
+      // Only this dialect's own echo keys: a history that ran on Claude carries `anthropic` blocks no other API takes.
+      if (isObj(m.providerMeta)) { const echo = echoOf(m.providerMeta); if (echo) Object.assign(msg, echo); }
       out.push(msg);
     } else {
       // A run of tool results: each gets its tool message; their images follow in one user message (or inline).
@@ -174,8 +175,10 @@ export class ChatCompletionsAdapter implements ProviderAdapter {
     const q = this.q;
     const body: Obj = { model: req.model, stream: true, messages: encodeMessages(q, req) };
     if (q.streamUsage) body.stream_options = { include_usage: true };
-    if (req.tools.length) {
-      body.tools = req.tools.map((t) => ({
+    // A deferred tool reaches a Chat Completions model only once ToolSearch loaded it (the brain then sends it plain).
+    const tools = req.tools.filter((t) => !t.defer);
+    if (tools.length) {
+      body.tools = tools.map((t) => ({
         type: "function",
         // Phase 0 unknown 3c: never `strict` to a non-OpenAI provider (it makes models invent optional values).
         function: { name: t.name, description: t.description, parameters: t.parameters, ...(t.strict && q.schemaDialect === "openai-strict" ? { strict: true } : {}) },

@@ -1,0 +1,50 @@
+{
+  "text": "Looking — one moment 🙂",
+  "reasoning": "The user wants the file list, then a reply.",
+  "finishReason": "tool_calls",
+  "usage": {
+    "inputTokens": 42,
+    "outputTokens": 187,
+    "cacheReadTokens": 9000,
+    "cacheWriteTokens": 1800,
+    "promptTokens": 10842,
+    "cacheWrite1hTokens": 1800
+  },
+  "toolCalls": [
+    {
+      "index": 0,
+      "id": "toolu_01A",
+      "name": "Shell",
+      "arguments": "{\"command\": \"ls -la /workspace\"}"
+    },
+    {
+      "index": 1,
+      "id": "toolu_01B",
+      "name": "SendMessage",
+      "arguments": "{\"content\":\"On it.\"}"
+    }
+  ],
+  "providerMeta": {
+    "anthropic": {
+      "blocks": [
+        {
+          "type": "thinking",
+          "thinking": "The user wants the file list, then a reply.",
+          "signature": "EqQBCkYIBxgCKkBsig=="
+        },
+        {
+          "type": "text",
+          "text": "Looking — one moment 🙂"
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_01A"
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_01B"
+        }
+      ]
+    }
+  }
+}

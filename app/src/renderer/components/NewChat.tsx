@@ -10,6 +10,8 @@ import { CheckIcon, CloseIcon, PlusIcon } from "./Icons";
 import { BotAvatar } from "./GroupAvatarStack";
 import { overlaysOpen } from "../overlay-stack";
 import { HomeStandup } from "../standup/HomeStandup";
+import { NewBotModelStep } from "./NewBotModelStep";
+import type { NewBotChoice } from "../model-picks";
 
 interface Option { key: string; label: string; disabled?: boolean; run(): void; botId?: string; starter?: StarterView; head?: string }
 
@@ -19,6 +21,8 @@ export function NewChat() {
   const [grouping, setGrouping] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [sel, setSel] = useState(0);
+  // 0.1.7: the new Bot's model (and, with several keys for its provider, the key that pays), chosen right here.
+  const [choice, setChoice] = useState<NewBotChoice | null>(null);
   const name = to.trim();
   // Non-grouping mode keeps BOT-03's behavior: the recent-Bots list is not filtered by the
   // typed text (only the "Create ... Bot" label reacts to it). Grouping mode is a real
@@ -58,7 +62,7 @@ export function NewChat() {
   const options: Option[] = grouping
     ? matches.flatMap((id) => { const b = bots[id]; return b ? [{ key: id, label: b.profile.name, run: () => toggle(id), botId: id }] : []; })
     : [
-        { key: "create", label: name ? STR.createNamedBot(name) : STR.createNewBot, disabled: creating, run: () => once(() => createBot(name || undefined)) },
+        { key: "create", label: name ? STR.createNamedBot(name) : STR.createNewBot, disabled: creating, run: () => once(() => createBot(name || undefined, choice)) },
         ...(!name || STR.createGroupChat.toLowerCase().includes(name.toLowerCase()) ? [{ key: "group", label: STR.createGroupChat, run: () => { setGrouping(true); setSel(0); setTo(""); } }] : []),
         ...templates.map((t, i) => ({ key: t.id, label: t.name, starter: t, ...(i === 0 ? { head: STR5.templatesHead } : {}), run: () => void useTemplates.getState().importEntry({ id: t.id, source: "starter", name: t.name, kind: "bot-template" } as CatalogEntry) })),
         ...recent.slice(0, 7).flatMap((id) => { const b = bots[id]; return b ? [{ key: id, label: b.profile.name, run: () => void openBot(id), botId: id }] : []; }),
@@ -98,6 +102,8 @@ export function NewChat() {
             if (e.key === "Backspace" && grouping && !to && picked.length) setPicked((p) => p.slice(0, -1));
           }} />
         </div>
+        {/* 0.1.7: the new Bot's model (and paying key), beside To:, so the recipients list below stays as it was. */}
+        {!grouping && <NewBotModelStep choice={choice} onChange={setChoice} />}
         {grouping && (
           <button type="button" className="btn-primary" aria-label="Create group" disabled={!canCreate || creating} onClick={() => once(() => createGroup(picked))}>Create group</button>
         )}

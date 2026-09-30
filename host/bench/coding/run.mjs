@@ -8,8 +8,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const outfile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "bench-coding-main-")), "main.mjs");
-await build({ entryPoints: [path.join(here, "main.ts")], outfile, bundle: true, platform: "node", format: "esm", logLevel: "error" });
+// A CommonJS dependency of the provider-loop runner's engine calls require(): give the ESM bundle one.
+await build({ entryPoints: [path.join(here, "main.ts")], outfile, bundle: true, platform: "node", format: "esm", logLevel: "error",
+  banner: { js: "import { createRequire as __benchRequire } from 'node:module'; const require = __benchRequire(import.meta.url);" } });
 process.env.BENCH_CODING_DIR = here;
+// The bundle lives in a temp folder: the host's prompts (the provider-loop runner's coding prompt) are read from source.
+process.env.PROMPTS_DIR ??= path.resolve(here, "../../prompts");
 try {
   const { main } = await import(pathToFileURL(outfile).href);
   process.exitCode = await main(process.argv.slice(2));

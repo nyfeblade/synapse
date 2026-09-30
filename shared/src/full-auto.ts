@@ -44,7 +44,7 @@ export const FULL_AUTO_CATEGORIES: readonly FullAutoCategory[] = ["destruction",
 
 /** One short factual line for the Full auto option in settings. No marketing copy. */
 export const FULL_AUTO_SETTINGS_LINE =
-  "Still asks before: deleting, spending money, security or access changes, and sending anything you didn't ask for.";
+  "Your rules decide what still asks. With Balanced, the default: deleting, spending money, security or access changes, and sending anything you didn't ask for.";
 
 /**
  * Bug 258: the token the app's own No limits confirm sends. The Mac's coordinator (and the host) refuse to turn No

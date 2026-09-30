@@ -16,7 +16,7 @@
 
       <h2 id="local">What stays on your Mac</h2>
       <p>A Bot on a local model keeps its conversation on your Mac: its messages, tool results, the files it reads and its call transcripts. Its own background work, like memory notes and summaries of long chats, runs on the same local model.</p>
-      <p>If you've also saved an Anthropic key, not everything is local: the safety reviewer runs on Claude and sees the actions it checks, with their context, and Synapse's shared work that isn't for one Bot, like reading schedules and deciding who speaks next in a group chat, runs on Claude too. You can move the reviewer to a local model in <b>Settings → Auto-review → Safety reviewer</b>; the shared work has no setting. If you set up with only a local model, the reviewer and the shared work run on your Mac as well.</p>
+      <p>If you've also saved an Anthropic key, not everything is local: the safety reviewer runs on Claude and sees the actions it checks, with their context, and Synapse's shared work that isn't for one Bot, like reading schedules and deciding who speaks next in a group chat, runs on Claude too. You can move the reviewer to a local model in <b>Settings → Rules → Safety reviewer</b>; the shared work has no setting. If you set up with only a local model, the reviewer and the shared work run on your Mac as well.</p>
       <p>A Bot that fetches a web page or uses a connected app still reaches that service.</p>
       <p>Your Bots never connect to your Mac themselves: the Bots' computer blocks that. Synapse's own host process calls Ollama or LM Studio for them, through its proxy, and only after you've allowed it.</p>
 
@@ -25,15 +25,15 @@
         <li>The models you've downloaded. The model picker lists them when you open it. Reading the list never loads a model.</li>
         <li>Chat, tools and replies, through the same approvals as every Bot.</li>
         <li>Subagents, on the same model.</li>
+        <li>Computer and browser helpers, on the same model. A model not known to read images works from text reads of the screen and page instead of screenshots, as <b>Experimental</b>.</li>
         <li>Voice calls, as <b>Experimental</b>.</li>
+        <li>Coding agents and Engineering mode, on the same model, through the same approvals.</li>
       </ul>
       <p>Every local model starts as <b>Not checked</b>, with a <b>Local</b> badge. Images show as Not checked until they are measured. See <a href="/works-with#badges">how badges are earned</a>.</p>
 
       <h2 id="not-yet">Not yet</h2>
       <ul>
         <li>Web search. A local Bot only has it when you've also set up OpenAI, Gemini or OpenRouter, and then its searches go there.</li>
-        <li>Coding agents. They run on Claude, so they need an Anthropic key.</li>
-        <li>Computer and browser helpers. They still run on Claude, so they need an Anthropic key.</li>
         <li>Changing the port. Synapse looks for Ollama on 11434 and LM Studio on 1234, their defaults, on this Mac.</li>
       </ul>
 
@@ -44,7 +44,7 @@
         <li><b>Tools.</b> A local Bot is offered at most 40 tools, so a Bot with many connected apps may not see them all.</li>
         <li><b>A local safety reviewer is ask-only at first.</b> If the reviewer runs on a local model, it doesn't decide on its own until that model passes the safety check. Anything Synapse's fixed rules don't settle comes to you as an approval card. Expect more cards than with Claude.</li>
       </ul>
-      <p>You can run the safety check on a local model in <b>Settings → Auto-review → Safety reviewer</b>. It costs nothing, but it makes up to 345 model calls, so it takes a while.</p>
+      <p>You can run the safety check on a local model in <b>Settings → Rules → Safety reviewer</b>. It costs nothing, but it makes up to 345 model calls, so it takes a while.</p>
 
       <h2 id="cost">Cost</h2>
       <p>Free. Local models cost $0 per token, and the model picker shows them as Free. You pay only for your Mac's power and memory.</p>

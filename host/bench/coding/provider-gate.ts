@@ -17,7 +17,8 @@ interface Result { taskId: string; runner: string; success?: boolean }
 interface Report { meta?: { model?: string }; results: Result[] }
 
 export function gate(ref: string, provider: Report, claude: Report, now = Date.now(), reportPath = ""): BenchRecord {
-  const mine = provider.results.filter((r) => r.runner === "synapse");
+  // The provider's own run: a provider Bot on the box (synapse), or Synapse's coding engine on its model (provider-loop).
+  const mine = provider.results.filter((r) => r.runner === "synapse" || r.runner === "provider-loop");
   const theirs = claude.results.filter((r) => r.runner === "synapse");
   const tasks = [...new Set(mine.map((r) => r.taskId))].filter((t) => theirs.some((r) => r.taskId === t));
   if (!tasks.length) throw new Error("the two reports share no tasks");

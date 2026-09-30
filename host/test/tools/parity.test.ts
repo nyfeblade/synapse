@@ -49,7 +49,7 @@ const IMPLEMENTED: Record<CommandName, true> = {
   getAgentMemories: true, addAgentMemory: true, updateAgentMemory: true, deleteAgentMemory: true, clearAgentMemories: true, getHistoryArchiveStats: true,
   // Settings → Account (sign-in mode, API key):
   getAuth: true, setApiKey: true, clearApiKey: true, testAuthConnection: true, checkApiKey: true,
-  getProviders: true, getSafetyReviewer: true, runSafetyCheck: true, cancelSafetyCheck: true, setSafetyReviewer: true, getModelCatalog: true, getCostPreview: true, runProviderConformance: true, setProviderKey: true, clearProviderKey: true, testProviderKey: true, consentProvider: true, getAcpVendors: true, consentAcpVendor: true, startAcpLogin: true, checkAcpLogin: true, installAcpVendor: true, removeAcpVendor: true,
+  getProviders: true, getKeys: true, addKey: true, renameKey: true, setDefaultKey: true, removeKey: true, setKeyCap: true, testKey: true, getModelPicks: true, pickAgentModel: true, getSafetyReviewer: true, runSafetyCheck: true, cancelSafetyCheck: true, setSafetyReviewer: true, getModelCatalog: true, getCostPreview: true, runProviderConformance: true, setProviderKey: true, clearProviderKey: true, testProviderKey: true, consentProvider: true, getAcpVendors: true, consentAcpVendor: true, startAcpLogin: true, checkAcpLogin: true, installAcpVendor: true, removeAcpVendor: true,
   listBotCalls: true, answerBotCall: true, setBotCallPermission: true, getCallGreetings: true, wrapUpCall: true, voiceSpeculate: true, voiceSpeculateCancel: true, voiceLatencyNotice: true,
   // 5.6: the Mac's action log, undo and dry run (answered by the coordinator)
   listMacActions: true, exportMacActions: true, undoMacAction: true, getLocalDryRun: true, setLocalDryRun: true,
@@ -57,6 +57,8 @@ const IMPLEMENTED: Record<CommandName, true> = {
   mcpListBots: true, mcpStartTask: true, mcpTaskStatus: true, mcpTaskResult: true,
   // 4.4: connector health
   getConnectorHealth: true, reportConnectorHealth: true,
+  // Safety v2: Settings → Rules
+  getSafety: true, compileSafetyRule: true, addSafetyRule: true, updateSafetyRule: true, deleteSafetyRule: true, setSafetyPreset: true, setGuidelines: true, setBotNetwork: true,
 };
 
 /** Tools the Phase 4 host registers, and the update_state targets it handles. */

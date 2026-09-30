@@ -2100,8 +2100,78 @@ a.row, a.tile, a.nav-item, a.side-link, a.mkt-row-main, a.mkt-card, a.mkt-instal
 .what-works dt { color: var(--ink-2); }
 .what-works dd { margin: 0; color: var(--ink-muted); }
 .what-works .ww.yes dd, .what-works .ww.cost dd { color: var(--ink); }
+/* 0.1.7: the one searchable picker (Bot settings and the Composer's compact form). Pinned search, quiet key labels. */
+.model-picker { display: flex; flex-direction: column; min-width: 0; }
+.model-search-row { position: sticky; top: -4px; z-index: 1; display: flex; align-items: center; gap: 8px; margin: -4px -4px 4px; padding: 8px 12px; background: var(--surface-raised); border-bottom: var(--hairline) solid var(--line-row); color: var(--ink-muted); }
+.model-search-row svg { width: 14px; height: 14px; flex: none; }
+.model-search-row .model-search { flex: 1; min-width: 0; width: auto; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 0; outline: none; box-shadow: none; appearance: none; background: transparent; font: inherit; font-size: var(--type-ui); color: var(--ink); }
+.model-search-row .model-search::placeholder { color: var(--ink-muted); }
+.model-search-row .model-search:focus-visible { outline: none; box-shadow: none; }
+.model-search-row .model-search::-webkit-search-cancel-button { display: none; }
+.model-list .opt { min-width: 0; }
+.model-list .opt.selected { background: transparent; }
+/* One highlight: the keyboard's row (the pointer moves it too), never a second one left under a still pointer. */
+.model-list .opt.active { background-color: var(--fill-hover); }
+.model-list .opt:hover:not(.active) { background-color: transparent; }
+.model-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-key { color: var(--ink-muted); }
+.model-list .model-badges, .model-list .model-price, .model-list svg { flex: none; }
+.model-all { margin-top: 4px; color: var(--ink-2); }
+.model-engine { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; padding: 6px 10px; border-top: var(--hairline) solid var(--line-row); font-size: var(--type-small); }
+.segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--fill-chip); }
+.segmented .seg { height: 22px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: var(--type-small); color: var(--ink-2); }
+.segmented .seg.on { background: var(--surface-raised); color: var(--ink); box-shadow: 0 0 0 var(--hairline) var(--line-button); }
+.composer-model-pop { position: fixed; z-index: 50; width: 340px; max-width: calc(100vw - 16px); padding: 4px; overflow: auto; border-radius: var(--radius-card); background: var(--surface-raised); border: var(--hairline) solid var(--line-modal); box-shadow: var(--shadow-pop); animation: menu-in var(--motion-menu) var(--ease-out) backwards; }
+.model-no-key { margin: 4px 0 0; }
+/* 0.1.7: creating a Bot — its model, and the paying key when its provider has several. Labels only. */
+.new-bot-model { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 8px 0; }
+.chat-header .new-bot-model { flex: 0 1 auto; flex-direction: row; align-items: center; gap: 12px; margin: 0 0 0 12px; }
+.chat-header .new-bot-label { width: auto; }
+.chat-header .new-bot-row .dropdown.select { flex: 0 1 200px; width: 200px; }
+.chat-header .new-bot-pop { left: auto; right: 0; z-index: 30; }
+.new-bot-row { position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; font-size: var(--type-ui); }
+.new-bot-label { flex: none; width: 48px; color: var(--ink-muted); }
+.new-bot-row .dropdown.select { flex: 0 1 280px; min-width: 0; }
+.new-bot-row .dropdown.select > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.new-bot-pop { position: absolute; z-index: 20; top: calc(100% + 4px); left: 60px; width: 340px; max-width: calc(100vw - 32px); max-height: 360px; overflow: auto; padding: 4px; border-radius: var(--radius-card); background: var(--surface-raised); border: var(--hairline) solid var(--line-modal); box-shadow: var(--shadow-pop); animation: menu-in var(--motion-menu) var(--ease-out) backwards; }
+/* 0.1.7: Settings → Account, a provider's keys. One line each: label, mask, this month, Test, and a menu for the rest. */
+.key-list { display: flex; flex-direction: column; min-width: 0; }
+.key-row .settings-row { gap: 10px; min-width: 0; }
+.key-row + .key-row .settings-row, .key-row + .key-add-row, .key-row + .key-add { border-top: var(--hairline) solid var(--line-row); }
+.key-label { min-width: 0; max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.key-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 9px; font-size: var(--type-small); color: var(--ink-muted); box-shadow: inset 0 0 0 var(--hairline) var(--line-button); white-space: nowrap; }
+.key-mask { font-family: var(--mono); font-size: var(--type-small); white-space: nowrap; }
+.key-usage { font-size: var(--type-small); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.key-bad { font-size: var(--type-small); color: var(--ink); white-space: nowrap; }
+.key-add-label { flex: 0 1 10em; min-width: 6em; }
 .safety-reviewer select.text-input { width: auto; min-width: 200px; }
 .provider-row + .provider-row { margin-top: 8px; padding-top: 8px; border-top: var(--hairline) solid var(--line-row); }
 .provider-consent { margin: 8px 0; padding: 10px 12px; border-radius: var(--radius-card); background: var(--fill-soft); }
 .provider-consent h4 { margin: 0 0 4px; font-size: var(--type-ui); }
 .provider-consent p { margin: 0 0 8px; font-size: var(--type-ui); color: var(--ink-2); }
+
+/* Safety v2: Settings → Rules, a Bot's rules and network, and a card's rule line. Calm: neutral greys, no new colours. */
+.rule-compiled { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--type-small); }
+.rule-words { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.rule-word { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: var(--radius-xs); background: var(--bg); box-shadow: inset 0 0 0 var(--hairline) var(--line-row); color: var(--ink-2); white-space: nowrap; }
+.rule-word:first-child { color: var(--ink); font-weight: 500; }
+.rule-preview, .rule-reason { font-size: var(--type-small); }
+.rule-tag { margin-left: 8px; font-size: var(--type-small); color: var(--ink-faint); white-space: nowrap; }
+button.rule-tag.except { border: none; background: transparent; padding: 0; color: var(--ink-muted); font: inherit; font-size: var(--type-small); }
+.rules-row.off .rule-text { color: var(--ink-faint); }
+.rules-row.flash { animation: flash 2s ease-out; }
+.rules-row .behavior-col .dropdown.compact { height: 24px; padding: 0 6px; font-size: var(--type-small); }
+.rules-row .rule-actions { align-items: center; gap: 8px; }
+.settings-card.rules-card { margin-top: 12px; }
+.settings-card.rules-card > .rules:first-child { padding-top: 12px; }
+.preset-diff { align-items: flex-start; }
+.preset-lines { display: flex; flex-direction: column; gap: 2px; font-size: var(--type-small); color: var(--ink-2); }
+.preset-lines b { font-weight: 500; color: var(--ink); margin-right: 4px; }
+.bot-rules { align-self: stretch; display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.bot-rules .inline-input { height: var(--control-h); box-sizing: border-box; padding: 0 10px; border-radius: var(--radius-control); border: var(--hairline) solid var(--line-field); background: var(--bg); font: inherit; font-size: var(--type-ui); color: var(--ink); outline: none; min-width: 0; }
+.bot-rules .rules { padding-top: 10px; }
+.bot-rules .rule-controls .btn-primary { min-width: 0; }
+.card-rule { font-size: var(--type-small); color: var(--ink-muted); }
+.card-rule b { font-weight: 500; color: var(--ink-2); margin-right: 4px; }
+/* A Bot's panel is narrow: its rules show their words only (the type is edited in Settings → Rules). */
+.bot-rules .rules-head, .bot-rules .rules-row .behavior-col { display: none; }

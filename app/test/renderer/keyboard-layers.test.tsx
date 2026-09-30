@@ -299,7 +299,7 @@ describe("Escape in a field with pending content cancels the field, not the moda
     await screen.findByRole("button", { name: STR.openAccountMenu });
     act(() => useUi.getState().openSettings("auto-review")); // new-user walk finding 22: its own section
     await screen.findByRole("dialog", { name: STR.settings });
-    const field = await screen.findByLabelText(/When a Bot wants to/);
+    const field = await screen.findByLabelText("Add rule"); // Safety v2: Settings → Rules' plain-English field
     fireEvent.change(field, { target: { value: "reply to emails" } });
     fireEvent.keyDown(field, { key: "Escape" });
     expect((field as HTMLInputElement).value, "the field's own edit is what Escape cancels").toBe("");

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { API_KEY_RE, STR, STR_AUTH, modelLabel, type AuthTestResult, type AuthView, type KeyCheckView } from "@synapse/shared";
+import { API_KEY_RE, STR, STR_AUTH, modelLabel, type AuthTestResult, type AuthView, type KeyCheckView, type KeysView } from "@synapse/shared";
 import { callQuiet } from "../../bridge";
 import { subscribeChannel } from "../../feature-store";
 import { nativeCall } from "../../native";
 import { useModelAccess } from "../../model-access";
 import { SectionBlocks } from "./sections";
 import { ProvidersBlock } from "./ProvidersBlock";
+import { KeyList } from "./KeyList";
+import { useKeysView } from "./keys-store";
 import { AcpVendorsBlock } from "./AcpVendorsBlock";
 import { noteIfSlow, SIGN_IN_TIMEOUT_MS } from "../../within-time";
 
@@ -38,6 +40,9 @@ export function AccountPanel({ onReady, firstRun = false, timeoutMs = SIGN_IN_TI
   const [check, setCheck] = useState<KeyCheckView | null>(null);
   // New-user walk, finding 2: a changed Bots' computer is trusted here, where the refusal is shown.
   const [pinChanged, setPinChanged] = useState(false);
+  // 0.1.7: the saved keys (a host before 0.1.7 has none: the one-key form stays). This Mac's copy of the default key
+  // follows the default in main (auth-key.ts), whichever list changes it.
+  const keys = useKeysView();
   useEffect(() => { void Promise.resolve(window.synapse.auth?.pinChanged?.()).then((c) => setPinChanged(!!c)).catch(() => {}); }, []);
   // callQuiet: the panel shows this failure itself, in place of the key field.
   useEffect(() => {
@@ -121,21 +126,29 @@ export function AccountPanel({ onReady, firstRun = false, timeoutMs = SIGN_IN_TI
   });
 
   if (!view) return <div className="settings-card"><p className="muted" role={error ? "alert" : undefined}>{error ?? "Loading…"}</p></div>;
+  // 0.1.7: with a key saved, Settings lists every Anthropic key (KeyList: Add key, Rename, Test, Make default, Remove);
+  // the first key goes in through the form below, which also keeps this Mac's copy.
+  const keyed = !!view.apiKey && !firstRun && !!keys.view;
+  const keysChanged = (v: KeysView) => {
+    changed();
+    if (!v.rings.find((r) => r.provider === "anthropic")?.keys.length) void callQuiet("getAuth", {}).then(setView).catch((e) => setError(reason(e)));
+  };
   return (
     <div className={firstRun ? "settings-card account-panel first-run" : "settings-card account-panel"}>
+      {keyed && <KeyList provider="anthropic" onChanged={keysChanged} />}
       <div className="account-key">
-        {view.apiKey ? <p className="muted">{STR_AUTH.savedKey(view.apiKey.masked)}</p> : !firstRun && <p className="muted">{STR_AUTH.noKey}</p>}
-        <form className="settings-row" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+        {keyed ? null : view.apiKey ? <p className="muted">{STR_AUTH.savedKey(view.apiKey.masked)}</p> : !firstRun && <p className="muted">{STR_AUTH.noKey}</p>}
+        {!keyed && <form className="settings-row" onSubmit={(e) => { e.preventDefault(); void save(); }}>
           <input aria-label={STR_AUTH.keyLabel} type="password" autoComplete="off" spellCheck={false} className="text-input grow" placeholder={STR_AUTH.keyPlaceholder}
             value={key} onChange={(e) => setKey(e.target.value)} />
           <button type="submit" className="btn-primary" disabled={busy || !key.trim()}>{view.apiKey ? STR_AUTH.replaceKey : STR_AUTH.saveKey}</button>
-        </form>
+        </form>}
         <div className="settings-row">
           {/* Bug 281: a saved key is checked on the host (Check); a typed one is tested before it's saved. */}
           {view.apiKey && !typed
             ? <button type="button" className="btn-outline" disabled={busy || checking || check?.checking === true} onClick={() => void checkNow()}>{checking || check?.checking ? STR_AUTH.checking : STR_AUTH.check}</button>
             : <button type="button" className="btn-outline" disabled={busy || !typed} onClick={() => void testNow()}>{test === "testing" ? STR_AUTH.testing : STR_AUTH.testConnection}</button>}
-          {view.apiKey && <button type="button" className="btn-outline" disabled={busy} onClick={() => void remove()}>{STR_AUTH.removeKey}</button>}
+          {view.apiKey && !keyed && <button type="button" className="btn-outline" disabled={busy} onClick={() => void remove()}>{STR_AUTH.removeKey}</button>}
           <span className="grow" />
           <a href="#" onClick={(e) => { e.preventDefault(); void nativeCall("openExternal", { url: STR_AUTH.consoleKeysUrl }); }}>{STR_AUTH.createKey}</a>
         </div>

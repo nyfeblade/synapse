@@ -57,7 +57,7 @@ describe("group shell (Group.dc.html)", () => {
     expect(screen.queryByRole("option", { name: /Planner, Scout & Ledger/ })).toBeNull(); // groups can't be members
     expect(create.disabled).toBe(false);
     fireEvent.click(create);
-    await vi.waitFor(() => expect(calls.filter((c) => c[0] !== "listStarterTemplates")[0]).toEqual(["createGroup", { memberIds: ["p", "s"] }]));
+    await vi.waitFor(() => expect(calls.filter((c) => !["listStarterTemplates", "getModelCatalog", "getModelPicks"].includes(c[0]))[0]).toEqual(["createGroup", { memberIds: ["p", "s"] }]));
     await vi.waitFor(() => expect(useUi.getState().view).toEqual({ kind: "chat", botId: "g2" }));
   });
 

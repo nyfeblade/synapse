@@ -7,7 +7,8 @@ interface SectionDef { id: SettingsSectionId; label: string; Component: Componen
 const sections: SectionDef[] = [
   { id: "general", label: "General", Component: null },
   // New-user walk, finding 22: Auto-review's rule builder no longer tops General.
-  { id: "auto-review", label: "Auto-review", Component: null },
+  // Safety v2: Auto-review became the Rules home (the Auto-review switch lives inside it).
+  { id: "auto-review", label: "Rules", Component: null },
   { id: "account", label: "Account", Component: null },
   // New-user walk, finding 15: the account menu's Usage opened Account; it is a section of its own.
   { id: "usage", label: "Usage", Component: null },

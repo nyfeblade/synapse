@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSelectionGlide } from "../flip";
-import { STR, STR5, STR_AUTH } from "@synapse/shared";
+import { STR, STR5, STR_RULES, STR_AUTH } from "@synapse/shared";
 import { useUi } from "../store";
 import { Dialog } from "./Dialog";
 import { AccountSection } from "./settings/AccountSection";
@@ -14,7 +14,7 @@ import { registerGeneralBlock, registerSectionBlock, registerSettingsSection, se
 import { SettingLinksLayer } from "./settings/SettingLinksLayer";
 
 registerSettingsSection("general", STR.general, GeneralSection);
-registerSettingsSection("auto-review", STR.autoReview, AutoReviewSection);
+registerSettingsSection("auto-review", STR_RULES.rules, AutoReviewSection);
 // The Anthropic API key (the only sign-in).
 registerSettingsSection("account", STR_AUTH.sectionTitle, AccountSection);
 registerSectionBlock("auto-review", "safety-reviewer", 10, SafetyReviewerBlock);

@@ -75,10 +75,36 @@ export interface BotProfile {
   effort?: EffortLevel;            // absent = high (the SDK default)
   /** A Claude model, or a provider model "<provider>:<id>" (spec 2026-09-29 §5). */
   model?: ModelId | ProviderModelRef | AcpModelRef;
+  /**
+   * Which loop runs a Bot on a Claude model (2026-09-30, "no feature may require Claude Code"): "synapse" is Synapse's
+   * own loop (ProviderBrain on Anthropic's Messages API), "claude-code" the Claude Agent SDK / Claude Code CLI. Absent =
+   * "claude-code": a Bot made before the switch keeps its engine until the owner changes it. Ignored for other models.
+   */
+  engine?: BotEngine;
   /** Bot-authored avatar animations (shared/src/avatar-anim.ts), validated by the host before storing. */
   avatarAnimations?: AvatarClip[];
   /** A request to play one stored clip once: avatars play it when `seq` rises past the one they mounted with. */
   avatarCue?: { name: string; seq: number };
+  /** 0.1.7: the saved key that pays for this Bot's calls, per provider (a key id); absent = the provider's default key. */
+  modelKeys?: Partial<Record<import("./key-ring").KeyedProvider, string>>;
+}
+
+export const BOT_ENGINES = ["synapse", "claude-code"] as const;
+export type BotEngine = (typeof BOT_ENGINES)[number];
+export const BOT_ENGINE_LABELS: Record<BotEngine, string> = { synapse: "Synapse (Experimental)", "claude-code": "Claude Code" };
+export function isBotEngine(x: unknown): x is BotEngine {
+  return typeof x === "string" && (BOT_ENGINES as readonly string[]).includes(x);
+}
+/** The engine a Bot made before the engine setting existed runs on (it keeps it until the owner switches). */
+export const LEGACY_BOT_ENGINE: BotEngine = "claude-code";
+/**
+ * The engine a NEW Bot on a Claude model gets. The offline parity gates pass (ruling 89), but it stays "claude-code"
+ * until the live smoke test (`npm run smoke:claude-live`, ruling 91) passes against the real API: one wrong request
+ * field would break every turn. "Synapse" is selectable, labelled Experimental, meanwhile.
+ */
+export const NEW_BOT_ENGINE: BotEngine = "claude-code";
+export function botEngineOf(p: { engine?: BotEngine } | undefined): BotEngine {
+  return p?.engine ?? LEGACY_BOT_ENGINE;
 }
 
 export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
@@ -98,7 +124,8 @@ export interface BotSettings {
   speechRate?: number;             // SPEECH_RATES; absent = 1
   spokenLanguage?: string | null;  // BCP-47; null/absent = Auto-detect
   archived?: boolean;              // ORIG-17 ArchiveAgent
-  advanced?: { followups?: boolean; historyKeep?: HistoryKeep };  // ORIG-11; historyKeep: token diet (2), absent = standard
+  /** ORIG-11; historyKeep: token diet (2), absent = standard. (A Claude Bot's coding agents follow its Engine.) */
+  advanced?: { followups?: boolean; historyKeep?: HistoryKeep };
   google?: boolean;                // ORIG-GOOGLE: built-in Google tools for this Bot (default off)
   engineeringMode?: boolean;       // ON = Claude Code preset + Bot prompt + ENGINEERING MODE section; OFF = standalone. Takes effect next turn
   engineeringModeSince?: number;   // epoch ms the user last turned it on (the Bot is told when)

@@ -58,10 +58,15 @@ export class ProviderProxy {
   private readonly agents = { http: new http.Agent({ keepAlive: true, maxSockets: 64 }), https: new https.Agent({ keepAlive: true, maxSockets: 64 }) };
 
   constructor(private o: {
-    /** The saved key for a provider (ProviderKeyStore.key), read per request. */
-    credential(p: Provider): string | null;
-    /** Asked before every chat call; not ok → 429 with BUDGET_HEADER, never forwarded. */
-    allow?(botId: string | null): { ok: boolean; message: string | null };
+    /**
+     * The saved key for a provider, read per request: 0.1.7, the key the grant's Bot pays with (its chosen key for the
+     * provider, else the provider's default; app.ts), so the right key is used per Bot and a change applies at once.
+     */
+    credential(p: Provider, botId?: string | null): string | null;
+    /** Asked before every chat call (the spend budget, and the paying key's monthly cap); not ok → 429 with BUDGET_HEADER, never forwarded. */
+    allow?(botId: string | null, p?: Provider): { ok: boolean; message: string | null };
+    /** 0.1.7: the status of each upstream answer made with a saved key (never a key test's candidate), for that key's health. */
+    onStatus?(p: Provider, botId: string | null, status: number): void;
     /** Tests only: a fake upstream in place of the provider's fixed base URL. */
     upstream?(p: Provider): string | undefined;
     /** Loopback port; 0 (default) = any free one. Only host code holds a token, so no fixed port is needed. */
@@ -98,6 +103,11 @@ export class ProviderProxy {
     return g;
   }
 
+  /** A saved key's answer, for its health row (advisory: it never fails a call). */
+  private noteStatus(p: Provider, botId: string | null, status: number): void {
+    try { this.o.onStatus?.(p, botId, status); } catch { return; }
+  }
+
   private handle(req: http.IncomingMessage, res: http.ServerResponse): void {
     const deny = (status: number, message: string, extra: http.OutgoingHttpHeaders = {}) => { req.resume(); res.writeHead(status, { "content-type": "application/json", ...extra }).end(errorBody(message)); };
     const [pathname, query] = (req.url ?? "/").split("?", 2) as [string, string | undefined];
@@ -109,11 +119,11 @@ export class ProviderProxy {
     const g = this.grantFor(req, provider);
     if (!g) { deny(401, "invalid proxy token"); return; }
     const q = quirksFor(provider);
-    const key = q.authHeader === "bearer" ? (g.keyOverride ?? this.o.credential(provider)) : null;
+    const key = q.authHeader === "bearer" ? (g.keyOverride ?? this.o.credential(provider, g.botId)) : null;
     if (q.authHeader === "bearer" && !key) { deny(401, "no key saved"); return; }
     if (route.model && this.o.allow) {
       let a: { ok: boolean; message: string | null };
-      try { a = this.o.allow(g.botId); } catch { a = { ok: false, message: null }; }
+      try { a = this.o.allow(g.botId, provider); } catch { a = { ok: false, message: null }; }
       if (!a.ok) { deny(429, a.message ?? "The spend budget is reached.", { [BUDGET_HEADER]: "over" }); return; }
     }
     const headers: http.OutgoingHttpHeaders = { "content-type": String(req.headers["content-type"] ?? "application/json"), accept: String(req.headers.accept ?? "*/*"), "accept-encoding": "identity", ...(q.extraHeaders ?? {}) };
@@ -128,6 +138,7 @@ export class ProviderProxy {
     const isHttps = target.protocol === "https:";
     const upReq = (isHttps ? https : http).request(target, { method: req.method, headers, agent: isHttps ? this.agents.https : this.agents.http }, (upRes) => {
       const status = upRes.statusCode ?? 502;
+      if (key && !g.keyOverride) this.noteStatus(provider, g.botId, status);
       const type = String(upRes.headers["content-type"] ?? "");
       const out: http.OutgoingHttpHeaders = {};
       for (const h of ["content-type", "retry-after", "x-ratelimit-reset-requests", "x-ratelimit-reset-tokens", "x-request-id"]) if (upRes.headers[h] !== undefined) out[h] = upRes.headers[h];

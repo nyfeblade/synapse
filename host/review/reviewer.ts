@@ -79,7 +79,7 @@ export class Reviewer {
     const allow = this.allowRules();
     return {
       today: new Date(this.now()).toLocaleString("en-US", { timeZone: this.d.timeZone(), weekday: "short", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) + ` ${this.d.timeZone()}`,
-      bot: { name: req.botName, standing_instructions: req.botDescription.slice(0, 2000) },
+      bot: { name: req.botName, standing_instructions: req.botDescription.slice(0, 2000), ...(req.guidelines?.length ? { owner_guidelines: req.guidelines.slice(0, 20).map((g) => g.slice(0, 500)) } : {}) },
       rules: {
         ask_first: cards.filter((c) => c.behavior === "ask").map((c) => ({ id: c.id, text: c.text })),
         // Exact-command rules reach the model as data (never as rule text), so a rule's text can't carry instructions.
@@ -162,7 +162,7 @@ export class Reviewer {
     // `| tail -150`) changes what the Bot reads back, never what runs. Everything else in the target stays exact.
     const cmd = exactTool ? String(req.target.arguments.command ?? "") : "";
     const shaped = cmd && commandShape(cmd) !== cmd ? fingerprint(req.surface, { ...req.target, arguments: { ...req.target.arguments, command: commandShape(cmd) } }) : req.fingerprint;
-    const key = this.d.cache.key([req.surface, shaped, cwd, rulesVersion, FLOOR_VERSION, safeVersion(), req.botId, req.origin, req.botDescription, JSON.stringify(req.wake ?? null), req.fullAutoIntent ? "full-auto-intent" : ""]);
+    const key = this.d.cache.key([req.surface, shaped, cwd, rulesVersion, FLOOR_VERSION, safeVersion(), req.botId, req.origin, req.botDescription, JSON.stringify(req.wake ?? null), req.fullAutoIntent ? "full-auto-intent" : "", JSON.stringify(req.guidelines ?? [])]);
     // Bug 417: an intent check is never cached — each send is judged, and counted, on its own.
     const noCache = intentCheck(req);
     const cached = noCache ? null : this.d.cache.get(key, req.userMessageEpoch);

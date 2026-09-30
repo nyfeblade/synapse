@@ -1,5 +1,4 @@
-import { credentialsReady } from "../auth/auth-env";
-import { isProviderModelRef } from "@synapse/shared";
+import { isProviderModelRef, type ScreenView } from "@synapse/shared";
 import type net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
@@ -51,6 +50,9 @@ import { DiskGuard, DiskSaver, withDiskReminder } from "./disk-guard";
 import { FakeDisplayControl, FakeSnapshotControl, fakeVncSocket, fakeXExec } from "./fuzz-fakes";
 import { createPrepareBoxRestart, createSetBoxMaintenance } from "./restart";
 import { createScreenshotTool } from "./screenshot-tool";
+import { createReadScreenTool, ocrScreen, type ScreenReader } from "./screen-read";
+import { NATIVE_VIEW } from "./screen-view";
+import { isProviderSessionId, providerSessionFile } from "../brain/provider/session-store";
 import { SnapshotService, SudoSnapshotControl } from "./snapshots";
 import { createVncUpgrade, readVncTransport } from "./vnc-bridge";
 import { openDesktopApp, type DesktopApp } from "./desktop-apps";
@@ -68,8 +70,15 @@ export interface Phase3Context {
   fuzz: boolean; brainKind: "claude" | "fake"; flags(): ConformanceFlags; now?(): number;
   /** I3: Teach a task rehearsal registry shared with the approval gate. */
   rehearsals?: { start(botId: string, childTaskId: string): void; end(childTaskId: string): void };
-  /** Spec P2: a Task subagent of a Bot on a model provider runs on ProviderBrain (app.ts builds it). */
-  providerChild?(spec: ChildSpec, wiring: BrainWiring, hooks: ChildHooks): SupervisedBrain;
+  /** Spec P2: a Task subagent of a Bot on a model provider runs on ProviderBrain (app.ts builds it). `serverTools` are a
+   *  computer or browser child's screen tools, under their canonical `mcp__computer__<name>`. */
+  providerChild?(spec: ChildSpec, wiring: BrainWiring, hooks: ChildHooks, serverTools: { canonical: string; def: BotToolDef }[]): SupervisedBrain;
+  /** Whether a model reads images in tool results; absent = every model does. */
+  seesImages?(modelRef: string): boolean;
+  /** The screen as a model sees it (host/computer/screen-view.ts); absent = the display, 1:1. */
+  screenView?(modelRef: string): ScreenView;
+  /** 2026-09-30: a Claude child that runs on Synapse's own loop (any Task of a Claude Bot whose engine is Synapse). */
+  ownLoopChild?(spec: ChildSpec): boolean;
 }
 
 const nullConnector: BrowserConnector = { connect: async () => { throw new Error("The browser isn't available in this mode."); } };
@@ -109,6 +118,10 @@ export async function createPhase3Services(ctx: Phase3Context) {
   cookies = new CookieSync({ connector, displays });
   wallpaper = new WallpaperScheduler({ exec, displays, timeZone: () => ctx.settings.view().userTimeZone });
   const viewId = (botId: string) => bots.sessionId(botId) ?? botId;
+  /** A child's session file: a Claude child's in the parent's CLI config dir, a provider child's under provider-sessions. */
+  const childTranscript = (s: string, parent: string) => isProviderSessionId(s)
+    ? providerSessionFile(cfg.hostPrivate, parent, s)
+    : path.join(cliConfigDirFor(cfg, parent), "projects", "-workspace", `${s}.jsonl`);
   // C1: every env (CLI, child, Shell, compaction) is built by buildBotEnv from these inputs.
   // Bug #66: asBot = the Bot whose own OS account runs the process (once the box is migrated).
   const envInputs = (botId: string) => ({ display: displays.env(botId), secrets: vault.env(botId), asBot: botId });
@@ -163,8 +176,21 @@ export async function createPhase3Services(ctx: Phase3Context) {
     fill: (botId, target, url, value) => fillIntoPage({ hub: browser, botId, viewId: viewId(botId), target, url, value }),
   });
 
-  const computerTool = (botId: string) => createComputerTool({ botId, displays, hub, workspace: cfg.workspace, enforce: () => ctx.settings.view().autoReviewEnabled, now });
-  const browserTools = (botId: string) => createBrowserTools({ botId, viewId: () => viewId(botId), hub: browser, bus: hub, now });
+  // Provider-neutral computer tools: a text-only model gets text reads of the screen (accessibility + OCR) instead of
+  // screenshots, and a model whose provider shrinks images gets its own view (coordinates scaled in screen-view.ts).
+  const screenReader = async (botId: string): Promise<ScreenReader> => {
+    const info = await displays.ensure(botId);
+    displays.touch(botId);
+    const xenv = displays.xenv(info.index);
+    const io = new BoxIO({ exec, xenv, index: info.index, browser: () => browser.browser(botId), sleep: (ms) => realSleep(ms), now, atspi: atspi(info.index) });
+    return { read: () => io.read(), ocr: () => ocrScreen(exec, xenv) };
+  };
+  const computerTool = (botId: string, o: { view?: ScreenView; textOnly?: boolean } = {}) => createComputerTool({
+    botId, displays, hub, workspace: cfg.workspace, enforce: () => ctx.settings.view().autoReviewEnabled, now,
+    ...(o.view ? { view: o.view } : {}), ...(o.textOnly ? { textOnly: { reader: () => screenReader(botId) } } : {}),
+  });
+  const readScreenTool = (botId: string, view: ScreenView) => createReadScreenTool({ reader: () => screenReader(botId), view });
+  const browserTools = (botId: string, o: { textOnly?: boolean } = {}) => createBrowserTools({ botId, viewId: () => viewId(botId), hub: browser, bus: hub, now, ...(o.textOnly ? { textOnly: true } : {}) });
 
   // "Computer perception: Live (beta)" (decisions.md 2026-09-21): one live perception service per Bot's display,
   // rebuilt when the display restarts (a new generation means new windows, so old ids must not survive).
@@ -193,23 +219,33 @@ export async function createPhase3Services(ctx: Phase3Context) {
   const subagents: SubagentService = new SubagentService({
     supervisor: ctx.supervisor, revivals, pending, hub, bots, now, rehearsals: ctx.rehearsals, parentSlot: (b) => ctx.runner.slot(b), perception: computerPerception,
     onWork: (b) => github.botStartedWorking(b), // bug 195 S2
-    // 0.1.6: computer and browser children run on Claude; without an Anthropic key they're refused up front.
-    ...(ctx.brainKind === "claude" ? { claudeReady: () => credentialsReady() } : {}),
+    // No feature needs Claude: a provider Bot's computer and browser children run on its own model, text-only when it
+    // can't read images.
+    ...(ctx.seesImages ? { seesImages: ctx.seesImages } : {}), ...(ctx.screenView ? { screenView: ctx.screenView } : {}),
     redact: redactBlock, // bug 198 fix round 1: a mirrored child step's body, redacted with the parent's secrets
     activity: { append: (b, e) => { if (bots.has(b)) bots.appendEntry(b, e); }, update: (b, e) => { if (bots.has(b)) bots.updateEntry(b, e); } },
-    transcriptPath: (s, parent) => path.join(cliConfigDirFor(cfg, parent), "projects", "-workspace", `${s}.jsonl`),
+    transcriptPath: (s, parent) => childTranscript(s, parent),
     onChildSession: (parent, s) => {
       if (!bots.has(parent)) return;
-      const file = path.join(cliConfigDirFor(cfg, parent), "projects", "-workspace", `${s}.jsonl`); // bug #66: the parent's own config dir
+      const file = childTranscript(s, parent); // bug #66: the parent's own config dir (a provider child: its provider-sessions folder)
       const list = bots.brainKv<{ file: string }[]>(parent, "childSessionFiles", []);
       if (!list.some((x) => x.file === file)) bots.setBrainKv(parent, "childSessionFiles", [...list, { file }]);
     },
     makeBrain: (spec: ChildSpec, hooks: ChildHooks): SupervisedBrain => {
       const botTools = createShellTools({ botId: spec.parentBotId, shells, childId: spec.id });
-      const computer = computerToolsFor(spec.type as SubagentType, { computer: computerTool(spec.parentBotId), browser: browserTools(spec.parentBotId), live: () => liveTools(spec.parentBotId) }, spec.perception);
-      const inner = createChildWiring({ parentBotId: spec.parentBotId, childId: spec.id, slot: hooks.slot, gate: ctx.gate, tools: [...botTools, ...computer], flags: ctx.flags });
+      const textOnly = spec.textOnly === true;
+      const computer = computerToolsFor(spec.type as SubagentType, {
+        computer: computerTool(spec.parentBotId, { ...(spec.view ? { view: spec.view } : {}), textOnly }),
+        browser: browserTools(spec.parentBotId, { textOnly }), live: () => liveTools(spec.parentBotId),
+        ...(textOnly ? { readScreen: readScreenTool(spec.parentBotId, spec.view ?? NATIVE_VIEW) } : {}),
+      }, spec.perception);
+      // A provider model's child, or a Claude child of a Bot on the Synapse engine: ProviderBrain, screen tools included.
+      const onProvider = (isProviderModelRef(spec.model) || !!ctx.ownLoopChild?.(spec)) && !!ctx.providerChild;
+      // On a provider child the screen tools are registered by the brain under mcp__computer__* (serverTools), so the
+      // wiring's own list holds only the bot server's tools, as the Claude child's `bot` MCP server does.
+      const inner = createChildWiring({ parentBotId: spec.parentBotId, childId: spec.id, slot: hooks.slot, gate: ctx.gate, tools: onProvider ? botTools : [...botTools, ...computer], flags: ctx.flags });
       const wiring: BrainWiring = withSecrets({ ...inner, postToolUse: async (call, out) => { const r = await inner.postToolUse(call, out); hooks.onAction(inner.actions.at(-1) ?? call.toolName); return r; } }, { botId: spec.parentBotId, registry: scanners });
-      if (isProviderModelRef(spec.model) && ctx.providerChild) return ctx.providerChild(spec, wiring, hooks);
+      if (onProvider) return ctx.providerChild!(spec, wiring, hooks, computer.map((def) => ({ canonical: `mcp__computer__${def.name}`, def })));
       if (ctx.brainKind === "fake") return new FakeBrain(`child:${spec.id}`, wiring, () => [{ text: `Report: finished “${spec.title}”.` }]);
       return new ClaudeBrain({
         botId: `child:${spec.id}`, cfg, wiring, getSessionId: hooks.getSessionId, setSessionId: hooks.setSessionId,

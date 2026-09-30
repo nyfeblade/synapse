@@ -63,12 +63,13 @@ describe("provider metering guard: static", () => {
     for (const fn of ["export async function providerFetch", "export async function providerJson"]) {
       const body = src.slice(src.indexOf(fn), src.indexOf("\n}\n", src.indexOf(fn)));
       expect(body.indexOf("r.allow(meter.botId)"), fn).toBeGreaterThan(0);
-      expect(body.indexOf("r.allow(meter.botId)"), fn).toBeLessThan(body.indexOf("(r.fetch ?? fetch)("));
+      // (A Claude call may run with no provider runtime, through the auth proxy that asks the budget itself: r?.fetch.)
+      expect(body.indexOf("r.allow(meter.botId)"), fn).toBeLessThan(body.search(/\(r\??\.fetch \?\? fetch\)\(/));
       expect(body.match(/recordMeteredRun\(/g), fn).toHaveLength(1);
     }
     expect(src.match(/recordMeteredRun\(/g)).toHaveLength(2);
     const pf = src.slice(src.indexOf("export async function providerFetch"));
-    const afterSend = pf.slice(pf.indexOf("(r.fetch ?? fetch)("), pf.indexOf("export function consentError"));
+    const afterSend = pf.slice(pf.search(/\(r\??\.fetch \?\? fetch\)\(/), pf.indexOf("export function consentError"));
     expect(afterSend.match(/finish\(\)/g)!.length).toBeGreaterThanOrEqual(3);
     // providerJson records in its finally, so every exit is metered
     const pj = src.slice(src.indexOf("export async function providerJson"));
@@ -136,7 +137,7 @@ describe("provider metering guard: runtime", () => {
 
   it("no key: refused before sending; a local provider needs none and sends no Authorization", async () => {
     const s = await withServer(() => reply({ text: "x" }), { key: null });
-    await expect(providerFetch({ purpose: "turn", botId: null }, adapter, call())).rejects.toMatchObject({ cls: { code: "BOT-E0421", trayTitle: "No key saved" } });
+    await expect(providerFetch({ purpose: "turn", botId: null }, adapter, call())).rejects.toMatchObject({ cls: { code: "BOT-E0421", trayTitle: "No key for this model" } });
     expect(s.server.requests).toHaveLength(0);
     await drain(await providerFetch({ purpose: "turn", botId: null }, new ChatCompletionsAdapter("ollama"), { ...call(), ref: "ollama:qwen3:4b" }));
     expect(s.server.requests[0]!.headers.authorization).toBeUndefined();

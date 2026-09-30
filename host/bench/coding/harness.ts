@@ -6,6 +6,7 @@ import { prepareTask, readTexts, snapshot, tmpDir } from "./repo";
 import { scoreRun, summarize, type RunnerSummary, type ScoredRun } from "./score";
 import { promptFor, sessionsFor } from "./suite";
 import { SynapseRunner, type SynapseBox, type SynapseSession } from "./synapse";
+import { ProviderLoopRunner, type ProviderLoopSession } from "./provider-loop";
 import type { AgentRun, RunnerName } from "./types";
 import { verifyTask } from "./verify";
 import { renderMarkdown } from "./report";
@@ -31,6 +32,7 @@ export const PARITY = {
     "Model calls = the SDK's num_turns on both sides; the CLI's distinct assistant message ids are noted as a cross-check. The Bot's usage.db rows count 1 per turn and 1 per helper call (each Haiku review), so its figure is turns + reviews, not its model calls (2026-09-21: 38 reported, 78 main-model calls + 35 reviews in the session files).",
     "The Bot's repo is its own ~/code/bench-<nonce>/ledger (bug 231; /workspace/bench-<nonce>/ledger on a box without per-Bot accounts) and its CLI starts in /workspace; the CLI's cwd is the repo.",
     "OrbStack can expose the Mac's files to the box; neither runner is sandboxed from the harness's private dirs. Tool inputs that mention them mark the run leak-suspect.",
+    "provider-loop: Synapse's own coding engine (the one a Bot's coding agent runs) on a provider model, on the Mac, in the task's repo. Its gate is the CLI runner's allowlist (declined otherwise, counted as interventions); its usage is what providerFetch metered; OpenAI-style usage reports no cache writes.",
   ],
 };
 
@@ -51,6 +53,9 @@ export interface BenchOptions {
   /** Test hooks. */
   cliExec?: ClaudeExec;
   box?: SynapseBox;
+  /** provider-loop, real runs: the provider's key (else BENCH_PROVIDER_KEY / <PROVIDER>_API_KEY) and an upstream override (a local model). */
+  providerKey?: string;
+  providerUpstream?: string;
 }
 
 export interface BenchResult {
@@ -63,9 +68,13 @@ export interface BenchResult {
   mdPath: string;
 }
 
-type Session = CliSession | SynapseSession;
+type Session = CliSession | SynapseSession | ProviderLoopSession;
 
 async function makeRunner(name: RunnerName, o: BenchOptions, scratch: string): Promise<{ open(dir: string): Promise<Session> }> {
+  if (name === "provider-loop") {
+    return new ProviderLoopRunner({ model: o.model, timeoutMs: o.timeoutMs, real: !o.dryRun, ...(o.maxWeighted !== undefined ? { maxWeighted: o.maxWeighted } : {}),
+      ...(o.fake ? { fake: o.fake } : {}), ...(o.providerKey ? { key: o.providerKey } : {}), ...(o.providerUpstream ? { upstream: o.providerUpstream } : {}) });
+  }
   if (name === "cli") {
     return new CliRunner({ exec: o.cliExec ?? (o.dryRun ? fakeClaudeExec(o.fake ?? idleModel, o.model) : realClaudeExec), model: o.model, timeoutMs: o.timeoutMs, real: !o.dryRun, maxWeighted: o.maxWeighted });
   }

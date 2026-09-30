@@ -10,7 +10,7 @@ import { undoScope } from "./snapshots";
 import { LocalPolicyStore } from "./policy";
 import { inspectPolicyKey, loadPolicyKey, resetPolicyKey, type PolicyKeyResult } from "./policy-key";
 import { retireMacClaudeLogin } from "./login-scrub";
-import { clearMacApiKey, loadMacApiKey, saveMacApiKey } from "./mac-api-key";
+import { clearMacApiKey, dropMacSpareKey, loadMacApiKey, promoteMacSpareKey, saveMacApiKey, saveMacSpareKey } from "./mac-api-key";
 import { MacKeyProxy } from "./mac-key-proxy";
 import { MacUsageQueue } from "./mac-usage-queue";
 
@@ -127,6 +127,10 @@ export function createLocalDaemon(o: {
     },
     clear: () => clearMacApiKey(userData),
     has: () => { const pk = policyKeyNow(); return !!pk && loadMacApiKey(userData, pk) !== null; },
+    // 0.1.7: the copy follows the box's default Anthropic key (mac-api-key.ts spares).
+    saveSpare: (keyId, value) => { const pk = policyKeyNow(); if (!pk) throw new Error(STR5.localPolicyKeyBroken); saveMacSpareKey(userData, pk, keyId, value); },
+    dropSpare: (keyId) => dropMacSpareKey(userData, keyId),
+    promote: (keyId, oldId) => { const pk = policyKeyNow(); if (!pk) { clearMacApiKey(userData); return false; } return promoteMacSpareKey(userData, pk, keyId, oldId); },
   };
   // feat-mac-access-parity: full access (CLI parity) — commands and file ops run anywhere the user can, bounded
   // by the protected NEVER guard; the layered permissions (fixed rules → reviewer → cards) gate the rest.
@@ -141,7 +145,10 @@ export function createLocalDaemon(o: {
 }
 
 /** The Mac's copy of the API key, kept by the coordinator (main asks for it over the parent port: "mac-key"). */
-export interface MacKeyStore { save(key: string): Promise<{ ok: boolean; error?: string }>; clear(): void; has(): boolean }
+export interface MacKeyStore {
+  save(key: string): Promise<{ ok: boolean; error?: string }>; clear(): void; has(): boolean;
+  saveSpare(keyId: string, key: string): void; dropSpare(keyId: string): void; promote(keyId: string, oldId: string | null): boolean;
+}
 
 /**
  * Review fixes 1, 3, 6: before every claude run on this Mac the host is asked (macClaudeAuth) whether it has a key

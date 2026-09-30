@@ -46,6 +46,8 @@ export interface ReviewRequest {
   /** Bug 410: Full auto's intent check — the host already ruled out deletion, money, bulk, outside content and
    *  non-owner wakes; the reviewer allows a send only when it clearly matches the owner's latest message. */
   fullAutoIntent?: boolean;
+  /** Safety v2: the owner's standing guidelines (global and this Bot's), for the reviewer's judgement. */
+  guidelines?: string[];
 }
 
 export type ReviewOutcome =

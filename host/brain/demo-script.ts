@@ -105,6 +105,9 @@ export function demoScriptFor(workspace: string): FakeScript {
     const code = at(/code:\s*(\S+)/i);
     if (code) return [usageEvent, { tool: "mcp__bot__CodingAgent", input: { action: "launch", repo: code, task: "Add a line to the README (demo)" } }, send("Launched a coding agent.")];
 
+    // The README's coding screenshot (app/e2e/readme-shots.e2e.ts): a Bot fixes a failing test.
+    if (/fix the failing date test/i.test(text)) return readmeCodingSteps();
+
     const ask = /ask ([A-Z][\w ]*?):\s*(.+)/.exec(text);
     if (ask) {
       const target = idOf(input.systemAppend ?? "", ask[1]!.trim());
@@ -137,3 +140,34 @@ export function demoScriptFor(workspace: string): FakeScript {
 }
 
 export const demoScript: FakeScript = demoScriptFor("/workspace");
+
+/** FUZZ only: a short coding turn for the README screenshot. Nothing runs; every output is scripted. */
+function readmeCodingSteps(): FakeStep[] {
+  const file = "/workspace/weather-app/src/format-date.ts";
+  return [
+    { emit: { kind: "spend", turnUsd: 0.14 } },
+    { think: true },
+    { parallel: [
+      { tool: "Read", input: { file_path: file }, output: "export function formatDate(d: Date): string { … }" },
+      { tool: "Read", input: { file_path: "/workspace/weather-app/test/format-date.test.ts" }, output: "it(\"formats a date in UTC\", …)" },
+    ] },
+    { tool: "Bash", input: { command: "npm test -- format-date", description: "Run the date tests" }, output: "✗ formats a date in UTC\nTests: 1 failed, 47 passed, 48 total" },
+    { tool: "Edit", input: { file_path: file, old_string: "dateStyle: \"medium\" }", new_string: "timeZone, dateStyle: \"medium\" }" }, output: "The file was updated." },
+    { tool: "Bash", input: { command: "npm test", description: "Run all tests" }, output: "Tests: 48 passed, 48 total" },
+    { emit: { kind: "spend", turnUsd: 0.21 } },
+    send([
+      "Fixed. `formatDate` used the computer's own time zone, so the test only passed in UTC. It now takes the zone as an argument:",
+      "",
+      "```ts",
+      "export function formatDate(d: Date, timeZone = \"UTC\"): string {",
+      "  return new Intl.DateTimeFormat(\"en-US\", {",
+      "    timeZone,",
+      "    dateStyle: \"medium\",",
+      "  }).format(d);",
+      "}",
+      "```",
+      "",
+      "All 48 tests pass.",
+    ].join("\n")),
+  ];
+}

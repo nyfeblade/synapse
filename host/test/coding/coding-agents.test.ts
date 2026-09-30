@@ -8,8 +8,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { toSdkMcpServer } from "../../brain/sdk-wiring";
 import type { BrainWiring } from "../../brain/types";
 import { AsyncQueue } from "../../util/async-queue";
-import { CodingAgents, type ChildFactory, codingModelFor, repoName, umaskGit } from "../../coding/coding-agents";
-import { DEFAULT_BOT_MODEL, STRC } from "@synapse/shared";
+import { CodingAgents, type ChildFactory, repoName, umaskGit } from "../../coding/coding-agents";
+import { pickCodingEngine } from "../../coding/engines/registry";
+import { DEFAULT_BOT_MODEL, STRC, STR_ACP } from "@synapse/shared";
 import { classifyTool } from "../../review/classify";
 import { codingAgentRule } from "../../coding/review-rule";
 import { createCodingAgentTool } from "../../tools/coding-agent-tool";
@@ -149,20 +150,48 @@ describe("coding agent (TOOL-20)", () => {
   });
 });
 
-describe("0.1.6: coding agents run on Claude, whatever the Bot's model", () => {
-  it("a Claude Bot's agent uses its model; a provider or coding-CLI Bot's agent uses Claude's default, never the provider ref", () => {
-    expect(codingModelFor("claude-opus-5-5")).toBe("claude-opus-5-5");
-    expect(codingModelFor("openai:gpt-6.1-sol")).toBe(DEFAULT_BOT_MODEL);
-    expect(codingModelFor("ollama:qwen3:4b")).toBe(DEFAULT_BOT_MODEL);
-    expect(codingModelFor("acp:copilot")).toBe(DEFAULT_BOT_MODEL);
-    expect(codingModelFor(undefined)).toBe(DEFAULT_BOT_MODEL);
+describe("no feature requires Claude: a coding agent runs on the Bot's own model", () => {
+  it("pickCodingEngine: provider models on Synapse's own loop, Claude by the Bot's Engine, coding CLIs on themselves", () => {
+    const ready = { claudeReady: () => true };
+    expect(pickCodingEngine("openai:gpt-6.1-sol", undefined, ready)).toEqual({ engine: "provider-loop", model: "openai:gpt-6.1-sol" });
+    expect(pickCodingEngine("ollama:qwen3:4b", "claude-code", ready)).toEqual({ engine: "provider-loop", model: "ollama:qwen3:4b" }); // the engine is a Claude Bot's
+    expect(pickCodingEngine("gemini:gemini-3.8-flash", undefined, { claudeReady: () => false })).toEqual({ engine: "provider-loop", model: "gemini:gemini-3.8-flash" }); // no Anthropic key needed
+    expect(pickCodingEngine("claude-opus-5-5", undefined, ready)).toEqual({ engine: "claude-code", model: "claude-opus-5-5" });
+    expect(pickCodingEngine("claude-opus-5-5", "synapse", ready)).toEqual({ engine: "provider-loop", model: "claude-opus-5-5" });
+    expect(pickCodingEngine(undefined, undefined, ready)).toEqual({ engine: "claude-code", model: DEFAULT_BOT_MODEL });
+    expect(pickCodingEngine("claude-sonnet-5", undefined, { claudeReady: () => false })).toEqual({ refused: STRC.codingClaudeNoKey });
+    expect(pickCodingEngine("acp:cursor", undefined, { ...ready, acpConsented: () => true })).toEqual({ engine: "acp:cursor", model: "acp:cursor" });
+    expect(pickCodingEngine("acp:cursor", undefined, { ...ready, acpConsented: () => false })).toEqual({ refused: STR_ACP.noConsent("cursor") });
   });
 
-  it("without an Anthropic key no coding agent starts, and nothing is cloned", async () => {
-    const c = mk({ claudeReady: () => false });
-    await expect(c.launch("bot-a", { repo: "https://github.com/acme/app.git", task: "fix it" })).rejects.toMatchObject({ code: "NEEDS_CLAUDE", message: STRC.codingNeedsClaude });
+  it("a refused launch says why, and nothing is cloned", async () => {
+    const c = mk({ choose: () => ({ refused: STRC.codingClaudeNoKey }) });
+    await expect(c.launch("bot-a", { repo: "https://github.com/acme/app.git", task: "fix it" })).rejects.toMatchObject({ code: "CODING_UNAVAILABLE", message: STRC.codingClaudeNoKey });
     expect(c.list("bot-a")).toEqual([]);
     expect(fs.existsSync(path.join(ws, "repos"))).toBe(false);
   });
-});
 
+  it("the chosen engine and model reach the child and the agent's card; a one-time note hook sees the launch", async () => {
+    const seen: string[] = [];
+    const notes: string[] = [];
+    const c = mk({
+      choose: () => ({ engine: "provider-loop", model: "openai:gpt-6.1-sol" }),
+      child: (o) => { seen.push(`${o.engine} ${o.model} ${o.agentId.startsWith("coding-")}`); return fakeChild(o); },
+      note: (b, m) => notes.push(`${b} ${m}`),
+    });
+    const a = await c.launch("bot-a", { repo: `file://${originRepo()}`, task: "Fix it" });
+    expect(seen).toEqual(["provider-loop openai:gpt-6.1-sol true"]);
+    expect(a).toMatchObject({ engine: "provider-loop", model: "openai:gpt-6.1-sol", status: "running" });
+    expect(notes).toEqual(["bot-a openai:gpt-6.1-sol"]);
+  });
+
+  it("an engine that meters its own calls adds no usage row when it settles", async () => {
+    const used: string[] = [];
+    const c = mk({ onUsage: (b, m) => used.push(`${b} ${m}`) });
+    const a = await c.launch("bot-a", { repo: `file://${originRepo()}`, task: "x" });
+    feeds[0]!.push({ type: "result", subtype: "success", result: "ok", metered: true });
+    for (let i = 0; i < 50 && c.get(a.id)!.status === "running"; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(c.get(a.id)!.status).toBe("done");
+    expect(used).toEqual([]);
+  });
+});

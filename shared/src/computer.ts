@@ -2,7 +2,7 @@ export const SUBAGENT_TYPES = ["generalPurpose", "computerUse", "browserUse"] as
 export type SubagentType = (typeof SUBAGENT_TYPES)[number];
 
 /** APR-02 `computer` surface: Computer actions that are reviewed (not screenshot, move, wait, scroll). Shared so Track C needn't wait for Track B. */
-export const REVIEWED_COMPUTER_ACTIONS: ReadonlySet<string> = new Set(["click", "drag", "type", "key"]);
+export const REVIEWED_COMPUTER_ACTIONS: ReadonlySet<string> = new Set(["click", "double_click", "drag", "type", "key"]);
 /** APR-02: browser tools that are not reviewed (browser_tabs is reviewed only for new/close). */
 export const BROWSER_UNREVIEWED: ReadonlySet<string> = new Set(["browser_snapshot", "browser_take_screenshot", "browser_get_bounding_box", "browser_highlight", "browser_scroll"]);
 
@@ -11,6 +11,11 @@ export const BROWSER_UNREVIEWED: ReadonlySet<string> = new Set(["browser_snapsho
  *  accessibility model (beta: stays opt-in until the real-model computer-use benchmark passes). */
 export const COMPUTER_PERCEPTION_MODES = ["screenshots", "live"] as const;
 export type ComputerPerception = (typeof COMPUTER_PERCEPTION_MODES)[number];
+
+/** The screen as a computer subagent's model sees it: the size of the screenshots it gets, which is also the coordinate
+ *  space of its clicks. The display itself is always 1280×800; a model whose provider would shrink a 1280×800 image
+ *  gets screenshots already at the shrunk size, and its coordinates are scaled back (host/computer/screen-view.ts). */
+export interface ScreenView { w: number; h: number }
 
 export interface DisplayInfo { botId: string; index: number; display: string; cdpPort: number; running: boolean; generation: number }
 

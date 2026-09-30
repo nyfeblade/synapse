@@ -27,6 +27,7 @@
     "bench:voice": "BENCH_VOICE=1 vitest run --project host host/test/voice/fast-path-bench.test.ts --silent=false",
     "selftest:voice": "VOICE_SELFTEST=1 vitest run --project app app/test/main/voice-selftest.native.test.ts --silent=false",
     "security-suite": "node security/run.mjs",
+    "smoke:claude-live": "RUN_CLAUDE_LIVE=1 vitest run --project host host/test/brain/provider/claude-own-loop.live.test.ts --silent=false",
     "eval:routing": "vitest run --project host host/test/evals/routing-real.live.test.ts --silent=false",
     "dmg": "npm run dmg -w @synapse/app",
     "journeys": "(test -f host/dist/host.mjs || node host/build.mjs) && (test -f app/dist/main.cjs || npm run build -w @synapse/app) && node scripts/journeys/run.ts",

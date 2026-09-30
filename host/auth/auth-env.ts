@@ -75,6 +75,8 @@ let proxy: ProxyLike | null = null;
 let proxyRequired = false;
 /** app.ts: from here on a Claude process gets ANTHROPIC_BASE_URL = the proxy and a proxy token, never the real key. */
 export function setAuthProxy(p: ProxyLike | null): void { proxy = p; }
+/** The auth proxy, for a host-side Messages call (a provider-loop coding agent on Claude, coding/engines/claude-route.ts). */
+export function authProxy(): ProxyLike | null { return proxy; }
 /**
  * app.ts, real brain: the proxy is required. While it isn't set (it couldn't start), every spawn is refused
  * (AuthProxyDownError) instead of getting the key in its env: fail closed. Only a test build may run without it.

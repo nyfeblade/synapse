@@ -1,4 +1,4 @@
-import { STR, STR5, STR_ACP, STR_HEALTH, STRAL, STRB, STRG, STRMA, STRO, STRS, STRV, STR_AUTH, STR_COST, STR_MCP, STR_PHONE, STR_PROVIDER_UI, STR_TELEGRAM } from "@synapse/shared";
+import { STR, STR5, STR_ACP, STR_HEALTH, STRAL, STRB, STRG, STRMA, STRO, STRS, STRV, STR_AUTH, STR_COST, STR_MCP, STR_PHONE, STR_PROVIDER_UI, STR_RULES, STR_TELEGRAM } from "@synapse/shared";
 import { slugRow } from "../../deep-links";
 import type { SettingsSectionId } from "./sections";
 
@@ -19,7 +19,7 @@ export function settingEntries(): SettingEntry[] {
   return [
     // General
     e("general", STR.timezone, ["time zone", "clock"]),
-    e("auto-review", STR.autoReview, ["approval", "rules", "ask first", "allow", "permissions", "trusted people", "trusted recipients"]),
+    e("auto-review", STR_RULES.rules, ["auto-review", "approval", "rules", "ask first", "always allow", "never", "preset", "careful", "balanced", "hands-off", "guidelines", "allow", "permissions", "trusted people", "trusted recipients"]),
     e("general", STR.theme, ["appearance", "dark", "light", "mode"]),
     e("general", STRG.connectedAccounts, ["google", "gmail", "calendar", "drive"]),
     e("general", STR5.memory, ["remember", "recall"]),

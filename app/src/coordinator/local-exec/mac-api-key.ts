@@ -43,3 +43,50 @@ export function loadMacApiKey(userData: string, policyKey: Buffer): string | nul
 export function clearMacApiKey(userData: string): void {
   try { fs.unlinkSync(path.join(userData, MAC_API_KEY_FILE)); } catch { /* none */ }
 }
+
+/**
+ * 0.1.7, several Anthropic keys: the Mac's copy follows the box's DEFAULT key. Other keys added from this Mac are kept
+ * beside it as spares (one file each, sealed the same way) so that "Make default" can move the copy to the new default
+ * without the key ever coming back from the box. A key id is short and safe in a file name (shared KEY_ID_RE).
+ */
+const SPARE_ID_RE = /^k[a-z0-9]{1,16}$/;
+const spareFile = (userData: string, keyId: string) => {
+  if (!SPARE_ID_RE.test(keyId)) throw new Error("not a key id");
+  return path.join(userData, `mac-anthropic-api-key.${keyId}.bin`);
+};
+function sealTo(file: string, policyKey: Buffer, key: string): void {
+  const iv = randomBytes(12);
+  const c = createCipheriv("aes-256-gcm", subkey(policyKey), iv);
+  const body = Buffer.concat([c.update(key, "utf8"), c.final()]);
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  const fd = fs.openSync(tmp, "w", 0o600);
+  try { fs.writeSync(fd, Buffer.concat([iv, c.getAuthTag(), body])); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  fs.chmodSync(tmp, 0o600);
+  fs.renameSync(tmp, file);
+}
+function openFrom(file: string, policyKey: Buffer): string | null {
+  let blob: Buffer;
+  try { blob = fs.readFileSync(file); } catch { return null; }
+  if (blob.length < 29) return null;
+  try {
+    const d = createDecipheriv("aes-256-gcm", subkey(policyKey), blob.subarray(0, 12));
+    d.setAuthTag(blob.subarray(12, 28));
+    return Buffer.concat([d.update(blob.subarray(28)), d.final()]).toString("utf8");
+  } catch { return null; }
+}
+export function saveMacSpareKey(userData: string, policyKey: Buffer, keyId: string, key: string): void { sealTo(spareFile(userData, keyId), policyKey, key); }
+export function dropMacSpareKey(userData: string, keyId: string): void { try { fs.unlinkSync(spareFile(userData, keyId)); } catch { /* none */ } }
+/**
+ * The box's default Anthropic key became `keyId`: its spare becomes the Mac's copy. The copy it replaces is kept as a
+ * spare under `oldId` (a key the owner still has); with no `oldId` (it was removed) it simply goes. No spare for the
+ * new default (it was added on another Mac): the copy is cleared rather than left on a key that isn't the default.
+ */
+export function promoteMacSpareKey(userData: string, policyKey: Buffer, keyId: string, oldId: string | null): boolean {
+  const next = openFrom(spareFile(userData, keyId), policyKey);
+  const cur = loadMacApiKey(userData, policyKey);
+  if (cur && oldId && oldId !== keyId) saveMacSpareKey(userData, policyKey, oldId, cur);
+  if (!next) { clearMacApiKey(userData); return false; }
+  saveMacApiKey(userData, policyKey, next);
+  dropMacSpareKey(userData, keyId);
+  return true;
+}

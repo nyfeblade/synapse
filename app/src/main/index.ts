@@ -73,7 +73,7 @@ import { registerMacDisk } from "./mac-disk";
 import { configureProfile } from "./profile";
 import { resolveUnpacked } from "./resolve-unpacked";
 import { MacSecretVault } from "./secret-vault";
-import { confirmTrustDialog, createApiKeySender, createProviderKeySender, registerAuthIpc, registerProviderIpc, type ApiKeySender, type ProviderKeySender } from "./auth-key";
+import { confirmTrustDialog, createApiKeySender, createProviderKeySender, registerAuthIpc, registerProviderIpc, type ApiKeySender, type MacKeyCopy, type MacSpareKeys, type ProviderKeySender } from "./auth-key";
 import { SecretSync, sealWith } from "./secret-sync";
 import { saveFileFromGateway } from "./save-file";
 import { readSecret, sealedSecretNames, storeSecret } from "./secrets";
@@ -165,7 +165,16 @@ let providerKeySender: ProviderKeySender | null = null;
 let macKeySeq = 0;
 const macKeyWaits = new Map<number, (r: unknown) => void>();
 let postToCoordinator: ((m: Record<string, unknown>) => void) | null = null;
-function macKeyRpc<T>(op: "save" | "clear" | "has", key?: string): Promise<T> {
+/** The Mac's copy of the default Anthropic key, and the spares that let it follow the default (0.1.7). */
+const macCopy: MacKeyCopy & MacSpareKeys = {
+  save: (key) => macKeyRpc<{ ok: boolean; error?: string }>("save", key),
+  clear: () => macKeyRpc<void>("clear"),
+  has: () => macKeyRpc<boolean>("has"),
+  saveSpare: (keyId, key) => macKeyRpc<void>("save-spare", key, { keyId }),
+  dropSpare: (keyId) => macKeyRpc<void>("drop-spare", undefined, { keyId }),
+  promote: (keyId, oldId) => macKeyRpc<boolean>("promote", undefined, { keyId, oldId }),
+};
+function macKeyRpc<T>(op: "save" | "clear" | "has" | "save-spare" | "drop-spare" | "promote", key?: string, extra: { keyId?: string; oldId?: string | null } = {}): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     if (!postToCoordinator) { reject(new Error("the coordinator isn't running")); return; }
     const id = ++macKeySeq;
@@ -175,7 +184,7 @@ function macKeyRpc<T>(op: "save" | "clear" | "has", key?: string): Promise<T> {
       const x = r as { ok: boolean; result?: unknown; error?: string };
       if (x?.ok) resolve(x.result as T); else reject(new Error(x?.error ?? "the coordinator couldn't do that"));
     });
-    postToCoordinator({ type: "mac-key", op, id, ...(key !== undefined ? { key } : {}) });
+    postToCoordinator({ type: "mac-key", op, id, ...(key !== undefined ? { key } : {}), ...extra });
   });
 }
 /**
@@ -198,17 +207,13 @@ function startSecrets(profileDir: string, baseUrl: string, token: string): void 
   // Settings → Account: the Anthropic API key is sealed to the box here and never sent back (auth-key.ts). A saved key
   // is also kept for the Bots' claude on this Mac (through the coordinator's key proxy), encrypted with
   // the profile's local-policy.key (never the keychain).
-  providerKeySender = createProviderKeySender({ call: gatewayCall(baseUrl, token, hostCallOpts), pin, seal: sealWith });
+  providerKeySender = createProviderKeySender({ call: gatewayCall(baseUrl, token, hostCallOpts), pin, seal: sealWith, log: (s) => console.error(s), mac: macCopy });
   apiKeySender = createApiKeySender({
     // No client time limit: a Save must reach its real end before a queued Remove runs (auth-key.ts), or a Save given
     // up on here could still land on the box after the Remove. The panel shows its slow note meanwhile.
     call: gatewayCall(baseUrl, token, hostCallOpts), pin, seal: sealWith, log: (s) => console.error(s),
     confirmTrust: (oldFp, newFp) => confirmTrustDialog((opts) => { const w = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]; return w ? dialog.showMessageBox(w, opts) : dialog.showMessageBox(opts); }, oldFp, newFp),
-    mac: {
-      save: (key) => macKeyRpc<{ ok: boolean; error?: string }>("save", key),
-      clear: () => macKeyRpc<void>("clear"),
-      has: () => macKeyRpc<boolean>("has"),
-    },
+    mac: macCopy,
   });
   void call("listAgents", {}).then((r) => secretSync?.resync(r.agents.map((a) => a.id))).catch(() => {});
   ipcMain.removeHandler("secrets:list");

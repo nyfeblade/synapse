@@ -8,6 +8,7 @@
  * for the site; password/card fields take typing only when the user gave the value this turn; a Stop or the user's
  * own input on the window holds the Bot until the user resumes it or sends a new message.
  */
+import { STR_RULES, macBrowserFacts, macRuleDecision, type MacRulesView } from "@synapse/shared";
 import { GOOGLE_CLIENT_ID_RE, GOOGLE_CLIENT_SECRET_RE, STRB, STRGS, isGoogleClientPage, probesGoogleClient, scrubGoogleClientValues, blocksGoogleConsent, browserBindTarget, fullAutoAsk, googleConsoleChange, type BrowserArgs, type BrowserReply, type BrowserSessionStatus, type PermMode } from "@synapse/shared";
 import { consequentialAction, sensitiveField, siteOf, type ElementFacts } from "./classify";
 import { OUTLINE_MAX_CHARS, diffPaged, page, renderOutline, type PageState } from "./outline";
@@ -45,6 +46,8 @@ export interface BrowserDriver {
 }
 
 export interface ControllerRequest { botId: string; botName: string; args: BrowserArgs; approved: boolean; origins: string[]; explicit: boolean; turn?: string; userTurn?: boolean;
+  /** Safety v2: the owner's rules (from the Mac's gate), judged here against the live page. */
+  rules?: MacRulesView | null;
   /** full-auto-quiet: the Bot's permission mode on this Mac. In "full-auto" only the five categories card. */
   mode?: PermMode }
 export type ControllerResult = { ok: true; reply: BrowserReply } | { ok: false; error: string; needsApproval?: boolean };
@@ -266,6 +269,9 @@ export class BrowserController {
     const pressable = f.isSubmit || ["button", "link", "menuitem", "tab"].includes(f.role);
     const change = (req.args.action === "click" || req.args.action === "check") && pressable ? googleConsoleChange(url, f.name) : null;
     const what = change ?? consequentialAction(req.args.action === "check" ? "click" : req.args.action, f, url, o);
+    // Safety v2: the owner's rules on the live page's address and the control's own text, in every mode.
+    const ruled = this.ruleGate(s, req, url, { label: f.name, submit: o.submit, field: sensitiveField(f), consequential: what });
+    if (ruled !== undefined) return ruled;
     if (!what) return null;
     // full-auto-quiet: in Full auto the shared classifier (the one the tool guard and the Mac coordinator use)
     // decides which consequential actions still card: sending or posting, money, deleting, and access changes.
@@ -284,6 +290,22 @@ export class BrowserController {
     return { ok: false, needsApproval: true, error: change ? STRGS.consoleCard(change) : STRB.consequential(what, site) };
   }
 
+  /**
+   * Safety v2: an owner's Never is a refusal (no card); an Ask first is a card, answered for exactly this call like
+   * the consequential card. undefined = no rule decides (the consequential gate goes on); null = approved.
+   */
+  private ruleGate(s: Session, req: ControllerRequest, url: string, o: { label?: string; submit?: boolean; field?: "password" | "card" | null; consequential?: string | null }): ControllerResult | null | undefined {
+    const rule = macRuleDecision(req.rules ?? null, macBrowserFacts(req.botId, { action: req.args.action, url, ...o }), { now: Date.now(), home: "" });
+    if (!rule || rule.type === "allow") return undefined;
+    if (rule.type === "never") return { ok: false, error: STR_RULES.macNever(rule.rule.text) };
+    const bind = browserBindTarget(req.args);
+    const what = `rule:${rule.rule.id}`;
+    if (req.approved && s.refusal?.bind === bind && s.refusal.what === what) { s.refusal = null; return null; }
+    s.refusal = { bind, what };
+    s.lastOrigin = siteOf(url);
+    return { ok: false, needsApproval: true, error: STR_RULES.macAsk(rule.rule.text) };
+  }
+
   private async click(s: Session, tab: Tab, ref: string): Promise<string | null> {
     const p = await tab.agent<{ ok: true; x: number; y: number } | { ok: false; covered?: string }>("point", ref);
     if (!p.ok) return p.covered ? `${ref} is covered by ${p.covered}; click that instead, or close it first.` : STRB.staleRef(ref);
@@ -298,6 +320,8 @@ export class BrowserController {
       case "open": {
         const url = String(a.url ?? "").trim();
         if (!SAFE_URL.test(url)) return fail("Only http(s) pages can be opened.");
+        const ruled = this.ruleGate(s, req, url, {}); // "Never browse example.com" stops the visit itself
+        if (ruled) return ruled;
         await tab.navigate(url);
         return this.after(s, tab);
       }

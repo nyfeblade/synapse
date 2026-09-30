@@ -59,6 +59,10 @@ export class UsageStore implements TurnObserver, UsageSink {
     // saving-settings (2026-09-25): what the Savings estimates need per turn — a spoken call turn, a call live when it
     // started, and the context of its first and largest model call. NULL on rows written before (estimated, savings-estimate.ts).
     for (const c of ["voice", "callLive", "ctxStart", "ctxPeak"]) if (!cols.has(c)) this.db.exec(`ALTER TABLE runs ADD COLUMN ${c} INTEGER`);
+    // 0.1.7, several keys per provider: the key that paid for each run ("<provider>/<key id>"), NULL before and for
+    // models with no key (on this Mac, a vendor's own CLI). Per-key spend is one range SUM over runs_key.
+    if (!cols.has("keyRef")) this.db.exec("ALTER TABLE runs ADD COLUMN keyRef TEXT");
+    this.db.exec("CREATE INDEX IF NOT EXISTS runs_key ON runs(keyRef, startedAt, costUsd) WHERE keyRef IS NOT NULL");
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS runs_time_cover ON runs(startedAt, costUsd, inputTokens, outputTokens, cacheRead, cacheWrite, botId);
       CREATE INDEX IF NOT EXISTS runs_bot_cover ON runs(botId, startedAt, costUsd, inputTokens, outputTokens, cacheRead, cacheWrite, purpose, taskLabel, routineId);
@@ -283,10 +287,12 @@ export class UsageStore implements TurnObserver, UsageSink {
   private insert(r: { requestId: string; botId: string; source: string; purpose: string; model: string; startedAt: number; durationMs: number; u: TurnUsage; status: string; turn?: { voice: boolean; callLive: boolean; ctxStart: number | null; ctxPeak: number | null } }): void {
     const task = this.tasks.get(r.requestId);
     this.tasks.delete(r.requestId);
-    const res = this.db.prepare(`INSERT OR IGNORE INTO runs (requestId, botId, source, routineId, model, startedAt, durationMs, inputTokens, outputTokens, cacheRead, cacheWrite, costUsd, numTurns, status, purpose, costBasis, taskLabel, voice, callLive, ctxStart, ctxPeak)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'exact',?,?,?,?,?)`).run(
+    let keyRef: string | null = null;
+    try { keyRef = this.keyOf?.(r.botId, r.model) ?? null; } catch { keyRef = null; }
+    const res = this.db.prepare(`INSERT OR IGNORE INTO runs (requestId, botId, source, routineId, model, startedAt, durationMs, inputTokens, outputTokens, cacheRead, cacheWrite, costUsd, numTurns, status, purpose, costBasis, taskLabel, voice, callLive, ctxStart, ctxPeak, keyRef)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'exact',?,?,?,?,?,?)`).run(
       r.requestId, r.botId, r.source, task?.routineId ?? null, r.model, r.startedAt, r.durationMs, r.u.inputTokens, r.u.outputTokens, r.u.cacheReadTokens, r.u.cacheWriteTokens, r.u.costUsd ?? 0, 1, r.status, r.purpose, task?.label ?? null,
-      r.turn ? Number(r.turn.voice) : null, r.turn ? Number(r.turn.callLive) : null, r.turn?.ctxStart ?? null, r.turn?.ctxPeak ?? null,
+      r.turn ? Number(r.turn.voice) : null, r.turn ? Number(r.turn.callLive) : null, r.turn?.ctxStart ?? null, r.turn?.ctxPeak ?? null, keyRef,
     );
     if (!res.changes) return;
     this.db.prepare("INSERT OR IGNORE INTO run_bots VALUES (?)").run(r.botId);
@@ -298,6 +304,22 @@ export class UsageStore implements TurnObserver, UsageSink {
     for (const fn of [...this.listeners]) {
       try { fn(ev); } catch (e) { log.warn("spend listener failed", { error: String(e) }); }
     }
+  }
+
+  /** 0.1.7: which key paid for a run ("<provider>/<key id>"), asked as each run is recorded (app.ts wires it). */
+  private keyOf: ((botId: string, model: string) => string | null) | null = null;
+  setKeyResolver(fn: ((botId: string, model: string) => string | null) | null): void { this.keyOf = fn; }
+
+  /** One key's spend and runs since `since` (the calendar month, for Settings and the key's cap). */
+  keySpend(keyRef: string, since: number): { usd: number; runs: number } {
+    const row = this.db.prepare("SELECT COALESCE(SUM(costUsd), 0) AS usd, COUNT(*) AS runs FROM runs WHERE keyRef = ? AND startedAt >= ?").get(keyRef, since) as { usd: number; runs: number };
+    return { usd: Math.round(row.usd * 1e6) / 1e6, runs: row.runs };
+  }
+
+  /** The models turns ran on lately, with the key that paid: newest first, one row per Bot, model and key. */
+  recentModels(since: number, limit = 40): { botId: string; model: string; keyRef: string | null; at: number }[] {
+    return this.db.prepare(`SELECT botId, model, keyRef, MAX(startedAt) AS at FROM runs WHERE startedAt >= ? AND purpose = 'turn'
+      GROUP BY botId, model, keyRef ORDER BY at DESC LIMIT ?`).all(since, limit) as { botId: string; model: string; keyRef: string | null; at: number }[];
   }
 
   private getKv<T>(k: string, fallback: T): T {

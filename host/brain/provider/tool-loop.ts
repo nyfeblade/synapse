@@ -131,8 +131,8 @@ async function runCalls(d: ToolLoopDeps, prepared: Prepared[]): Promise<BatchOut
   const notes: string[] = [];
   let deferred = false;
   let executed = 0;
-  const result = (p: Prepared, text: string, isError: boolean, images?: ToolResultMessage["images"]) =>
-    results.push({ role: "tool", toolCallId: p.call.toolUseId, name: p.call.toolName, text, isError, ...(images?.length ? { images } : {}) });
+  const result = (p: Prepared, text: string, isError: boolean, images?: ToolResultMessage["images"], toolRefs?: string[]) =>
+    results.push({ role: "tool", toolCallId: p.call.toolUseId, name: p.call.toolName, text, isError, ...(images?.length ? { images } : {}), ...(toolRefs?.length ? { toolRefs } : {}) });
 
   for (const p of prepared) {
     if (deferred) { result(p, "Not run: an earlier action in this message is waiting for the user's approval.", true); continue; }
@@ -175,7 +175,7 @@ async function runCalls(d: ToolLoopDeps, prepared: Prepared[]): Promise<BatchOut
     if (post.additionalContext) notes.push(post.additionalContext);
     const shown = post.replaceOutput ?? output;
     d.emit({ kind: "tool_end", toolUseId: p.call.toolUseId, name: p.call.toolName, isError, output: shown });
-    result(p, shown, isError, r.images);
+    result(p, shown, isError, r.images, isError ? undefined : r.toolRefs);
   }
   // ---- batch end (step 6) ----
   let endTurn = false;

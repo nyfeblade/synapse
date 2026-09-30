@@ -31,6 +31,8 @@ export function createProviderCommands(o: {
   fake?: boolean;
   /** Any-key setup: which keys worked (auth/provider-setup.ts). */
   setup?: Pick<ProviderSetupStore, "markWorking" | "forget" | "noteCandidateWorked" | "keySaved">;
+  /** 0.1.7: a saved key's test answered (its health row). */
+  onTested?(p: P, keyId: string, r: ProviderTestResult): void;
 }): CommandHandlers {
   const view = async (): Promise<ProvidersView> => ({
     boxPublicKey: (await o.keyPair()).publicKey,
@@ -79,13 +81,19 @@ export function createProviderCommands(o: {
       o.consent.consent(p, textVersion);
       return view();
     },
-    testProviderKey: async ({ provider, sealed }): Promise<ProviderTestResult> => {
+    testProviderKey: async ({ provider, sealed, keyId }): Promise<ProviderTestResult> => {
       const p = need(provider);
       const candidate = sealed ? await unseal(sealed) : undefined;
-      const r = await test(p, candidate);
+      // 0.1.7: one saved key by id (several keys per provider); it stays in this process, as the proxy's key override.
+      const saved = !candidate && typeof keyId === "string" && keyId ? o.keys.key(p, keyId) : null;
+      if (!candidate && keyId && !saved) throw new GatewayError("NO_KEY", "That key isn't saved.", 404);
+      const r = await test(p, candidate ?? saved ?? undefined);
+      const isDefault = !keyId || keyId === o.keys.defaultId(p);
       // Any-key setup: a key (or the app on this Mac) that answered counts toward finishing setup.
       if (r.ok) { if (candidate) o.setup?.noteCandidateWorked(p, candidate); else o.setup?.markWorking(p); }
-      else if (!candidate && r.kind === "invalid-key") o.setup?.forget(p);
+      else if (!candidate && isDefault && r.kind === "invalid-key") o.setup?.forget(p);
+      const kid = candidate ? null : keyId || o.keys.defaultId(p);
+      if (kid) { try { o.onTested?.(p, kid, r); } catch { /* health is advisory */ } }
       return r;
     },
   };
@@ -94,7 +102,7 @@ export function createProviderCommands(o: {
     if (!o.consent.consented(p)) return result("no-consent", STR_PROVIDER.noConsentTitle, STR_PROVIDER.noConsent(p));
     const local = quirksFor(p).authHeader === "none";
     if (!local && !candidate && !o.keys.has(p)) return result("no-key", STR_PROVIDER.noKeyTitle, STR_PROVIDER.noKey(p));
-    if (o.fake) return /wrong/i.test(candidate ?? "") ? result("invalid-key", STR_PROVIDER.keyRejectedTitle, STR_PROVIDER.keyRejected(p)) : result("ok", STR_PROVIDER_UI.keyOk);
+    if (o.fake) return /wrong/i.test(candidate ?? o.keys.key(p) ?? "") ? result("invalid-key", STR_PROVIDER.keyRejectedTitle, STR_PROVIDER.keyRejected(p)) : result("ok", STR_PROVIDER_UI.keyOk);
     // 1. The free model list.
     let status = 0;
     try { status = (await providerGet(p, "models", candidate ? { keyOverride: candidate } : {})).status; } catch { status = 0; }

@@ -28,7 +28,11 @@ export interface HealthServices {
   keyCheck(v: KeyCheckView): void;
   /** 0.1.6: a model provider key's real signal — the HTTP status of a call made with the saved key (a model call, the
    *  key test, the free model list); null = the key was saved anew or removed (its row goes until the next signal). */
-  providerKey(p: Exclude<ProviderId, "anthropic">, status: number | null): void;
+  providerKey(p: ProviderId, status: number | null, keyId?: string | null): void;
+  /** 0.1.7: drops the rows of a provider's keys that are no longer saved (`saved`: the ids still there). */
+  pruneKeys(p: ProviderId, saved: string[]): void;
+  /** 0.1.7: names each saved key's row (app.ts, once the key stores exist). */
+  setKeyRow(fn: (p: ProviderId, keyId?: string | null) => { id: string; name: string } | null): void;
   observer: TurnObserver;
 }
 
@@ -47,6 +51,11 @@ export interface HealthServices {
 export function createHealthServices(ctx: Pick<ModuleContext, "cfg" | "hub" | "trays" | "bots" | "now">, o: {
   google: GoogleServices | null; mcp: McpServices | null; composio: ComposioServices | null;
   setTimer?(fn: () => void, ms: number): unknown; clearTimer?(t: unknown): void; file?: string | null;
+  /**
+   * 0.1.7, several keys per provider: the health row of one saved key (`keyId` absent = the provider's default), or
+   * null when the provider has no key. Absent: one row per provider, as before.
+   */
+  keyRow?(p: ProviderId, keyId?: string | null): { id: string; name: string } | null;
 }): HealthServices {
   const setTimer = o.setTimer ?? ((fn, ms) => { const t = setTimeout(fn, ms); t.unref?.(); return t; });
   const clearTimer = o.clearTimer ?? ((t) => clearTimeout(t as ReturnType<typeof setTimeout>));
@@ -194,14 +203,20 @@ export function createHealthServices(ctx: Pick<ModuleContext, "cfg" | "hub" | "t
   };
 
   // ---- The Anthropic API key ----
+  let keyRow = o.keyRow ?? null;
+  const rowOf = (p: ProviderId, keyId?: string | null): { id: string; name: string } | null =>
+    (keyRow ? keyRow(p, keyId) : { id: `provider:${p}`, name: p === "anthropic" ? STR_HEALTH.anthropicKey : STR_HEALTH.providerKey(providerLabel(p)) });
+  // The key check tries the default key.
   const keyCheck = (v: KeyCheckView) => {
-    const base = { kind: "provider" as const, name: STR_HEALTH.anthropicKey, fix: { kind: "provider" as const } };
-    if (v.works === true) health.report("provider:anthropic", { ...base, state: "ok" });
+    const row = rowOf("anthropic");
+    if (!row) return;
+    const base = { kind: "provider" as const, name: row.name, fix: { kind: "provider" as const } };
+    if (v.works === true) health.report(row.id, { ...base, state: "ok" });
     else if (v.works === false && v.problem) {
       const k = v.problem.kind;
-      if (k === "no-key") health.report("provider:anthropic", null);
-      else if (k === "invalid-key") health.report("provider:anthropic", { ...base, state: "needs-sign-in" });
-      else if (k === "billing" || k === "permission") health.report("provider:anthropic", { ...base, state: "broken", reason: v.problem.title });
+      if (k === "no-key") health.report(row.id, null);
+      else if (k === "invalid-key") health.report(row.id, { ...base, state: "needs-sign-in" });
+      else if (k === "billing" || k === "permission") health.report(row.id, { ...base, state: "broken", reason: v.problem.title });
       // rate limits, overload, the network: passing weather, not a broken key
     }
   };
@@ -209,10 +224,13 @@ export function createHealthServices(ctx: Pick<ModuleContext, "cfg" | "hub" | "t
   // ---- Model provider keys (0.1.6, any AI provider) ----
   // The same states as the Anthropic key: 401 = the key was rejected; 402/403 = no credit or no access; a success = OK.
   // Rate limits, overload and the network are passing weather, not a broken key.
-  const providerKey = (p: Exclude<ProviderId, "anthropic">, status: number | null) => {
-    const id = `provider:${p}`;
+  // 0.1.7: one row per saved key (keyRow), from the calls made with that key.
+  const providerKey = (p: ProviderId, status: number | null, keyId?: string | null) => {
+    const row = keyId && keyRow ? { id: `provider:${p}:${keyId}`, name: keyRow(p, keyId)?.name ?? "" } : rowOf(p, keyId);
+    if (!row) return;
+    const id = row.id;
     if (status === null) { health.report(id, null); return; }
-    const base = { kind: "provider" as const, name: STR_HEALTH.providerKey(providerLabel(p)), fix: { kind: "provider" as const } };
+    const base = { kind: "provider" as const, name: row.name, fix: { kind: "provider" as const } };
     if (status >= 200 && status < 300) health.report(id, { ...base, state: "ok" });
     else if (status === 401) health.report(id, { ...base, state: "needs-sign-in" });
     else if (status === 402 || status === 403) health.report(id, { ...base, state: "broken", reason: STR_HEALTH.reasons.noCredit });
@@ -251,7 +269,9 @@ export function createHealthServices(ctx: Pick<ModuleContext, "cfg" | "hub" | "t
   google();
   mcp();
   composio();
-  return { health, probes, noteFor: (b) => health.noteFor(b), googleChanged: google, keyCheck, providerKey, observer };
+  return { health, probes, noteFor: (b) => health.noteFor(b), googleChanged: google, keyCheck, providerKey, setKeyRow: (fn) => { keyRow = fn; },
+    pruneKeys: (p, saved) => { for (const c of health.list()) if (c.id.startsWith(`provider:${p}:`) && !saved.includes(c.id.slice(`provider:${p}:`.length))) health.report(c.id, null); },
+    observer };
 }
 
 export function createHealthModule(h: HealthServices, o: { mcp: McpServices | null; warmUpMs?: number }): HostModule {

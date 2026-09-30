@@ -14,8 +14,10 @@ export interface TranscriptMetrics {
 }
 
 /**
- * Reads one Claude Code session transcript (.jsonl). The CLI writes one line per content block, so an
- * assistant message's usage repeats on each of its lines: count it once per message id.
+ * Reads one child session transcript (.jsonl): a Claude Code session, or a provider child's session (the same record
+ * shape, host/brain/provider/session-store.ts). The CLI writes one line per content block, so an assistant message's
+ * usage repeats on each of its lines: count it once per message id. A provider record has no message id: one record is
+ * one model call, keyed by its record uuid.
  */
 export function transcriptMetrics(jsonl: string): TranscriptMetrics {
   const usage: Usage = { fresh: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
@@ -31,7 +33,7 @@ export function transcriptMetrics(jsonl: string): TranscriptMetrics {
     const content: any[] = Array.isArray(msg.content) ? msg.content : [];
     if (ev.type === "assistant") {
       for (const b of content) if (b?.type === "tool_use" && b.name) tools[b.name] = (tools[b.name] ?? 0) + 1;
-      const id = String(msg.id ?? "");
+      const id = String(msg.id ?? ev.uuid ?? "");
       if (!id || seen.has(id)) continue;
       seen.add(id);
       const u = msg.usage ?? {};

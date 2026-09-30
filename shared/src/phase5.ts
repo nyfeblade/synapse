@@ -268,7 +268,9 @@ export interface VoiceCallView {
 
 // ---------- Coding agent (TOOL-20) ----------
 export type CodingAgentStatus = "running" | "done" | "error" | "cancelled" | "timed-out";
-export interface CodingAgentView { id: string; botId: string; title: string; repo: string; branch: string; worktree: string; status: CodingAgentStatus; startedAt: number; endedAt: number | null; prUrl: string | null; summary: string | null; /** Set when origin couldn't be fetched: what the agent started from instead. */ note?: string | null }
+export interface CodingAgentView { id: string; botId: string; title: string; repo: string; branch: string; worktree: string; status: CodingAgentStatus; startedAt: number; endedAt: number | null; prUrl: string | null; summary: string | null; /** Set when origin couldn't be fetched: what the agent started from instead. */ note?: string | null;
+  /** What runs it: "claude-code", "provider-loop" or "acp:<vendor>", on this model (absent on agents from before 0.1.7). */
+  engine?: string; model?: string }
 
 // ---------- Transcript cards (CHAT-16 kinds added by Phase 5) ----------
 export interface ConnectCardView { kind: "connect"; serverId: string | null; catalogId: string | null; name: string; logo: string | null; toolCount: number; state: "available" | "added" | "waiting-auth" | "connected" }

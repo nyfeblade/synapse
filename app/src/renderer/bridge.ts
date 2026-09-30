@@ -40,6 +40,11 @@ export interface SynapseBridge {
   providers: {
     saveKey(provider: string, value: string): Promise<unknown>;
     testKey(provider: string, value: string): Promise<unknown>;
+    /** 0.1.7: another named key (any provider that takes one, Anthropic too). */
+    addKey?(provider: string, value: string, label: string): Promise<unknown>;
+    /** 0.1.7: through main, so this Mac's copy of the Anthropic key follows the default. */
+    makeDefault?(provider: string, keyId: string): Promise<unknown>;
+    removeKey?(provider: string, keyId: string): Promise<unknown>;
   };
   box: {
     update(force: boolean): Promise<{ status: "done" | "busy"; busyBotIds?: string[] }>;

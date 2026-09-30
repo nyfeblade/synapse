@@ -6,6 +6,15 @@ import { benchCuName, newNonce, type BoxEvent, type CuBox } from "./box";
 import { tokensOf, transcriptMetrics, type Mode } from "./metrics";
 import { renderReport } from "./report";
 import { taskById, type Category, type Check, type CuTask, type SystemState } from "./tasks";
+import { isProviderModelRef } from "@synapse/shared";
+
+/** Which brain runs the Bot and its computerUse child: Claude (the Agent SDK), or the provider brain on the Bot's own
+ *  provider model (no Claude involved). The runner is chosen by the Bot's model; this names and checks the choice. */
+export type CuRunnerKind = "claude" | "provider";
+export const CU_RUNNERS: CuRunnerKind[] = ["claude", "provider"];
+export function runnerForModel(model: string): CuRunnerKind {
+  return isProviderModelRef(model) ? "provider" : "claude";
+}
 
 /** What the runner holds equal across the two modes, and what it cannot. Printed in every report. */
 export const PARITY = {
@@ -19,7 +28,7 @@ export const PARITY = {
     "Success is read from system state only (the local server's records, files on disk, Thunar's xfconf xml), never from the Bot's reply.",
   ],
   notEqualised: [
-    "The parent Bot's own turns are metered from usage.db; its computerUse child from the child's session transcript (usage per message id). They are added.",
+    "The parent Bot's own turns are metered from usage.db; its computerUse child from the child's session transcript (usage per message id, or per record on the provider runner). They are added.",
     "D3 (Thunar setting) resets by stopping xfconfd and removing the property from thunar.xml; a running Thunar may cache the old value [unverified on the box].",
     "The Bot could bypass the screen through Shell although the prompt forbids it; the tools each run used are listed so such runs can be discounted.",
   ],
@@ -54,12 +63,16 @@ export interface CuRunnerOptions {
   /** After the Bot and its children go idle, wait this long before calling the run done. */
   settleMs?: number;
   usageWaitMs?: number;
+  /** The brain under test; must match the model (a provider runner needs a `<provider>:<model>` ref). Default: from the model. */
+  runner?: CuRunnerKind;
 }
 
-export interface CuResult { meta: { startedAt: string; model: string; modes: Mode[]; tasks: string[]; notes: string[] }; parity: typeof PARITY; results: CuRun[]; jsonPath: string; mdPath: string }
+export interface CuResult { meta: { startedAt: string; model: string; runner: CuRunnerKind; modes: Mode[]; tasks: string[]; notes: string[] }; parity: typeof PARITY; results: CuRun[]; jsonPath: string; mdPath: string }
 
 export async function runCuBench(o: CuRunnerOptions): Promise<CuResult> {
-  if (o.box.real && process.env.BENCH_REAL !== "1") throw new Error("refusing a real computer-use run: it spends on the Anthropic API key. Set BENCH_REAL=1 (after approval).");
+  const runner = o.runner ?? runnerForModel(o.model);
+  if (runnerForModel(o.model) !== runner) throw new Error(`the ${runner} runner needs ${runner === "provider" ? "a provider model ref (<provider>:<model>)" : "a Claude model"}, not ${o.model}`);
+  if (o.box.real && process.env.BENCH_REAL !== "1") throw new Error(`refusing a real computer-use run: it spends on the ${runner === "provider" ? "model provider's" : "Anthropic API"} key. Set BENCH_REAL=1 (after approval).`);
   const log = o.log ?? (() => {});
   const box = o.box;
   const tasks = o.taskIds.map(taskById);
@@ -89,7 +102,7 @@ export async function runCuBench(o: CuRunnerOptions): Promise<CuResult> {
       if (extra.length) notes.push(`SAFETY: Bots left behind: ${extra.join(", ")}`);
     } catch (e) { notes.push(`post-run check failed: ${String(e)}`); }
   }
-  const meta = { startedAt: new Date().toISOString(), model: o.model, modes: o.modes, tasks: tasks.map((t) => t.id), notes };
+  const meta = { startedAt: new Date().toISOString(), model: o.model, runner, modes: o.modes, tasks: tasks.map((t) => t.id), notes };
   fs.mkdirSync(o.outDir, { recursive: true });
   const jsonPath = path.join(o.outDir, "results.json");
   const mdPath = path.join(o.outDir, "report.md");

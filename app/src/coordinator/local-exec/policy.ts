@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { readScriptCapped } from "./script-read";
+import { STR_RULES, macRequestFacts, macRuleDecision, type MacRulesView } from "@synapse/shared";
 import { BROWSER_PERMISSION_PREFIX, LIMITS5, MACAPP_PERMISSION_PREFIX, STRMA, LOCAL_ADOPT_MODE, LOCAL_NEEDS_APPROVAL, MAC_UNCHECKED_RULES, STR5, STRB, evaluateFixedRules, fullAutoAsk, localActionOf, localFullAutoAction, localPermAction, macAutoRunEligible, macFloorHits, macFold, macRootAcceptable, macExemptTool, macSandboxExemptSimple, macSandboxInteractive, macUnsandboxedHandoff, macPrivateStoreRead, macPrivateStorePath, macQuietHandoff, localBindTarget, realOfDeepest, type DryRunMode, type ExecutionPolicy, type FullAutoResult, type LocalAction, type LocalComputer, type LocalExecRequest, type MacActionVia, type MacHandoffContext, type PermMode, type PermResult } from "@synapse/shared";
 
 import { macAllowedApp, warmAllowedApps } from "./app-trust";
@@ -189,7 +190,12 @@ export class LocalPolicyStore {
    * consequential-card approval (bound to exactly this call) also marks it approved for the controller, which judges
    * the live page. Never allow blocks it like every Mac request.
    */
-  checkBrowser(req: LocalExecRequest): { ok: true; approved: boolean; origins: string[]; mode: PermMode } | { ok: false; reason: string } {
+  /** Safety v2: the owner's rules, from the host (getSafety and the "safety" event); null until the first answer. */
+  private rulesView: MacRulesView | null = null;
+  setRules(v: MacRulesView | null): void { this.rulesView = v && Array.isArray(v.rules) ? v : null; }
+  rules(): MacRulesView | null { return this.rulesView; }
+
+  checkBrowser(req: LocalExecRequest): { ok: true; approved: boolean; origins: string[]; mode: PermMode; rules: MacRulesView | null } | { ok: false; reason: string } {
     if (this.current().executionPolicy === "never") return { ok: false, reason: STR5.macRefused.neverPolicy };
     const target = localBindTarget(req);
     let permitted = this.granted(req.botId, "browser");
@@ -203,7 +209,7 @@ export class LocalPolicyStore {
     if (!permitted) return { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STRB.permissionRefused}` };
     // full-auto-quiet: the controller judges the LIVE page, so it needs the Bot's effective mode to apply the
     // same five-category policy there (a "Save changes" on a settings page is not one of the five; "Pay now" is).
-    return { ok: true, approved, origins: this.browserOrigins(req.botId), mode: this.effectiveMode(req) };
+    return { ok: true, approved, origins: this.browserOrigins(req.botId), mode: this.effectiveMode(req), rules: this.rulesView };
   }
 
   /** The Bot's mode on THIS Mac: its own record, capped by any lower claim the host sent (never raised by it). */
@@ -218,7 +224,7 @@ export class LocalPolicyStore {
    * everything; `approved` says the user answered the card for exactly THIS call, which is what lets the
    * controller run a send, a delete, a spend or a security action.
    */
-  checkMacApp(req: LocalExecRequest): { ok: true; approved: boolean } | { ok: false; reason: string } {
+  checkMacApp(req: LocalExecRequest): { ok: true; approved: boolean; rules: MacRulesView | null } | { ok: false; reason: string } {
     if (this.current().executionPolicy === "never") return { ok: false, reason: STR5.macRefused.neverPolicy };
     const target = localBindTarget(req);
     let permitted = this.granted(req.botId, "mac-app");
@@ -230,7 +236,7 @@ export class LocalPolicyStore {
       approved = hit === 0;
     }
     if (!permitted) return { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STRMA.permissionRefused}` };
-    return { ok: true, approved };
+    return { ok: true, approved, rules: this.rulesView };
   }
 
   /** Consume a once-approval if it is this Bot's, live, and bound to one of `binds`; the index matched, or -1. */
@@ -520,6 +526,15 @@ export class LocalPolicyStore {
     // approval in EVERY mode, and nothing else here reads its text (a huge hostile command can't stall the gate).
     if (fixed?.verdict === "always-ask" && MAC_UNCHECKED_RULES.has(fixed.rule)) {
       return req.approvalId ? tag(this.consume(req.approvalId, req)) : { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STR5.macRefused.alwaysAsk(fixed.reason)}` };
+    }
+    // Safety v2: the owner's rules, on the Mac's own facts (the real path, the command's targets), in every mode, No
+    // limits included. Never is a wall (no card); Ask first needs this call's own approval, whatever the mode or grants.
+    // (No rules from the host: nothing is parsed, so a huge hostile command costs no more than before, bug 433.)
+    if (req.op !== "browser" && req.op !== "mac-app" && this.rulesView?.rules.some((r) => r.enabled && !r.reviewOnly && (r.source !== "preset" || r.strict || r.type === "never"))) {
+      const home = this.home();
+      const rule = macRuleDecision(this.rulesView, macRequestFacts(req.botId, req, { home, base: c.localRoot || home }), { now: this.now(), home });
+      if (rule?.type === "never") return { ok: false, reason: STR_RULES.macNever(rule.rule.text) };
+      if (rule?.type === "ask") return req.approvalId ? tag(this.consume(req.approvalId, req)) : { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STR_RULES.macAsk(rule.rule.text)}` };
     }
     // Bug 229: a command that runs outside the command sandbox (a known self-sandboxing program, run unwrapped) or
     // hands code to something that will (launchd, cron, an opened script/app, Terminal told to run a line) needs this

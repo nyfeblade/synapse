@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { DEFAULT_BOT_MODEL, LIMITS5, STR5, STRC, isModelId, type CodingAgentView } from "@synapse/shared";
+import { LIMITS5, STR5, type CodingAgentView } from "@synapse/shared";
 import { buildBotEnv } from "../brain/spawn-options";
 import type { ConformanceFlags } from "../brain/conformance/flags";
 import type { TurnUsage } from "../brain/types";
@@ -128,13 +128,12 @@ export async function prepareWorktree(o: { git: Git; workspace: string; source: 
   return { repoDir: local, worktree, note };
 }
 
-export interface CodingChild { push(text: string): void; interrupt(): Promise<void>; close(): void; messages: AsyncIterable<{ type: string; [k: string]: unknown }> }
-/** 0.1.6: the model a coding agent runs on: the Bot's own when it is a Claude model, else Claude's default. */
-export function codingModelFor(botModel: string | undefined): string {
-  return isModelId(botModel) ? botModel : DEFAULT_BOT_MODEL;
-}
+export type { CodingChild } from "./engines/types";
+import type { CodingChild, CodingEngineId } from "./engines/types";
+import type { CodingPick } from "./engines/registry";
 
-export type ChildFactory = (o: { botId: string; cwd: string; model: string; prompt: string }) => CodingChild;
+/** Starts one coding child. `engine` is what `choose` picked (absent without one: the Claude Code engine). */
+export type ChildFactory = (o: { botId: string; agentId: string; cwd: string; model: string; engine: CodingEngineId; prompt: string }) => CodingChild;
 
 interface Live { child: CodingChild; timers: ReturnType<typeof setTimeout>[] }
 
@@ -148,8 +147,11 @@ export class CodingAgents {
    *  its own yet, so the shared /workspace/repos below. */
   constructor(private d: { workspace: string; registryFile: string; now(): number; git: Git; child: ChildFactory; model(botId: string): string; onChange(a: CodingAgentView): void; onDone(a: CodingAgentView): void; wallClockMs?: number; maxPerBot?: number; maxTotal?: number;
     ladder?(): { allowsBackground(kind: "coding"): boolean }; onUsage?(botId: string, model: string, u: TurnUsage): void;
-    /** 0.1.6: coding agents run on Claude whatever the Bot's model; without an Anthropic key none starts. Absent: not checked. */
-    claudeReady?(): boolean;
+    /** The engine and model for this Bot's next agent (engines/registry.ts pickCodingEngine), or why none can start.
+     *  Absent: the Claude Code engine on model(botId). */
+    choose?(botId: string): CodingPick;
+    /** A one-time note for a launch on a model that failed its tool-use check (never a refusal). */
+    note?(botId: string, model: string): void;
     prepare?(botId: string, a: { source: string; branch: string; agentId: string }): Promise<{ repoDir: string; worktree: string; note?: string | null } | null> }) {
     for (const a of readJson<{ agents: CodingAgentView[] }>(d.registryFile, { agents: [] }).agents) this.agents.set(a.id, a);
   }
@@ -164,7 +166,8 @@ export class CodingAgents {
 
   async launch(botId: string, a: { repo: string; task: string; title?: string }): Promise<CodingAgentView> {
     this.assertLadder();
-    if (this.d.claudeReady && !this.d.claudeReady()) throw new GatewayError("NEEDS_CLAUDE", STRC.codingNeedsClaude);
+    const pick: CodingPick = this.d.choose?.(botId) ?? { engine: "claude-code", model: this.d.model(botId) };
+    if ("refused" in pick) throw new GatewayError("CODING_UNAVAILABLE", pick.refused);
     const running = [...this.agents.values()].filter((x) => x.status === "running");
     const perBot = this.d.maxPerBot ?? 4;
     if (running.filter((x) => x.botId === botId).length >= perBot) throw new GatewayError("CAP", `A Bot can run at most ${perBot} coding agents at once. Wait for one to finish.`);
@@ -175,7 +178,7 @@ export class CodingAgents {
     // fix round 1, finding 2: reserve this Bot's slot in `this.agents` synchronously, before the
     // first `await`, so two launch() calls issued in the same tick (e.g. two tool_use blocks in one
     // assistant turn) can't both read the pre-launch running count above and both pass the cap check.
-    const agent: CodingAgentView = { id, botId, title, repo: repoName(a.repo), branch, worktree: "", status: "running", startedAt: this.d.now(), endedAt: null, prUrl: null, summary: null };
+    const agent: CodingAgentView = { id, botId, title, repo: repoName(a.repo), branch, worktree: "", status: "running", startedAt: this.d.now(), endedAt: null, prUrl: null, summary: null, engine: pick.engine, model: pick.model };
     this.agents.set(id, agent);
     let worktree: string;
     let note: string | null | undefined;
@@ -191,7 +194,15 @@ export class CodingAgents {
     if (note) agent.note = note;
     this.save();
     const task = note ? `${a.task}\n\n(${note})` : a.task;
-    const child = this.d.child({ botId, cwd: worktree, model: this.d.model(botId), prompt: fillTemplate(loadPrompt("orig/coding-agent.md"), { task }) });
+    let child: CodingChild;
+    try {
+      child = this.d.child({ botId, agentId: id, cwd: worktree, model: pick.model, engine: pick.engine, prompt: fillTemplate(loadPrompt("orig/coding-agent.md"), { task }) });
+    } catch (e) {
+      this.agents.delete(id);
+      this.save();
+      throw new GatewayError("CODING_UNAVAILABLE", e instanceof Error ? e.message : String(e));
+    }
+    this.d.note?.(botId, pick.model);
     const wall = this.d.wallClockMs ?? LIMITS5.codingAgentWallClockMs;
     const timers = [
       setTimeout(() => child.push(STR5.steerTimeUp), Math.floor(wall * LIMITS5.steerAtFraction)),
@@ -242,8 +253,9 @@ export class CodingAgents {
           const agent = this.agents.get(id);
           const u = (m.usage ?? {}) as Record<string, number | undefined>;
           // total_cost_usd is a RUNNING total across this child's turns; the metered query has its own share.
+          // An engine that metered every call itself (provider-loop, ACP) says so: nothing to add here.
           const own = runUsageOf(m);
-          if (agent) this.d.onUsage?.(agent.botId, this.d.model(agent.botId), own ?? {
+          if (agent && m.metered !== true) this.d.onUsage?.(agent.botId, agent.model ?? this.d.model(agent.botId), own ?? {
             inputTokens: u.input_tokens ?? 0, outputTokens: u.output_tokens ?? 0, cacheReadTokens: u.cache_read_input_tokens ?? 0, cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
             ...(typeof m.total_cost_usd === "number" ? { costUsd: m.total_cost_usd } : {}),
           });

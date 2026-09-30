@@ -130,7 +130,11 @@ export type StopOutcome = { block: false } | { block: true; reason: string };
 /** Token diet (1): after a batch of tool calls, whether the turn ends here with no further model call. */
 export interface ToolBatchOutcome { endTurn: boolean }
 export interface ToolImage { data: string; mimeType: "image/webp" | "image/png" | "image/jpeg" }
-export interface BotToolResult { text: string; isError?: boolean; images?: ToolImage[] }
+export interface BotToolResult {
+  text: string; isError?: boolean; images?: ToolImage[];
+  /** ToolSearch on Synapse's own loop: the canonical names of the deferred tools this result loads (tool_reference). */
+  toolRefs?: string[];
+}
 export interface BotToolDef {
   name: string;
   description: string;

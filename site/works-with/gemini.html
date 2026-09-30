@@ -21,15 +21,15 @@
         <li>Images, in a message and from a tool.</li>
         <li>Voice calls.</li>
         <li>Subagents, on the same model.</li>
+        <li>Computer and browser helpers, on the same model. They see the screen in screenshots.</li>
         <li>A context window of about 1 million tokens.</li>
+        <li>Coding agents and Engineering mode, on the same model, through the same approvals.</li>
       </ul>
       <p>Every model starts as <b>Not checked</b>. A badge is earned by measurement, not given. See <a href="/works-with#badges">how badges are earned</a>.</p>
 
       <h2 id="not-yet">Not yet</h2>
       <ul>
-        <li>Coding agents. They run on Claude, so they need an Anthropic key.</li>
-        <li>Computer and browser helpers. They still run on Claude, so they need an Anthropic key.</li>
-        <li>A Gemini safety reviewer on a free key. The reviewer runs on Claude unless you pick another model for it. If you pick Gemini, it asks you first until it passes the safety check, and the check makes up to 345 model calls, more than Gemini's free tier allows in a day.</li>
+        <li>A Gemini safety reviewer on a free key. The reviewer runs on Claude when you've saved an Anthropic key, unless you pick another model for it. If you pick Gemini, it asks you first until it passes the safety check, and the check makes up to 345 model calls, more than Gemini's free tier allows in a day.</li>
       </ul>
 
       <h2 id="cost">Cost</h2>
@@ -54,7 +54,7 @@
       <ul>
         <li><b>Consent first.</b> Nothing goes to Gemini until you allow it once. The consent says what is sent: the conversation, tool results, files the Bot reads, safety-check inputs, memory notes and call transcripts. Google's own terms apply, and they differ between the free and paid tiers.</li>
         <li><b>Your key stays on your Mac.</b> It is encrypted, and only Synapse's own proxy adds it to a request. Your Bots never see it. Each call gets a one-time token, and the key is removed from anything that comes back.</li>
-        <li><b>The same safety gate.</b> Every action goes through Synapse's fixed rules and approvals, whatever the model. The safety reviewer runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for it in <b>Settings → Auto-review → Safety reviewer</b>. A reviewer on a model other than Claude asks you first until it passes the safety check.</li>
+        <li><b>The same safety gate.</b> Every action goes through Synapse's fixed rules and approvals, whatever the model. The safety reviewer runs on Claude when you've saved an Anthropic key, and otherwise on the provider you set up. You can pick another model for it in <b>Settings → Rules → Safety reviewer</b>. A reviewer on a model other than Claude asks you first until it passes the safety check.</li>
       </ul>
 
       <h2 id="setup">Set up</h2>

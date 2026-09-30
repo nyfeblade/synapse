@@ -3,10 +3,10 @@ import type { SubagentType } from "@synapse/shared";
 import { toNamedMcpServer } from "../brain/sdk-wiring";
 import type { BotToolDef } from "../brain/types";
 
-/** TOOL-02: computerUse gets Computer (or, in "Computer perception: Live", Look/Act/Screenshot); browserUse gets the
- *  15 browser_* tools; generalPurpose gets none. */
-export function computerToolsFor(type: SubagentType, o: { computer: BotToolDef; browser: BotToolDef[]; live?: () => BotToolDef[] }, perception?: "live"): BotToolDef[] {
-  if (type === "computerUse") return perception === "live" && o.live ? o.live() : [o.computer];
+/** TOOL-02: computerUse gets Computer (plus ReadScreen for a model that reads text only; or, in "Computer perception:
+ *  Live", Look/Act/Screenshot); browserUse gets the browser_* tools; generalPurpose gets none. */
+export function computerToolsFor(type: SubagentType, o: { computer: BotToolDef; browser: BotToolDef[]; live?: () => BotToolDef[]; readScreen?: BotToolDef }, perception?: "live"): BotToolDef[] {
+  if (type === "computerUse") return perception === "live" && o.live ? o.live() : [o.computer, ...(o.readScreen ? [o.readScreen] : [])];
   return type === "browserUse" ? o.browser : [];
 }
 

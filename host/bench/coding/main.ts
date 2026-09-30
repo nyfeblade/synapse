@@ -6,8 +6,13 @@ import { benchDir } from "./repo";
 import { PILOT, TASKS } from "./suite";
 import type { RunnerName } from "./types";
 
-const USAGE = `npm run bench:coding -- [--runner cli|synapse|both] [--tasks T01,T03|pilot|all] [--dry-run]
+const USAGE = `npm run bench:coding -- [--runner cli|synapse|both|provider-loop] [--tasks T01,T03|pilot|all] [--dry-run]
                           [--model <id>] [--timeout-min <n>] [--max-weighted <n>] [--out <dir>] [--estimate] [--list]
+                          [--upstream <url>]
+
+  --runner provider-loop  Synapse's own coding engine on a provider model (--model openai:gpt-6.1-sol) or a Claude
+               model (--model claude-sonnet-5-5, key from ANTHROPIC_API_KEY); a provider's key from BENCH_PROVIDER_KEY
+               or <PROVIDER>_API_KEY; --upstream for a local model. --runner cli,provider-loop runs both on one model.
 
   --dry-run    fake model on both runners: no Claude call, nothing spent (default when BENCH_REAL is unset)
   --max-weighted  per-task weighted-token budget (default 300000), metered live on both runners; past it
@@ -26,8 +31,10 @@ export async function main(argv: string[]): Promise<number> {
   const arg = (name: string) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   if (argv.includes("--help") || argv.includes("-h")) { console.log(USAGE); return 0; }
   const runnerArg = arg("--runner") ?? "both";
-  if (!["cli", "synapse", "both"].includes(runnerArg)) { console.error(USAGE); return 2; }
-  const runners: RunnerName[] = runnerArg === "both" ? ["cli", "synapse"] : [runnerArg as RunnerName];
+  // A comma list runs several (0.1.8: `--runner cli,provider-loop` compares Claude Code with Synapse's own engine).
+  const picked = runnerArg === "both" ? ["cli", "synapse"] : runnerArg.split(",").map((s) => s.trim());
+  if (!picked.length || !picked.every((r) => ["cli", "synapse", "provider-loop"].includes(r))) { console.error(USAGE); return 2; }
+  const runners = picked as RunnerName[];
   const tasksArg = arg("--tasks") ?? "pilot";
   const taskIds = tasksArg === "pilot" ? PILOT : tasksArg === "all" ? TASKS.map((t) => t.id) : tasksArg.split(",").map((s) => s.trim().toUpperCase());
 
@@ -47,6 +54,7 @@ export async function main(argv: string[]): Promise<number> {
     model: arg("--model") ?? DEFAULT_MODEL,
     timeoutMs: Number(arg("--timeout-min") ?? 20) * 60_000,
     maxWeighted,
+    ...(arg("--upstream") ? { providerUpstream: arg("--upstream")! } : {}),
     log: (s) => console.log(s),
   });
   console.log(`budget per task: ${maxWeighted} weighted tokens (--max-weighted)`);

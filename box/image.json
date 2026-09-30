@@ -1,10 +1,10 @@
 {
   "format": 1,
-  "imageVersion": "131a3be5c611e3eb",
-  "hostBuild": "8b0c1e8d965b47c2",
+  "imageVersion": "b0840c724e5d8e17",
+  "hostBuild": "14e094099accb0bc",
   "arch": "arm64",
-  "url": "https://github.com/nyfeblade/synapse/releases/download/box-131a3be5c611e3eb/synapse-box-131a3be5c611e3eb-arm64.tar.zst",
-  "sha256": "63b42a50af0a006df157f915b0e2ca4c6a8b01c604adea38acd5c7ae9339d449",
-  "bytes": 661940248,
-  "unpackedBytes": 2381365760
+  "url": "https://github.com/nyfeblade/synapse/releases/download/box-b0840c724e5d8e17/synapse-box-b0840c724e5d8e17-arm64.tar.zst",
+  "sha256": "ad6accd82fedc82f8c66d1f3b7a6d5e5ea232e7ab03b5d196697d9ce41ce157e",
+  "bytes": 662077461,
+  "unpackedBytes": 2382460416
 }

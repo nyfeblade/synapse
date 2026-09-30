@@ -4,6 +4,7 @@ import type { BotToolDef, BrainWiring, PostToolOutcome, ToolCall } from "../brai
 import type { ApprovalGateLike } from "../runner/bot-wiring";
 import { fenceOutput, shouldFence } from "../runner/discipline";
 import { countersOf, type TurnSlot } from "../runner/turn-slot";
+import { outsideLog } from "../review/outside-log";
 
 /** TOOL-02: built-ins per child type. No Task/Agent (no grandchildren), no SendMessage, no AskUserQuestion. */
 export const CHILD_BUILTINS: Record<SubagentType, string[]> = {
@@ -50,7 +51,11 @@ export function createChildWiring(o: ChildWiringOptions): BrainWiring & { action
       actions.push(short(call));
       if (actions.length > 24) actions.splice(0, actions.length - 24);
       if (o.postToolUse) return o.postToolUse(call, output);
-      return shouldFence(call.toolName, call.input) ? { replaceOutput: fenceOutput(call.toolName, output) } : {};
+      if (!shouldFence(call.toolName, call.input)) return {};
+      // Page text, a screen read, a fetched page: outside content, logged for the parent Bot as a WebFetch result is
+      // (bug 415: Full auto's send checks read it), whichever brain runs the child.
+      outsideLog.record(o.parentBotId, output, Date.now());
+      return { replaceOutput: fenceOutput(call.toolName, output) };
     },
     stop: async () => ({ block: false }), // children end with their report; no SendMessage nudges (TOOL-02)
     botTools: () => o.tools,

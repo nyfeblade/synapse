@@ -1,4 +1,4 @@
-import type { AvatarMaterial, AvatarMotion, AvatarShape, BotSummary, EffortLevel } from "./bots";
+import type { AvatarMaterial, AvatarMotion, AvatarShape, BotEngine, BotSummary, EffortLevel } from "./bots";
 import type { HistoryKeep } from "./history-budget";
 import type { CallReplies, LongContextMode, PromptCacheTtl } from "./savings";
 import type {
@@ -111,7 +111,7 @@ export interface GatewayCommands {
     result: { id: string };
   };
   updateAgent: {
-    args: { id: string; name?: string; description?: string; model?: ModelId | ProviderModelRef | AcpModelRef; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel };
+    args: { id: string; name?: string; description?: string; model?: ModelId | ProviderModelRef | AcpModelRef; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel; engine?: BotEngine };
     result: { agent: BotSummary };
   };
   deleteAgent: { args: { id: string }; result: { activeAgentId: string | null } };
@@ -199,6 +199,7 @@ export interface GatewayCommands {
   newAgentSession: { args: { id: string }; result: { scheduled: boolean } };
   /** Token diet (2): Advanced "Keep more history". Takes effect on the next turn (respawn). */
   setAgentHistoryKeep: { args: { id: string; keep: HistoryKeep }; result: { agent: BotSummary } };
+  /** Advanced: what a Claude Bot's coding agents run on (Claude Code, or Synapse's own loop on the same model). */
   // MEM-09, designed: the memory screen. `scope` omitted = only the Bot's project list. `owner` names the Bot whose "about you" shard holds a line.
   getAgentMemories: { args: { id: string; scope?: MemoryScopeRef }; result: MemoryListView };
   addAgentMemory: { args: { id: string; scope: MemoryScopeRef; content: string; tier: MemoryTierChoice }; result: { added: boolean; fact: MemoryFactView } };
@@ -247,6 +248,8 @@ export type SseEvent =
   | { channel: "spend-meter"; payload: import("./cost").SpendMeterView }
   /** Spec §7a: the background safety check's progress (and the reviewer's state once it ends). */
   | { channel: "safety-check"; payload: import("./providers").SafetyReviewerView }
+  /** Safety v2: the owner's rules changed (the Mac's gate applies them too). */
+  | { channel: "safety"; payload: import("./safety-rules").SafetyView }
   // Phase 5 owns "usage" (UsageView, which carries Phase 4's efficiency tiles).
   | Phase5SseEvent
   // Built-in Google connector status (Connect Google sheet, Settings → Connected accounts).

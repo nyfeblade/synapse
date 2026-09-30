@@ -34,7 +34,7 @@ export const VERDICT_SCHEMA = {
 export const OUTPUT_SCHEMA = { type: "object", additionalProperties: false, required: ["verdict"], properties: { verdict: VERDICT_SCHEMA } };
 
 /** Said after the input, where it is read last: the prompt alone still let a written walkthrough through. */
-const REPLY_NUDGE = "Reply with the StructuredOutput call only. No text.";
+export const REPLY_NUDGE = "Reply with the StructuredOutput call only. No text.";
 
 /**
  * The host's own check of the verdict's shape, whatever the CLI validated: a verdict that doesn't match

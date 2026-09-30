@@ -1,10 +1,14 @@
 import { parseProviderModelRef, providerPrice, type ProviderId } from "@synapse/shared";
+import { modelTarget } from "../brain/provider/adapters/index";
+import { ANTHROPIC_VERSION } from "../brain/provider/adapters/anthropic-messages";
+import { listCostUsd } from "./list-price";
 import { quirksFor } from "../brain/provider/adapters/quirks";
 import type { CallUsage, ProviderAdapter } from "../brain/provider/adapters/types";
-import { classifyProviderError, networkError, noKeyError, timeoutError, type ProviderErrorClass } from "../brain/provider/errors";
+import { classifyProviderError, networkError, noKeyError, statusOfErrorType, timeoutError, type ProviderErrorClass } from "../brain/provider/errors";
 import { STR_PROVIDER } from "@synapse/shared";
 import { SseParser } from "../brain/provider/sse";
 import { BUDGET_HEADER } from "../auth/proxy";
+import { authProxy } from "../auth/auth-env";
 import { recordMeteredRun, type Meter, type RunUsage } from "./metered-query";
 
 /**
@@ -28,9 +32,23 @@ export interface ProviderProxyLike {
   issue(g: { botId: string | null; provider: Provider; keyOverride?: string }): string;
   revoke(token: string): void;
 }
+/**
+ * Claude on Synapse's own loop (2026-09-30): the auth proxy (auth/proxy.ts) the Claude CLI already goes through. A call
+ * gets a one-call proxy token (x-api-key); the proxy swaps it for the key, asks the budget and meters the stream; the
+ * token is revoked with this call's own usage as the report, so the proxy records only what went past it unreported.
+ */
+export interface AnthropicLink {
+  readonly url: string;
+  issue(g: { botId: string | null }): string;
+  revoke(token: string, reported?: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; webSearchRequests: number }): void;
+  /** An Anthropic key is saved (the proxy holds it; this never returns it). */
+  hasKey(): boolean;
+}
 export interface ProviderRuntime {
   /** The provider proxy; null (it couldn't start) refuses every call. */
   proxy: ProviderProxyLike | null;
+  /** The Anthropic auth proxy, for Claude models on the Messages API; absent or null refuses every Claude call. */
+  anthropic?: AnthropicLink | null;
   /** The spend budget, asked before every call (app.ts: the BudgetGate the auth proxy asks). */
   allow(botId: string | null): { ok: boolean; message: string | null };
   /** The user's data-sharing consent for the provider (ProviderConsentStore). */
@@ -52,10 +70,17 @@ export function setProviderRuntime(r: ProviderRuntime | null): void { runtime = 
 export function providerRuntime(): ProviderRuntime | null { return runtime; }
 
 /** 4.4 (0.1.6): report the saved key's status upstream; the proxy's own answers and the budget's refusal aren't the key's. */
-function noteKeyStatus(r: ProviderRuntime, provider: Provider, keyOverride: string | undefined, res: Response): void {
+function noteKeyStatus(r: ProviderRuntime, provider: ProviderId, keyOverride: string | undefined, res: Response): void {
+  if (provider === "anthropic") return; // the Anthropic key's own health comes from the key check (auth/key-check.ts)
   if (!r.onKeyStatus || keyOverride || quirksFor(provider).authHeader !== "bearer") return;
   if (res.headers.get("x-synapse-proxy") || res.headers.get(BUDGET_HEADER) === "over") return;
   try { r.onKeyStatus(provider, res.status); } catch { /* health is advisory: never fails a call */ }
+}
+
+/** The auth proxy the host set for Claude processes, as a Claude link (the proxy answers a missing key itself). */
+function authEnvLink(): AnthropicLink | null {
+  const p = authProxy();
+  return p ? { get url() { return p.url; }, issue: (g) => p.issue(g), revoke: (t, rep) => p.revoke(t, rep), hasKey: () => true } : null;
 }
 
 /** A failed call, already classified (spec §6). */
@@ -95,6 +120,9 @@ const NEVER_CONNECTED = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "EHOS
  */
 export function providerCostUsd(ref: string, u: CallUsage, day?: string): number {
   if (typeof u.costUsd === "number") return u.costUsd;
+  // Claude: the list price with its cache multipliers (5-minute writes 1.25x, 1-hour writes 2x, reads 0.1x) and searches.
+  const t = modelTarget(ref);
+  if (t?.provider === "anthropic") return listCostUsd(t.model, u);
   const p = providerPrice(ref, u.promptTokens, day);
   return Math.round(((p.input * (u.inputTokens + u.cacheWriteTokens) + p.cachedInput * u.cacheReadTokens + p.output * u.outputTokens) / 1e6) * 1e10) / 1e10;
 }
@@ -110,20 +138,42 @@ function estimate(requestBytes: number, responseChars: number): CallUsage {
  */
 export async function providerFetch(meter: Meter, adapter: ProviderAdapter, call: ProviderCall): Promise<MeteredProviderStream> {
   const r = runtime;
-  const parsed = parseProviderModelRef(call.ref);
+  const parsed = modelTarget(call.ref);
   if (!parsed) throw new Error(`not a provider model: ${call.ref}`);
   const provider = parsed.provider;
-  // Fail closed: no runtime means no budget to ask, so nothing is sent.
-  if (!r) throw new ProviderCallError(classifyProviderError(provider, 429, "", null, { budget: true }), null);
-  // Spec §4: consent is checked here as well as in the gateway (defense in depth).
-  if (!r.consented(provider)) throw new ProviderCallError(consentError(provider), null);
-  const allowed = r.allow(meter.botId);
-  if (!allowed.ok) throw new ProviderCallError(classifyProviderError(provider, 429, "", null, { budget: true, budgetMessage: allowed.message }), 429);
-  const q = quirksFor(provider);
-  if (q.authHeader === "bearer" && !call.keyOverride && !r.hasKey(provider)) throw new ProviderCallError(noKeyError(provider), null);
-  if (!r.proxy) throw new ProviderCallError(networkError(provider), null);
-  const proxy = r.proxy;
-  const token = proxy.issue({ botId: meter.botId, provider, ...(call.keyOverride ? { keyOverride: call.keyOverride } : {}) });
+  // Claude: the runtime's link to the auth proxy, else the auth proxy the host set for its Claude processes (the proxy
+  // asks the same spend budget itself, as it does for the CLI).
+  const claudeLink = provider === "anthropic" ? r?.anthropic ?? authEnvLink() : null;
+  // No way to Claude at all (no auth proxy: no Anthropic key set up): said as the missing key it is.
+  if (provider === "anthropic" && !claudeLink) throw new ProviderCallError(noKeyError(provider), null);
+  // Fail closed: no runtime means no budget to ask, so nothing is sent (a Claude call's proxy asks it instead).
+  if (!r && !claudeLink) throw new ProviderCallError(classifyProviderError(provider, 429, "", null, { budget: true }), null);
+  if (r) {
+    // Spec §4: consent is checked here as well as in the gateway (defense in depth).
+    if (!r.consented(provider)) throw new ProviderCallError(consentError(provider), null);
+    const allowed = r.allow(meter.botId);
+    if (!allowed.ok) throw new ProviderCallError(classifyProviderError(provider, 429, "", null, { budget: true, budgetMessage: allowed.message }), 429);
+  }
+  // The way out: the provider proxy (a bearer token), or for Claude the auth proxy (x-api-key). Neither holds a key here.
+  let target: { url: string; headers: Record<string, string>; release(reported?: CallUsage): void };
+  if (provider === "anthropic") {
+    const a = claudeLink;
+    if (!a) throw new ProviderCallError(networkError(provider), null);
+    if (!a.hasKey()) throw new ProviderCallError(noKeyError(provider), null);
+    const token = a.issue({ botId: meter.botId });
+    target = {
+      url: `${a.url}/v1/messages`, headers: { "x-api-key": token, "anthropic-version": ANTHROPIC_VERSION },
+      release: (u) => a.revoke(token, u ? { inputTokens: u.inputTokens, outputTokens: u.outputTokens, cacheReadTokens: u.cacheReadTokens, cacheWriteTokens: u.cacheWriteTokens, webSearchRequests: u.webSearchRequests ?? 0 } : undefined),
+    };
+  } else {
+    if (!r) throw new ProviderCallError(networkError(provider), null);
+    const q = quirksFor(provider);
+    if (q.authHeader === "bearer" && !call.keyOverride && !r.hasKey(provider)) throw new ProviderCallError(noKeyError(provider), null);
+    if (!r.proxy) throw new ProviderCallError(networkError(provider), null);
+    const proxy = r.proxy;
+    const token = proxy.issue({ botId: meter.botId, provider, ...(call.keyOverride ? { keyOverride: call.keyOverride } : {}) });
+    target = { url: `${proxy.url}/p/${provider}/chat/completions`, headers: { authorization: `Bearer ${token}` }, release: () => proxy.revoke(token) };
+  }
 
   const payload = JSON.stringify(call.body);
   const requestBytes = Buffer.byteLength(payload);
@@ -132,10 +182,13 @@ export async function providerFetch(meter: Meter, adapter: ProviderAdapter, call
   let settle!: (u: RunUsage & { promptTokens: number; estimated: boolean }) => void;
   const settled = new Promise<RunUsage & { promptTokens: number; estimated: boolean }>((res) => { settle = res; });
   let done = false;
+  let released = false;
+  const release = (reported?: CallUsage) => { if (released) return; released = true; target.release(reported); };
   const finish = () => {
     if (done) return;
     done = true;
     const u = usage ?? estimate(requestBytes, responseChars);
+    release(u);
     const run: RunUsage & { promptTokens: number; estimated: boolean } = {
       inputTokens: u.inputTokens, outputTokens: u.outputTokens, cacheReadTokens: u.cacheReadTokens, cacheWriteTokens: u.cacheWriteTokens,
       costUsd: providerCostUsd(call.ref, u), promptTokens: u.promptTokens, estimated: u.estimated === true,
@@ -154,15 +207,16 @@ export async function providerFetch(meter: Meter, adapter: ProviderAdapter, call
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => { timedOut = true; ac.abort(new Error("provider timeout")); }, ms);
   };
-  const disarm = () => { if (timer) clearTimeout(timer); timer = null; call.signal.removeEventListener("abort", onAbort); proxy.revoke(token); };
-  const firstByteMs = r.firstByteMs ?? 60_000;
-  const idleMs = r.idleMs ?? 120_000;
+  // The grant ends with the call; finish() hands the proxy this call's usage as the report when it settles first.
+  const disarm = () => { if (timer) clearTimeout(timer); timer = null; call.signal.removeEventListener("abort", onAbort); };
+  const firstByteMs = r?.firstByteMs ?? 60_000;
+  const idleMs = r?.idleMs ?? 120_000;
 
-  const headers: Record<string, string> = { "content-type": "application/json", accept: "text/event-stream", authorization: `Bearer ${token}` };
+  const headers: Record<string, string> = { "content-type": "application/json", accept: "text/event-stream", ...target.headers };
   let res: Response;
   arm(firstByteMs);
   try {
-    res = await (r.fetch ?? fetch)(`${proxy.url}/p/${provider}/chat/completions`, { method: "POST", headers, body: payload, signal: ac.signal });
+    res = await (r?.fetch ?? fetch)(target.url, { method: "POST", headers, body: payload, signal: ac.signal });
   } catch (e) {
     disarm();
     // Anything after the request may have left (a timeout, an abort, a reset) is metered, estimated; only a connection
@@ -173,7 +227,7 @@ export async function providerFetch(meter: Meter, adapter: ProviderAdapter, call
     if (call.signal.aborted) throw e;
     throw new ProviderCallError(timedOut ? timeoutError(provider) : networkError(provider), null);
   }
-  noteKeyStatus(r, provider, call.keyOverride, res);
+  if (r) noteKeyStatus(r, provider, call.keyOverride, res);
   if (!res.ok) {
     let text = "";
     try { text = (await res.text()).slice(0, ERROR_BODY_MAX); } catch { /* keep the status */ }
@@ -188,6 +242,7 @@ export async function providerFetch(meter: Meter, adapter: ProviderAdapter, call
     throw new ProviderCallError(classifyProviderError(provider, res.status, text, res.headers.get("retry-after"), { model: parsed.model, ...(budget ? { budget: true, budgetMessage: messageOf(text) } : {}) }), res.status);
   }
   const body = res.body;
+  const meterOf = adapter.meter?.() ?? { push: (j: unknown) => adapter.usage((j as { usage?: unknown }).usage) };
   async function* chunks(): AsyncGenerator<unknown> {
     const sse = new SseParser();
     let bytes = 0;
@@ -213,8 +268,9 @@ export async function providerFetch(meter: Meter, adapter: ProviderAdapter, call
             let j: unknown;
             try { j = JSON.parse(ev.data); } catch { continue; }
             const err = j && typeof j === "object" ? (j as { error?: unknown }).error : undefined;
-            if (err) throw new ProviderCallError(classifyProviderError(provider, 500, ev.data), null); // an error sent mid-stream
-            const u = adapter.usage((j as { usage?: unknown }).usage);
+            // An error sent mid-stream: Anthropic's typed errors keep their meaning (overloaded_error is a 529).
+            if (err) throw new ProviderCallError(classifyProviderError(provider, statusOfErrorType((err as { type?: string }).type) ?? 500, ev.data), null);
+            const u = meterOf.push(j);
             if (u) usage = u;
             yield j;
           }

@@ -1,5 +1,5 @@
-import { parseProviderModelRef } from "@synapse/shared";
-import { ChatCompletionsAdapter } from "../brain/provider/adapters/chat-completions";
+import { adapterFor, modelTarget } from "../brain/provider/adapters/index";
+import { STRUCTURED_TOOL } from "../brain/provider/adapters/anthropic-messages";
 import type { CanonMessage } from "../brain/provider/adapters/types";
 import { providerFetch } from "../usage/metered-provider";
 
@@ -12,7 +12,7 @@ import { providerFetch } from "../usage/metered-provider";
 export interface HelperRequest {
   purpose: string;
   botId: string | null;
-  /** "<provider>:<model>" */
+  /** "<provider>:<model>", or a Claude model id (Anthropic's Messages API). */
   ref: string;
   system: string;
   user: string;
@@ -72,9 +72,9 @@ export function schemaErrors(schema: Record<string, unknown>, v: unknown, at = "
 
 /** One helper call on a provider model. Throws what providerFetch throws, or HelperOutputError. */
 export async function providerComplete(req: HelperRequest): Promise<HelperResult> {
-  const p = parseProviderModelRef(req.ref);
+  const p = modelTarget(req.ref);
   if (!p) throw new Error(`not a provider model: ${req.ref}`);
-  const adapter = new ChatCompletionsAdapter(p.provider);
+  const adapter = adapterFor(p.provider);
   const ac = new AbortController();
   const timer = req.timeoutMs ? setTimeout(() => ac.abort(), req.timeoutMs) : null;
   const onAbort = () => ac.abort();
@@ -89,7 +89,10 @@ export async function providerComplete(req: HelperRequest): Promise<HelperResult
     const s = await providerFetch({ purpose: req.purpose, botId: req.botId }, adapter, { ref: req.ref, body, signal: ac.signal });
     const dec = adapter.decoder();
     for await (const c of s.chunks) dec.push(c);
-    return dec.finish().text;
+    const m = dec.finish();
+    // Claude answers structured output through its StructuredOutput tool: the tool's input is the JSON.
+    const structured = req.schema ? m.toolCalls.find((c) => c.name === STRUCTURED_TOOL) : undefined;
+    return structured ? structured.arguments : m.text;
   };
   try {
     const text = await once();

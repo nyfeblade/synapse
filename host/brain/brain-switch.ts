@@ -1,4 +1,4 @@
-import { isAcpModelRef, isProviderModelRef } from "@synapse/shared";
+import { isAcpModelRef, isClaudeModel, isProviderModelRef, type BotEngine } from "@synapse/shared";
 import { isAcpSessionId } from "./acp/acp-sessions";
 import type { ModelMessage, ProcState, SupervisedBrain, TurnEventSink, TurnInput, TurnResult } from "./types";
 import { isProviderSessionId } from "./provider/session-store";
@@ -13,8 +13,14 @@ import { isProviderSessionId } from "./provider/session-store";
  * The switch is read from the stored session id as well, so it holds across a host restart.
  */
 export type BrainKind = "claude" | "provider" | "acp";
-export function brainKindOf(model: string | undefined): BrainKind {
-  return isAcpModelRef(model) ? "acp" : isProviderModelRef(model) ? "provider" : "claude";
+/**
+ * A Claude model runs on the Claude Code CLI ("claude") unless the Bot's engine is "synapse" (2026-09-30): then it runs
+ * on Synapse's own loop, ProviderBrain on the Messages API, like any other provider's model.
+ */
+export function brainKindOf(model: string | undefined, engine?: BotEngine): BrainKind {
+  if (isAcpModelRef(model)) return "acp";
+  if (isProviderModelRef(model)) return "provider";
+  return engine === "synapse" && (model === undefined || isClaudeModel(model.replace(/\[1m\]$/, ""))) ? "provider" : "claude";
 }
 /** Which brain a stored session id belongs to (prov-acp-… before prov-…). */
 export function sessionKindOf(sid: string): BrainKind {
@@ -25,6 +31,8 @@ export interface BrainSwitchDeps {
   botId: string;
   /** The Bot's model now (the turn's own `model` wins when set). */
   model(): string;
+  /** The Bot's engine for Claude models; absent = the Claude Code CLI (every Bot before 2026-09-30). */
+  engine?(): BotEngine;
   claude(): SupervisedBrain;
   provider(): SupervisedBrain;
   /** Wave 3: a vendor's own coding CLI over ACP (acp:<vendor>). Absent = such a model fails the turn. */
@@ -44,7 +52,7 @@ export class BrainSwitch implements SupervisedBrain {
 
   constructor(private d: BrainSwitchDeps) {
     this.botId = d.botId;
-    this.kind = brainKindOf(d.model());
+    this.kind = brainKindOf(d.model(), d.engine?.());
   }
 
   /** The brain that runs the current kind (built on first use). */
@@ -75,7 +83,7 @@ export class BrainSwitch implements SupervisedBrain {
   }
 
   async runTurn(input: TurnInput, sink: TurnEventSink): Promise<TurnResult> {
-    const want = brainKindOf(input.model ?? this.d.model());
+    const want = brainKindOf(input.model ?? this.d.model(), this.d.engine?.());
     const sid = this.d.getSessionId();
     // A stored session of the other kind is a switch too (e.g. the model changed while the host was down).
     const mismatched = sid !== null && sessionKindOf(sid) !== want;

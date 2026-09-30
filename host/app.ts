@@ -7,7 +7,7 @@ import fs from "node:fs";
 import type http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
-import { newBotModelFor, DEFAULT_BOT_MODEL, DEFAULT_EFFORT, MODEL_IDS, OFFERED_PROVIDERS, isLocalProvider, isProviderModelRef, parseAcpModelRef, ACP_VENDOR_IDS, ACP_VENDOR_ROOT, liveProviderModels, type SafetyReviewerView, parseProviderModelRef, type ProviderId, DEFAULT_HISTORY_KEEP, LONG_CONTEXT_ESCALATE_TOKENS, isModelId, LIMITS, modelLabel, spawnModelId, STR, STR5, STRG, STRV, STR_AUTH, latencyLabel, type HealthInfo } from "@synapse/shared";
+import { newBotModelFor, DEFAULT_BOT_MODEL, DEFAULT_EFFORT, MODEL_IDS, OFFERED_PROVIDERS, isLocalProvider, isProviderModelRef, parseAcpModelRef, ACP_VENDOR_IDS, ACP_VENDOR_ROOT, liveProviderModels, type SafetyReviewerView, parseProviderModelRef, type ProviderId, DEFAULT_HISTORY_KEEP, LONG_CONTEXT_ESCALATE_TOKENS, isModelId, LIMITS, modelLabel, spawnModelId, STR, STR5, STRG, STRV, STR_AUTH, latencyLabel, type HealthInfo, botEngineOf, HELPER_MODEL, NEW_BOT_ENGINE, isBotEngine, type BotEngine } from "@synapse/shared";
 import { ApprovalGate } from "./approvals/approval-gate";
 import { BotService } from "./bots/bot-service";
 import { ClaudeBrain } from "./brain/claude-brain";
@@ -18,7 +18,9 @@ import { readSessionFile, removeBoxSession, writeSessionFile } from "./brain/con
 import { demoScriptFor } from "./brain/demo-script";
 import { FakeBrain } from "./brain/fake-brain";
 import { BrainSwitch } from "./brain/brain-switch";
-import { ProviderBrain } from "./brain/provider/provider-brain";
+import { CHILD_BUILTINS } from "./background/child-wiring";
+import { screenViewFor, seesImagesFor } from "./computer/screen-view";
+import { ProviderBrain, defaultSystemPrompt, engineeringSystemPrompt } from "./brain/provider/provider-brain";
 import { AcpBrain } from "./brain/acp/acp-brain";
 import { AcpSessionMap } from "./brain/acp/acp-sessions";
 import { AcpLogins } from "./brain/acp/login";
@@ -32,7 +34,13 @@ import { providerConsentStoreFor } from "./auth/provider-consent";
 import { providerSetupStoreFor } from "./auth/provider-setup";
 import { ProviderProxy } from "./auth/provider-proxy";
 import { createProviderCommands } from "./auth/provider-module";
+import { createKeyServices, type KeyServices } from "./auth/keys-module";
+import { startFakeProviders } from "./auth/fake-providers";
+import { monthStartMs } from "./usage/periods";
+import { KEYED_PROVIDERS, type ProviderTestResult } from "@synapse/shared";
 import { compactProviderSession } from "./brain/provider/compaction";
+import { isAnthropicRef, modelTarget } from "./brain/provider/adapters/index";
+import { MessagesModelReviewer } from "./review/messages-reviewer";
 import { builtinTools } from "./tools/builtin";
 import { botFileFor } from "./walls/bot-file";
 import { botOsUser } from "./walls/bot-uid";
@@ -66,7 +74,7 @@ import { createAttachmentSendExtension } from "./files/attachment-send";
 import { AttachmentStore, createAttachmentCommands } from "./files/attachments";
 import { createFileCommands } from "./files/file-access";
 import { createMemoryEngineHooks, type PendingExchange } from "./memory/engine";
-import { leanMemoryGate, leanSpawnFields } from "./engineering/lean-profile";
+import { leanMemoryGate, leanSpawnFields, providerUpFrontTools } from "./engineering/lean-profile";
 import { EpisodeWriter } from "./memory/episodes";
 import { MemoryExtractor } from "./memory/extractor";
 import { MemoryStore } from "./memory/memory-store";
@@ -129,7 +137,8 @@ import { CircuitBreaker } from "./review/circuit";
 import { ReviewLog } from "./review/log";
 import { SdkModelReviewer, StubModelReviewer } from "./review/model-reviewer";
 import { Reviewer } from "./review/reviewer";
-import { compileAll, providerCompilerCall, sdkCompilerCall } from "./review/rules";
+import { claudeMessagesCompilerCall, compileAll, providerCompilerCall, ruleV2Call, sdkCompilerCall } from "./review/rules";
+import { guidelinesReminder, SafetyService } from "./review/safety";
 import { AckLedger } from "./runner/ack-ledger";
 import { envValuesHash, spawnKeyOf } from "./runner/prompt-collector";
 import { ResumeLedger } from "./runner/resume-ledger";
@@ -277,13 +286,25 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
   const warmNewBotModel = async () => { const p = accountProvider(); if (p && isLocalProvider(p)) await localModels.list(p); return newBotModel(); };
   /** First-run setup is done: an Anthropic key, or a provider that worked. */
   const keySetUp = () => credentialsReady() || providerSetup.ready();
+  // 0.1.7, several keys per provider: the key each call pays with is the Bot's chosen key, else the default (keySvc,
+  // wired once Bots and usage exist; until then every call uses the default key).
+  let keySvc: KeyServices | null = null;
+  // FUZZ / the fake brain: every provider answers in-process and offline (auth/fake-providers.ts), so a preview can add
+  // made-up keys and run provider Bots, and nothing can reach a real provider. Tests pass their own upstream.
+  const fakeProviders = cfg.brain === "fake" && !opts.providerUpstream ? await startFakeProviders() : null;
+  const providerUpstream = opts.providerUpstream ?? fakeProviders?.upstream;
   const providerProxy = new ProviderProxy({
-    credential: (p) => providerKeys.key(p), allow: (b) => budgetGate.allow(b), ...(opts.providerUpstream ? { upstream: opts.providerUpstream } : {}),
+    credential: (p, b) => (keySvc ? keySvc.providerCredential(p, b) : providerKeys.key(p)),
+    allow: (b, p) => { const k = keySvc && p ? keySvc.allowKey(b, p) : null; return k && !k.ok ? k : budgetGate.allow(b); },
+    onStatus: (p, b, status) => { const kid = keySvc?.keyIdFor(b, p); if (kid) keyHealth(p, kid, status); },
+    ...(providerUpstream ? { upstream: providerUpstream } : {}),
   });
   let providerProxyUp = false;
   try { await providerProxy.start(); providerProxyUp = true; } catch (e) { log.error("provider proxy could not start; provider Bots are refused until it does", { error: String(e) }); }
   // 4.4 (0.1.6): each provider key's health row, from the status of the calls made with it (wired once Phase 5 exists).
   let providerKeyHealth: (p: Exclude<ProviderId, "anthropic">, status: number | null) => void = () => {};
+  /** 0.1.7: one saved key's health row (wired once Phase 5 exists). */
+  let keyHealth: (p: ProviderId, keyId: string, status: number | null) => void = () => {};
   const providerRt: ProviderRuntime = {
     proxy: providerProxyUp ? providerProxy : null, allow: (b) => budgetGate.allow(b),
     consented: (p) => providerConsent.consented(p), hasKey: (p) => p !== "anthropic" && providerKeys.has(p),
@@ -291,7 +312,8 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
       // A real call with the saved key succeeding proves it works; a 401 means it no longer does.
       if (status !== null && status >= 200 && status < 300) providerSetup.markWorking(p);
       else if (status === 401) providerSetup.forget(p);
-      providerKeyHealth(p, status);
+      // 0.1.7: the key's own row comes from the provider proxy (onStatus), which knows which key answered.
+      if (!keySvc) providerKeyHealth(p, status);
     },
   };
   setProviderRuntime(providerRt);
@@ -301,7 +323,14 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
   const livePriceTimer = setInterval(() => void livePrices.ensure(), 3600_000);
   livePriceTimer.unref();
   const authProxy = cfg.brain === "claude" && cfg.authProxy.enabled
-    ? new AuthProxy({ upstream: cfg.authProxy.upstream, port: cfg.authProxy.port, credential: () => auth.apiKey(), allow: (b) => budgetGate.allow(b), onUnreported: (b, m, u) => budgetGate.unreported(b, m, u) })
+    ? new AuthProxy({
+      upstream: cfg.authProxy.upstream, port: cfg.authProxy.port,
+      // 0.1.7: the Anthropic key this Bot pays with (either engine: the CLI and Synapse's own loop both come through here).
+      credential: (b) => (keySvc ? keySvc.anthropicCredential(b) : auth.apiKey()),
+      allow: (b) => { const k = keySvc?.allowKey(b, "anthropic"); return k && !k.ok ? k : budgetGate.allow(b); },
+      onStatus: (b, status) => { const kid = keySvc?.keyIdFor(b, "anthropic"); if (kid && (status < 300 || status === 401 || status === 402 || status === 403)) keyHealth("anthropic", kid, status); },
+      onUnreported: (b, m, u) => budgetGate.unreported(b, m, u),
+    })
     : null;
   // Fail closed (security review minor 2): with the real brain the proxy is required. If it can't start, every spawn
   // is refused (AuthProxyDownError, a tray with Retry once the tray service exists below) rather than given the key in
@@ -331,6 +360,16 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     return authProxyUp;
   };
   await startAuthProxy();
+  // 2026-09-30: Claude on Synapse's own loop goes out through the same auth proxy as the CLI (a one-call token, the
+  // budget, the proxy's metering); the key stays in the proxy.
+  providerRt.anthropic = authProxy ? {
+    get url() { return authProxy.url; },
+    issue: (g) => authProxy.issue(g), revoke: (t, reported) => authProxy.revoke(t, reported),
+    hasKey: () => authProxyUp && credentialsReady(),
+  } : null;
+  /** Claude's helpers (reviewer, compiler, one-shots, memory, avatar, drafts) on the Messages adapter, not the SDK. */
+  const claudeHelperEngine = (): BotEngine => { const v = settings.extra<string>("claudeHelperEngine", NEW_BOT_ENGINE); return isBotEngine(v) ? v : NEW_BOT_ENGINE; };
+  const claudeHelpersOwnLoop = (): boolean => cfg.brain === "claude" && !!authProxy && claudeHelperEngine() === "synapse";
 
   // ---- conformance flags (§13.1): fake brain → defaults; real brain → saved results, first boot runs the fast suite ----
   // The boot reap (EVT-17 sweep) runs first; conformance starts only after it (H-2).
@@ -371,6 +410,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     // Wave 3: a vendor coding CLI only once the user gave that vendor's one-time consent (its login is the vendor's own).
     acpModelAllowed: (ref) => { const v = parseAcpModelRef(ref); return !!v && providerConsent.consentedAcp(v); },
     newBotModel,
+    newBotEngine: () => NEW_BOT_ENGINE,
   });
   bots.loadAll();
   relocateSessionRecords(cfg, bots); // bug #66: recorded session paths follow the Bot into (or out of) its own account
@@ -529,20 +569,30 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     // model runs exactly as before; only a provider model ("openai:…") reaches ProviderBrain.
     return new BrainSwitch({
       botId, model: () => bots.summary(botId).profile.model ?? DEFAULT_BOT_MODEL,
+      // 2026-09-30: a Bot on a Claude model runs on Synapse's own loop when its engine is Synapse (real brain only).
+      engine: () => (cfg.brain === "claude" ? botEngineOf(bots.summary(botId).profile) : "claude-code"),
       claude: () => claudeBrainFor(botId),
       provider: () => new ProviderBrain({
         botId, wiring: runner.wiring(botId), store: providerSessions, now, log: (m, f) => log.info(m, f),
         getSessionId: () => bots.sessionId(botId), effort: () => bots.summary(botId).profile.effort,
         compactInstructions: () => compactInstructions({ botName: nameOf(botId), botId }),
+        // Engineering mode works on every model: Synapse's own engineering prompt in place of the standard one.
+        systemPrompt: (append) => (bots.summary(botId).settings.engineeringMode ? engineeringSystemPrompt(append) : defaultSystemPrompt(append)),
         // Spec §11.1: conformance's flags drive the brain — reasoning effort only where PC-12 showed it's accepted.
         reasoning: (ref) => providerEvidence.conformance(ref)?.flags.reasoningEffort === true,
         // Spec §3: Read/Write/Edit as the Bot (bot-file), WebFetch through the guarded fetch, TodoWrite, Skill.
         builtinTools: () => builtinTools({
           botId, files: botFiles, library: skills, plugins: () => phase5?.cliPlugins() ?? [],
-          search: { botRef: () => bots.summary(botId).profile.model ?? "", usable: (p) => p !== "anthropic" && providerConsent.consented(p) && (isLocalProvider(p) || providerKeys.has(p)) },
+          cwd: () => cfg.workspace, // Glob/Grep without a path look where the Shell starts
+          search: { botRef: () => bots.summary(botId).profile.model ?? "", usable: (p) => (p === "anthropic" ? credentialsReady() : providerConsent.consented(p) && (isLocalProvider(p) || providerKeys.has(p))) },
         }),
         historyKeep: () => bots.summary(botId).settings.advanced?.historyKeep,
         mcpTools: () => providerMcp.tools(botId),
+        // 0.1.8: the profile's up-front tools; the rest (connectors included) wait behind ToolSearch, as on the CLI path.
+        upFrontTools: () => providerUpFrontTools(bots.summary(botId).settings),
+        // Claude: the key's model fallback and the long-context arm, as a CLI spawn gets them; the cache TTL setting.
+        resolveModel: (ref) => (isAnthropicRef(ref) ? botModels(botId).model : ref),
+        cacheTtl: () => settings.savings().promptCacheTtl,
       }),
       acp: () => new AcpBrain({
         botId, wiring: runner.wiring(botId), spawn: acpSpawn, store: providerSessions, sessions: acpSessions, now, log: (m, f) => log.info(m, f),
@@ -591,6 +641,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     botModels: () => bots.ids().map((id) => bots.summary(id).profile.model ?? "").filter(Boolean),
     reviewerChoice: () => settings.extra<string | null>("safetyReviewerModel", null),
     preferred: () => providerSetup.account(), fallbackModel: (p) => newBotModelFor(p, localModels.cached(p)),
+    claudeRef: () => (claudeHelpersOwnLoop() ? HELPER_MODEL : null),
   });
   const providerEvidence = new ProviderEvidenceStore(hp("provider-evidence.json"));
   const qualifications = new QualificationStore(hp("reviewer-qualification.json"), now);
@@ -622,6 +673,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
   };
   const model = cfg.reviewer === "stub"
     ? new StubModelReviewer()
+    : claudeHelpersOwnLoop() ? new MessagesModelReviewer()
     : new SdkModelReviewer({ env: buildBotEnv({ cfg, botId: "reviewer" }), cwd: cfg.workspace, pathToClaudeCodeExecutable: claudeExecutableFor(flags.runAs, cfg),
       // One pooled process (it counts against the warm budget), read live: the CT-10 flag, SYNAPSE_PREWARM, and 0 on a call.
       prewarm: () => (flagsFn().prewarm && !callLive() ? 1 : 0) });
@@ -640,8 +692,19 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     review: (req) => (phase5 ? phase5.wrapReviewer(inner).review(req) : inner.review(req)),
     clearCache: () => inner.clearCache(),
   };
+  // Safety v2: the owner's rules, presets, guidelines and network lists (settings key `safety`), enforced by the gate.
+  // The rule compiler model reads a rule only when the grammar can't, and only while the reviewer's model may decide.
+  const ruleV2 = (input: string): Promise<unknown> => {
+    const t = helperRouter.reviewer();
+    if (cfg.reviewer === "stub" || (t.kind === "provider" && !reviewerQualified())) return Promise.reject(new Error("no rule compiler"));
+    const run = t.kind === "claude" && claudeHelpersOwnLoop() ? ruleV2Call({ kind: "messages" })
+      : t.kind === "claude" ? ruleV2Call({ kind: "sdk", env: buildBotEnv({ cfg, botId: "rule-compiler" }), cwd: cfg.workspace, pathToClaudeCodeExecutable: claudeExecutableFor(flags.runAs, cfg) })
+      : ruleV2Call({ kind: "provider", ref: t.ref });
+    return run(input);
+  };
+  const safety = new SafetyService({ settings, historyFile: hp("safety-history.jsonl"), ledgerFile: hp("safety-rate-ledger.json"), now, compileModel: ruleV2, macHome: () => phase5?.macEnv()?.home ?? null });
   gate = new ApprovalGate({
-    cfg, bots, settings, reviewer: phase5Reviewer, now, flags: flagsFn, slot: (id) => runner.slot(id), rehearsals,
+    cfg, bots, settings, reviewer: phase5Reviewer, now, flags: flagsFn, slot: (id) => runner.slot(id), rehearsals, safety,
     // Bug 231 round 1: the fast path judges ~/code trees as the Bot (bothost can't enter the 0700 homes).
     homeFs: cfg.perBotUid && cfg.brain !== "fake" && process.env.FUZZ !== "1" ? sudoFsQuery(cfg, execBuf, { log: (m) => console.warn(m) }) : undefined,
     // fix-mac-gate-and-approval-expiry (Bug B): pending cards survive a host restart and stay answerable.
@@ -743,8 +806,10 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     const sid = bots.sessionId(bid);
     // A provider Bot compacts through its own provider (spec §7), never through Claude, in either brain mode.
     if (isProviderSessionId(sid)) {
-      const ref = bots.summary(bid).profile.model ?? "";
-      if (!parseProviderModelRef(ref)) return false;
+      const profileRef = bots.summary(bid).profile.model ?? DEFAULT_BOT_MODEL;
+      // A Claude Bot on Synapse's own loop compacts on its own model (with its long-context arm), like the CLI.
+      const ref = isAnthropicRef(profileRef) ? botModels(bid).model : profileRef;
+      if (!modelTarget(ref)) return false;
       return compactProviderSession({ store: providerSessions, botId: bid, sessionId: sid, ref, instructions: compactInstructions({ botName: nameOf(bid), botId: bid }), signal });
     }
     return claudeCompactFn(bid, signal);
@@ -812,6 +877,14 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     sendPrompt: (b, t, n, meta) => runner.sendPrompt(b, t, n, meta), ladder: () => p5.ladder,
   }, { routeDreams: (l) => new RoutedDreamLlm(helperRouter, l), routeAvatar: (g) => new RoutedAvatarGenerator(helperRouter, g), routeDrafter: (d) => new RoutedTemplateDrafter(helperRouter, d), fake: cfg.brain === "fake", circuit, kickstart: (b) => runner.kickstart(b), efficiency: () => metrics.efficiency(), redact: redactFor, gate,
     widgets: hostWidgets, // cost-dashboard: budget approval cards for held routine fires
+    // Spec §8: coding agents on any model — Synapse's own loop (provider models, or Claude when a Bot is set to it) and
+    // vendor coding CLIs, walled like the Bot's own tools (bot-file, the Bot's Shell) and gated like every command.
+    coding: {
+      files: botFiles, store: providerSessions, shells: () => phase3?.shells ?? null, claudeReady: () => credentialsReady(),
+      reasoning: (ref) => providerEvidence.conformance(ref)?.flags.reasoningEffort === true,
+      acp: { spawn: acpSpawn, consented: (v) => providerConsent.consentedAcp(v), home: (b) => botOsUser(cfg, b)?.home ?? null, newId: () => randomUUID() },
+      toolUse: (ref) => { const pc = providerEvidence.conformance(ref); const r = pc?.results.find((x) => x.id === "PC-02")?.status; return r === "pass" ? "pass" : r === "fail" ? "fail" : null; },
+    },
     // Screen share: a Bot on a live 1:1 call may ask for one snapshot; the app sends it only if the user is sharing.
     onLook: (b) => {
       const roster = p4Ref?.services.calls.roster(b);
@@ -828,6 +901,30 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
   phase5 = p5;
   // 4.4: a Bot that uses a connector that broke is told in its next turn (once per break), and again when it's back.
   runner.addPromptDecorator((b) => { const t = p5.health.noteFor(b); return t ? { text: t } : null; });
+  // Safety v2: the owner's guidelines ride every turn (the uncached tail), only when there are any.
+  runner.addPromptDecorator((b) => { const t = guidelinesReminder(safety.guidelines(b)); return t ? { text: t } : null; });
+  // 0.1.7: several keys per provider — the key each Bot pays with, per-key spend, caps and health rows.
+  keySvc = createKeyServices({
+    auth, providers: providerKeys, consent: providerConsent, bots, keyPair: () => loadOrCreateBoxKeyPair(cfg.hostPrivate), now,
+    monthStart: () => monthStartMs(now(), settings.timeZone()), usage: () => p5.usage,
+    healthState: (id) => p5.health.health.get(id)?.state ?? null,
+    keyHealth: (p, kid, status) => keyHealth(p, kid, status),
+    notice: (b, title, detail, dedupeKey) => { trays.add({ botId: b, title, detail, dedupeKey }); },
+    nameOf,
+    onKeyChange: (p) => {
+      p5.health.pruneKeys(p, (p === "anthropic" ? auth.list() : providerKeys.list(p)).map((k) => k.id));
+      if (p !== "anthropic") { providerProxy.revokeProvider(p); if (p === "openrouter") void livePrices.ensure(true); }
+    },
+    onKeySaved: (p, key) => providerSetup.keySaved(p, key),
+    newBotModel: () => newBotModel(),
+    testProvider: async (p, kid) => (await handlers.testProviderKey!({ provider: p, keyId: kid })) as ProviderTestResult,
+    fake: process.env.FUZZ === "1" || cfg.brain === "fake",
+  });
+  p5.usage.setKeyResolver((b, m) => keySvc?.usageKeyRef(b, m) ?? null);
+  p5.health.setKeyRow((p, kid) => keySvc!.keyRow(p, kid));
+  keyHealth = (p, kid, status) => p5.health.providerKey(p, status, kid);
+  // The one row per provider of 0.1.6 gives way to one row per key.
+  for (const p of KEYED_PROVIDERS) p5.health.health.report(`provider:${p}`, null);
   p5.health.keyCheck(keyCheck.view());
   providerKeyHealth = (p, status) => p5.health.providerKey(p, status);
   // Phase 5's gate decorator (disabled MCP tools, local asks expiry) wraps the one ApprovalGate; the ctx (cwd binding) passes through.
@@ -837,16 +934,27 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     fuzz: process.env.FUZZ === "1" || cfg.brain === "fake", brainKind: cfg.brain,
     // Spec P2: a provider Bot's generalPurpose Task runs on ProviderBrain, with the parent's walls for its files, its
     // session under the parent's folder, and its model calls metered as "subagent" for the parent.
-    providerChild: (spec, wiring, hooks) => new ProviderBrain({
+    // A computer or browser child (no feature needs Claude) runs on the Bot's own model too: its screen tools come as
+    // `serverTools` under mcp__computer__*, gated and reviewed exactly as on the Claude path; its built-ins are the
+    // child type's own (TOOL-02: Read only).
+    providerChild: (spec, wiring, hooks, serverTools) => new ProviderBrain({
       botId: `child:${spec.id}`, storeKey: spec.parentBotId, wiring, store: providerSessions, now, log: (m, f) => log.info(m, f),
       getSessionId: hooks.getSessionId, setSessionId: hooks.setSessionId, meter: { purpose: "subagent", botId: spec.parentBotId },
-      systemPrompt: () => spec.systemAppend, maxModelCalls: 60,
+      systemPrompt: () => spec.systemAppend, maxModelCalls: spec.type === "generalPurpose" ? 60 : 150,
+      serverTools: () => serverTools,
       reasoning: (ref) => providerEvidence.conformance(ref)?.flags.reasoningEffort === true,
       builtinTools: () => builtinTools({
         botId: spec.parentBotId, files: botFiles, library: null, plugins: () => [],
-        search: { botRef: () => spec.model, usable: (p) => p !== "anthropic" && providerConsent.consented(p) && (isLocalProvider(p) || providerKeys.has(p)) },
-      }).filter((b) => b.canonical !== "Skill"),
+        cwd: () => cfg.workspace,
+        search: { botRef: () => spec.model, usable: (p) => (p === "anthropic" ? credentialsReady() : providerConsent.consented(p) && (isLocalProvider(p) || providerKeys.has(p))) },
+      }).filter((b) => CHILD_BUILTINS[spec.type].includes(b.canonical)),
+      cacheTtl: () => settings.savings().promptCacheTtl,
     }),
+    seesImages: (ref) => seesImagesFor(ref, providerEvidence.conformance(ref)?.flags ?? null),
+    screenView: (ref) => screenViewFor(ref),
+    // Every Task of a Claude Bot on the Synapse engine runs on Synapse's own loop with its Claude model: generalPurpose
+    // on the Bot's model, computer and browser children on Claude's computer model, their screen tools through the gate.
+    ownLoopChild: (spec) => cfg.brain === "claude" && isAnthropicRef(spec.model) && bots.has(spec.parentBotId) && botEngineOf(bots.summary(spec.parentBotId).profile) === "synapse",
     flags: flagsFn, now, rehearsals, // I3
   });
   budgetGate.wire({ allow: (b) => p5.budgetAllow(b), unreported: (b, m, u) => p5.recordUnreported(b, m, u) });
@@ -885,6 +993,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     await p3.deleteBot(id); // shells, subagents, displays
     await memoryEngine.dropBot(id);
     memory.clearBot(id);
+    safety.forgetBot(id); // Safety v2: its network list, its guidelines and rules scoped only to it
     await runner.finishDelete(id);
     p3.forgetSecrets(id);
   };
@@ -965,7 +1074,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     gate: { pending: (b) => gate?.pending(b) ?? [], resolve: (b, id, c, n) => { if (!gate) throw new GatewayError("STALE_APPROVAL", "No approvals here.", 409); return gate.resolve(b, id, c, n); } },
     calls: p4.services.calls,
     // Spec §7a row 8: a provider Bot's voice runs on its provider (in both brain modes); a Claude Bot's as before.
-    factory: (spec) => frontSessionFor(spec, claudeFront, { now }),
+    factory: (spec) => frontSessionFor(spec, claudeFront, { now, ownLoop: (sp) => cfg.brain === "claude" && bots.has(sp.botId) && botEngineOf(bots.summary(sp.botId).profile) === "synapse" }),
     enabled: () => cfg.voiceFastPath,
     recall: (b, t) => (settings.memoryRecallOn() ? recallFor({ index: recallIndex, store: memory, ledger: memoryLedger, frozen: (bid) => frozenFactIds(bots, bid), nameOf, now }, b, t).block : null),
     userName: () => userNameFromFacts(memory.userShardOwners().flatMap((o) => memory.profile({ kind: "user", botId: o }).map((f) => f.content))),
@@ -1015,13 +1124,23 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
       return {};
     },
   };
+  function rulesView() { return { ...safety.view(nameOf), timeZone: settings.timeZone() }; }
+  function rulesChanged() {
+    gate!.settingsChanged();
+    const v = rulesView();
+    hub.publish({ channel: "safety", payload: v }); // the Mac's gate applies the same rules
+    return v;
+  }
+  function botList() { return bots.list().map((b) => ({ id: b.id, name: b.profile.name })); }
+  function botArg(id: unknown): string | null { return typeof id === "string" && id && bots.has(id) ? id : null; }
   const compile = () => {
     if (cfg.reviewer === "stub") return;
     // Spec §7a row 3: the rule compiler runs on the reviewer's model, and is off while that model isn't qualified
     // (typed rules are kept, not compiled; exact-command rules from cards still apply).
     const t = helperRouter.reviewer();
     if (t.kind === "provider" && !reviewerQualified()) return;
-    const call = t.kind === "claude"
+    const call = t.kind === "claude" && claudeHelpersOwnLoop() ? claudeMessagesCompilerCall()
+      : t.kind === "claude"
       ? sdkCompilerCall({ env: buildBotEnv({ cfg, botId: "rule-compiler" }), cwd: cfg.workspace, pathToClaudeCodeExecutable: claudeExecutableFor(flags.runAs, cfg) })
       : providerCompilerCall(t.ref);
     void compileAll(settings, call).catch((e) => log.warn("rule compile failed", { error: String(e) }));
@@ -1121,6 +1240,34 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
       return view;
     },
     setMacTimeZone: (a) => { settings.setMacTimeZone(a.zone); return settings.view(); },
+    // ---- Safety v2: Settings → Rules. The owner's app only (tools/parity.ts: userOnly); a rule change ends pending cards. ----
+    getSafety: () => rulesView(),
+    compileSafetyRule: async (a) => {
+      if (typeof a.text !== "string") throw new GatewayError("BAD_ARGS", "Write the rule first.");
+      const r = await safety.compile(a.text, { botId: botArg(a.botId), bots: botList(), macActions: Array.isArray(a.macActions) ? a.macActions : [] });
+      return r.ok ? { ok: true as const, words: r.words, type: r.rule.type, preview: r.preview!, conflicts: r.conflicts ?? [] } : { ok: false as const, reason: r.reason };
+    },
+    addSafetyRule: async (a) => { await safety.addRule(String(a.text ?? ""), { botId: botArg(a.botId), bots: botList(), asExceptionTo: a.asExceptionTo ?? null }); return rulesChanged(); },
+    updateSafetyRule: (a) => { safety.updateRule(String(a.id), a); return rulesChanged(); },
+    deleteSafetyRule: (a) => {
+      const { legacyText } = safety.deleteRule(String(a.id));
+      // A migrated ask-first rule leaves the reviewer's list too.
+      if (legacyText) settings.update({ blockInstructions: settings.get().autoReviewInstructions.blockInstructions.filter((t) => t !== legacyText) });
+      return rulesChanged();
+    },
+    setSafetyPreset: (a) => {
+      if (!["careful", "balanced", "hands-off"].includes(a.preset)) throw new GatewayError("BAD_ARGS", "Pick Careful, Balanced or Hands-off.");
+      const diff = safety.presetDiff(a.preset);
+      if (a.preview) return { ...rulesView(), diff };
+      safety.setPreset(a.preset);
+      return { ...rulesChanged(), diff };
+    },
+    setGuidelines: (a) => { safety.setGuidelines(Array.isArray(a.guidelines) ? a.guidelines.filter((g) => !g.botId || bots.has(g.botId)) : []); return rulesView(); },
+    setBotNetwork: (a) => {
+      if (!bots.has(a.botId)) throw new GatewayError("NO_BOT", "That Bot is gone.");
+      safety.setNetwork(a.botId, { mode: a.mode, hosts: Array.isArray(a.hosts) ? a.hosts : [] });
+      return rulesChanged();
+    },
     // 0.1.4: the app saw the box's Local network state differ from the owner's choice (tampering, or a failed apply).
     // No Bot turn starts until the app says it matches again; a tray says why.
     setNetworkPause: (a) => {
@@ -1216,9 +1363,11 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     createAcpCommands({ consent: providerConsent, logins: acpLogins, hasBot: (id) => bots.has(id), installer: acpInstaller }),
     createProviderCommands({
       keys: providerKeys, consent: providerConsent, keyPair: () => loadOrCreateBoxKeyPair(cfg.hostPrivate),
-      onKeyChange: (p) => { providerProxy.revokeProvider(p); providerKeyHealth(p, null); if (p === "openrouter") void livePrices.ensure(true); }, fake: process.env.FUZZ === "1",
+      onKeyChange: (p) => { providerProxy.revokeProvider(p); providerKeyHealth(p, null); p5.health.pruneKeys(p, providerKeys.list(p).map((k) => k.id)); if (p === "openrouter") void livePrices.ensure(true); }, fake: process.env.FUZZ === "1" || cfg.brain === "fake",
       setup: providerSetup,
+      onTested: (p, kid, r) => { const st = r.ok ? 200 : r.kind === "invalid-key" ? 401 : r.kind === "no-credit" ? 402 : null; if (st !== null) keyHealth(p, kid, st); },
     }),
+    keySvc.handlers,
     {
       // Review round 2 (P4): `refresh` re-probes now (real brain only); otherwise the last answer.
       getModelAccess: async (a) => {
@@ -1279,6 +1428,7 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
       if (providerRuntime() === providerRt) setProviderRuntime(null);
       clearInterval(livePriceTimer);
       await providerProxy.stop();
+      await fakeProviders?.close();
       releaseLock();
     },
   };

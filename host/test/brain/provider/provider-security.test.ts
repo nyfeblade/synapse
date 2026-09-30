@@ -148,13 +148,17 @@ describe("provider key guard (static)", () => {
   const sources = (dir: string): string[] => walk(dir).filter((f) => /\.(ts|tsx|mjs|js)$/.test(f) && !f.includes(`${path.sep}node_modules${path.sep}`) && !f.startsWith(path.join(HOST, "test")) && !f.endsWith(".d.ts"));
   it("the opened key is read in one place: the provider proxy's credential lookup in app.ts", () => {
     const users = sources(HOST).filter((f) => /from\s+["'][./]*(auth\/)?provider-keys["']/.test(src(f))).map((f) => path.relative(HOST, f));
-    // provider-consent and provider-setup (any-key setup) take only the directory name from it.
-    expect(users.sort()).toEqual(["app.ts", "auth/provider-consent.ts", "auth/provider-module.ts", "auth/provider-setup.ts"].sort());
-    expect(src(path.join(HOST, "auth", "provider-module.ts"))).not.toMatch(/\.key\(/);
+    // provider-consent and provider-setup (any-key setup) take only the directory name from it. 0.1.7: keys-module picks
+    // which saved key a call pays with, and hands it only to the proxies' credential lookups and a key test.
+    expect(users.sort()).toEqual(["app.ts", "auth/keys-module.ts", "auth/provider-consent.ts", "auth/provider-module.ts", "auth/provider-setup.ts"].sort());
+    // provider-module reads a saved key only for its key test: by id (kept in this process as the proxy's override),
+    // and the offline FUZZ test's "wrong" check. It never leaves the process.
+    expect(src(path.join(HOST, "auth", "provider-module.ts")).match(/\.key\(/g)).toHaveLength(2);
+    expect(src(path.join(HOST, "auth", "keys-module.ts")).match(/providers\.key\(/g)).toHaveLength(1);
     expect(src(path.join(HOST, "auth", "provider-setup.ts"))).not.toMatch(/\.key\(|keys\./);
     const app = src(path.join(HOST, "app.ts"));
     expect(app.match(/providerKeys\.key\(/g)).toHaveLength(1);
-    expect(app).toMatch(/new ProviderProxy\(\{\s*credential: \(p\) => providerKeys\.key\(p\)/);
+    expect(app).toMatch(/new ProviderProxy\(\{\s*credential: \(p, b\) => \(keySvc \? keySvc\.providerCredential\(p, b\) : providerKeys\.key\(p\)\)/);
     // only the proxy puts a key in an Authorization header
     const setters = sources(HOST).filter((f) => /authorization[^\n]{0,20}`Bearer \$\{key\}`/.test(src(f))).map((f) => path.relative(HOST, f));
     expect(setters).toEqual(["auth/provider-proxy.ts"]);

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { STR, historyKeepLabel } from "@synapse/shared";
+import { STR, STR5, historyKeepLabel } from "@synapse/shared";
 import { AdvancedSection } from "../../src/renderer/components/AdvancedSection";
 import { AdvancedSettingsCard } from "../../src/renderer/components/AdvancedSettingsCard";
 import { useUi } from "../../src/renderer/store";
@@ -40,6 +40,12 @@ describe("Advanced controls (D14)", () => {
     expect(screen.queryByText(STR.keepMoreHistoryHint)).toBeNull();
     fireEvent.change(select, { target: { value: "more" } });
     expect(bridge.calls.at(-1)).toEqual(["setAgentHistoryKeep", { id: "b", keep: "more" }]);
+  });
+
+  it("no separate coding-agent setting: a Claude Bot's coding agents follow its Engine (Bot settings)", () => {
+    useUi.setState({ settings: { ...settingsFixture(), advancedEnabled: true }, bots: { b: { id: "b", profile: { model: "claude-opus-5-5" }, settings: { notifyOnAgentUpdates: true, hiddenFromSidebar: false } } } } as never);
+    render(<AdvancedSection botId="b" />);
+    expect(document.querySelector("[data-setting=\"coding-engine\"]")).toBeNull();
   });
 
   it("Task 34 fuzz: a failed Compact now / New session shows the action error instead of an unhandled rejection", async () => {

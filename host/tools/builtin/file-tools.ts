@@ -14,6 +14,8 @@ import type { BotFileRunner } from "../../walls/bot-file";
 export interface FileToolsDeps { botId: string; files: BotFileRunner; seen: Map<string, string> }
 
 const err = (text: string): BotToolResult => ({ text: `<tool_use_error>${text}</tool_use_error>`, isError: true });
+/** The CLI's own Read cap (25,000 tokens), in characters at ~4 a token: past it the model is asked to read in parts. */
+export const READ_MAX_CHARS = 100_000;
 
 /** Per-Bot memory of what each Bot last saw of each file (path -> sha256). */
 const seenByBot = new Map<string, Map<string, string>>();
@@ -39,6 +41,7 @@ export function createFileTools(d: FileToolsDeps): BotToolDef[] {
           return { text: `Image ${p}`, images: [{ data: r.data, mimeType: r.mime }] };
         }
         if (!("kind" in r) || r.kind !== "text") return err("Unexpected answer.");
+        if (r.text.length > READ_MAX_CHARS) return err(`This part of the file is ${r.text.length} characters (about ${Math.ceil(r.text.length / 4)} tokens), over the ${READ_MAX_CHARS / 4} token limit. Read it in parts with offset and limit, or Grep for what you need.`);
         d.seen.set(p, r.sha);
         if (r.total === 0) return { text: "<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>" };
         return { text: r.cut ? `${r.text}\n\n(The file has ${r.total} lines; this shows ${r.lines}. Use offset and limit to read the rest.)` : r.text };
@@ -53,6 +56,7 @@ export function createFileTools(d: FileToolsDeps): BotToolDef[] {
         const p = String(a.file_path);
         const r = await d.files(d.botId, { op: "write", path: p, content: String(a.content), expect: d.seen.get(p) ?? null });
         if (!r.ok) return err(r.error);
+        if (!("sha" in r)) return err("Unexpected answer.");
         d.seen.set(p, r.sha);
         return { text: "created" in r && r.created ? `File created successfully at: ${p}` : `The file ${p} has been updated.` };
       },
@@ -66,6 +70,7 @@ export function createFileTools(d: FileToolsDeps): BotToolDef[] {
         const p = String(a.file_path);
         const r = await d.files(d.botId, { op: "edit", path: p, old: String(a.old_string), new: String(a.new_string), all: a.replace_all === true, expect: d.seen.get(p) ?? null });
         if (!r.ok) return err(r.error);
+        if (!("sha" in r)) return err("Unexpected answer.");
         d.seen.set(p, r.sha);
         const n = "count" in r ? r.count ?? 1 : 1;
         return { text: `The file ${p} has been updated.${n > 1 ? ` ${n} replacements.` : ""}` };

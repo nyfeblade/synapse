@@ -10,6 +10,8 @@ import { nativeCall } from "../native";
 import { useTemplates } from "../templates/store";
 import { noteIfSlow, SIGN_IN_TIMEOUT_MS } from "../within-time";
 import mark from "../assets/synapse-mark.png";
+import { applyNewBotChoice, NewBotModelStep } from "../components/NewBotModelStep";
+import type { NewBotChoice } from "../model-picks";
 
 type Step = "splash" | "setup" | "tour" | "tools" | "new-bot";
 
@@ -28,6 +30,8 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
   const [color, setColor] = useState<string>(DEFAULT_AVATAR_COLOR);
   // New-user walk, finding 5: a suggestion card selects a teammate (filling in the Bot below); Get started is the only commit.
   const [picked, setPicked] = useState<StarterView | null>(null);
+  // 0.1.7: the first Bot's model (and paying key, with several keys), chosen in this step.
+  const [choice, setChoice] = useState<NewBotChoice | null>(null);
   // Creating a Bot (or importing a starter) is a round trip: without a guard a second click before the first
   // one lands ran the whole thing again and left two Bots behind. A ref, because two clicks in the same tick
   // both read the pre-render state value.
@@ -69,6 +73,7 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
   };
   const create = async () => {
     const { id } = await call("createAgent", { name: name.trim() || undefined, description: tools.length ? STR5.toolsAppend(tools) : undefined, avatarShape: shape, avatarColor: color, isKickstartRequested: true });
+    await applyNewBotChoice(id, choice);
     await finish(id);
   };
   const meet = async (s: StarterView) => {
@@ -80,6 +85,7 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
       ...(color !== s.avatarColor ? { avatarColor: color } : {}),
     };
     if (Object.keys(edits).length) await call("updateAgent", { id, ...edits });
+    await applyNewBotChoice(id, choice);
     await finish(id);
   };
   // Bot sharing (no app installed yet): the website copied the Bot's link on Download. The clipboard is read only
@@ -178,6 +184,7 @@ export function Onboarding({ onDone, initialStep = "splash", timeoutMs = SIGN_IN
       {noLocalModel && <p role="status" className="muted">{STR_KEY_STEP.noLocalModels}</p>}
       <label htmlFor="onb-name">{STR.name}</label>
       <input id="onb-name" className="text-input" value={name} placeholder={STR.newBotName} onChange={(e) => setName(e.target.value)} />
+      <NewBotModelStep choice={choice} onChange={setChoice} />
       {error && <span className="error" role="alert">{error}</span>}
       <div className="onb-nav">
         <button type="button" className="btn-outline" disabled={busy} onClick={() => setStep("tools")}>{STR5.back}</button>

@@ -47,17 +47,21 @@ describe("MCP servers for provider Bots", () => {
     for (const c of cards().filter((x) => x.status === "pending")) app.services.gate.resolve(id, c.approvalId, "once");
     await until(() => texts().includes("The server said it back."));
     const first = up.requests.find((r) => Array.isArray(r.body.tools))!;
-    const names = (first.body.tools as { function: { name: string } }[]).map((t) => t.function.name);
-    expect(names).toContain("mcp__echo__echo");
-    expect(names).not.toContain("mcp__echo__whoami"); // turned off by the user
+    const tools = first.body.tools as { function: { name: string; description: string } }[];
+    // 0.1.8: a connector's tools wait behind ToolSearch (names listed), as on the Claude Code path; a call still works.
+    const listed = tools.find((t) => t.function.name === "ToolSearch")!.function.description;
+    expect(listed).toContain("mcp__echo__echo");
+    expect(listed).not.toContain("mcp__echo__whoami"); // turned off by the user
+    expect(tools.map((t) => t.function.name)).not.toContain("mcp__echo__whoami");
     const toolMsgs = up.requests.flatMap((r) => (r.body.messages as { role: string; content: unknown }[]).filter((m) => m.role === "tool").map((m) => String(m.content)));
     expect(toolMsgs.some((t) => /No such tool available: mcp__echo__whoami/.test(t))).toBe(true);
     expect(toolMsgs.some((t) => t.includes("echo: from the bot"))).toBe(true);
     expect(cards().map((c) => c.status)).toEqual(["approved"]);
     // 4.4 (0.1.6): the provider key got its connector-health row from the Bot's real calls; removing the key removes it.
+    // 0.1.7: one row per saved key (the first key's id is k1).
     type HealthList = { connectors: { id: string; state: string }[] };
-    expect(((await h.getConnectorHealth!({})) as HealthList).connectors.find((c) => c.id === "provider:openai")?.state).toBe("ok");
+    expect(((await h.getConnectorHealth!({})) as HealthList).connectors.find((c) => c.id === "provider:openai:k1")?.state).toBe("ok");
     await h.clearProviderKey!({ provider: "openai" });
-    expect(((await h.getConnectorHealth!({})) as HealthList).connectors.some((c) => c.id === "provider:openai")).toBe(false);
+    expect(((await h.getConnectorHealth!({})) as HealthList).connectors.some((c) => c.id.startsWith("provider:openai"))).toBe(false);
   }, 30_000);
 });

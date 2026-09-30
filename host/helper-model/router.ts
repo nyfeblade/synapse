@@ -30,6 +30,13 @@ export interface HelperRouterDeps {
   preferred?(): P | null;
   /** A model to lend when the provider has no helper model and none of its Bots lends one (a provider model ref). */
   fallbackModel?(p: P): string | null;
+  /**
+   * 2026-09-30: Claude's helper calls on Synapse's own loop. When this gives a Claude model id, a helper call that
+   * would run on Claude runs on that model through the Messages adapter (providerComplete), not the Agent SDK. The
+   * safety reviewer keeps its Claude kind (it is the reference, qualified as it is); its implementation is chosen by
+   * the host. Absent or null: the SDK paths, as before.
+   */
+  claudeRef?(): string | null;
 }
 
 export class HelperRouter {
@@ -55,6 +62,12 @@ export class HelperRouter {
   }
 
   account(): HelperTarget {
+    const t = this.accountTarget();
+    const ref = t.kind === "claude" && this.d.anthropicReady() ? this.d.claudeRef?.() ?? null : null;
+    return ref ? { kind: "provider", ref } : t;
+  }
+
+  private accountTarget(): HelperTarget {
     if (this.d.anthropicReady()) return { kind: "claude" };
     const first = this.d.preferred?.() ?? null;
     const order = first ? [first, ...ACCOUNT_HELPER_ORDER.filter((p) => p !== first)] : ACCOUNT_HELPER_ORDER;
@@ -72,6 +85,6 @@ export class HelperRouter {
     const pick = this.d.reviewerChoice?.() ?? null;
     const p = pick ? parseProviderModelRef(pick) : null;
     if (p && this.usable(p.provider)) return { kind: "provider", ref: pick! };
-    return this.account();
+    return this.accountTarget();
   }
 }

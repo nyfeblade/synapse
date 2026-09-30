@@ -6,6 +6,7 @@ import { listPrice } from "../../usage/list-price";
 import { badgesFor, type ProviderEvidenceStore } from "./conformance/evidence";
 import { quirksFor } from "./adapters/quirks";
 import { searchProviderFor } from "../../tools/builtin/web-search";
+import { seesImagesFor } from "../../computer/screen-view";
 
 /**
  * The model picker's data (spec §10): models grouped by provider (Claude first when keyed), each with the badges its
@@ -38,11 +39,12 @@ export function whatWorks(ref: string, d: Pick<CatalogDeps, "usable" | "evidence
 
 function whatWorksRows(ref: string, d: Pick<CatalogDeps, "usable" | "evidence" | "reviewerQualified">): WhatWorks[] {
   if (parseAcpModelRef(ref)) {
-    // A vendor's own coding CLI: its tools ask Synapse's gate; Synapse's own tools (search, subagents, coding agents) aren't there.
+    // A vendor's own coding CLI: its tools ask Synapse's gate; Synapse's own tools (search, subagents) aren't there. Its
+    // coding agents run on the same CLI (an acp engine), every permission answered by the gate.
     return [
       { label: "Tools and replies", state: "experimental" }, { label: "Auto-review", state: d.reviewerQualified() ? "yes" : "asks" },
       { label: "Web search", state: "no" }, { label: "Images", state: "no" }, { label: "Voice calls", state: "no" },
-      { label: "Coding agents", state: "no" }, { label: "Subagents", state: "no" },
+      { label: "Coding agents", state: "experimental" }, { label: "Subagents", state: "no" }, { label: "Computer and browser", state: "no" },
     ];
   }
   const p = parseProviderModelRef(ref);
@@ -50,6 +52,7 @@ function whatWorksRows(ref: string, d: Pick<CatalogDeps, "usable" | "evidence" |
     return [
       { label: "Tools and replies", state: "yes" }, { label: "Auto-review", state: "yes" }, { label: "Web search", state: "yes" },
       { label: "Images", state: "yes" }, { label: "Voice calls", state: "yes" }, { label: "Coding agents", state: "yes" }, { label: "Subagents", state: "yes" },
+      { label: "Computer and browser", state: "yes" },
     ];
   }
   const pc = d.evidence.conformance(ref);
@@ -67,8 +70,13 @@ function whatWorksRows(ref: string, d: Pick<CatalogDeps, "usable" | "evidence" |
     { label: "Web search", state: !searcher ? "no" : searcher === "gemini" ? "experimental" : "yes" },
     { label: "Images", state: vision === null ? "unchecked" : vision ? "yes" : "no" },
     { label: "Voice calls", state: local ? "experimental" : "yes" },
-    { label: "Coding agents", state: "no" },
+    // Spec §8: a provider Bot's coding agents run on Synapse's own loop with this model, so they work where tools do (an
+    // unchecked model still runs them: What works informs, it never blocks).
+    { label: "Coding agents", state: tools },
     { label: "Subagents", state: tools }, // spec P2: a Task child runs on the same provider model, so it works where tools do
+    // Computer and browser helpers run on the same model too: with screenshots where it reads images, and on text reads
+    // of the screen (accessibility + OCR) and page snapshots where it doesn't, which is Experimental.
+    { label: "Computer and browser", state: tools !== "yes" ? tools : seesImagesFor(ref, pc?.flags ?? null) ? "yes" : "experimental" },
   ];
 }
 

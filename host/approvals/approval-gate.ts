@@ -15,7 +15,11 @@ import { expandHome, rawShellCwd, resolveShellCwdInfo, shellHome } from "../back
 import { needsCardFacts, type GoogleCardFacts } from "../google/card-facts";
 import { formatDraftPreviewCard, hashDraftPreview, type DraftPreview } from "../google/tools";
 import { classifyTool, insideDir, mcpToolChanges, type Classification } from "../review/classify";
-import { askModeFloor, fixedRuleFor, fullAutoAskFor, modeAllowsWithoutCard, withAskFloor, type FixedRulesEnv } from "../review/fixed-rules";
+import { askFloorOf, fixedRuleFor, fullAutoAskFor, modeAllowsWithoutCard, withAskFloor, type FixedRulesEnv } from "../review/fixed-rules";
+import { hardCore } from "../review/hard-core";
+import { readLanOpen } from "../net/guarded-fetch";
+import type { SafetyService } from "../review/safety";
+import { KIND_LABEL, exceptionFor, kindOfClassRule, scopeWords, type ActionFacts, type ActionKind, type ApprovalTriggerView, type SafetyRule } from "@synapse/shared";
 import type { WakeSource } from "../brain/types";
 import { roomReviewText } from "../groups/member-prompt";
 import { COMPOSIO_SERVER_ID, type PermMode } from "@synapse/shared";
@@ -113,6 +117,10 @@ export interface GateDeps {
   /** Bug 231 round 1: read-only queries AS the Bot (box/files/bot-fs-query), so the fast path can judge trees inside the
    *  Bot's 0700 home. Unset: plain fs (tests, a box without per-Bot accounts). */
   homeFs?: FsQuery;
+  /** Safety v2: the owner's rules, presets and network lists. Unset: Balanced with no rules of the owner's (today's gate). */
+  safety?: SafetyService;
+  /** Safety v2 hard core: Settings → Local network is on. Default: the box's net-guard.conf (off when it's missing). */
+  lanOpen?(): boolean;
 }
 
 /** 4.3b: the account a connector call uses (`label`), the labels this Bot may use, and every account the owner has. */
@@ -172,6 +180,8 @@ const REVIVAL_OUTSIDE = new Set<WakeSource>(["subagent-done", "coding-agent", "s
 
 interface Item { toolUseId: string; call: ToolCall; cls: Classification; fingerprint: string; summary: string; status: ApprovalStatus; resolve?: (d: PermissionDecision) => void }
 interface ApprovalRecord {
+  /** Safety v2: what raised the card (a rule, or a reason), and the action's facts for "Always allow this". */
+  trigger?: ApprovalTriggerView | null; facts?: ActionFacts | null;
   id: string; botId: string; surface: Surface; items: Item[]; title: string; reason: string; summary: string; command: string | null;
   proposedRule: string | null; verdict: Verdict | null; stage: string; createdAt: number; settledAt: number | null; policy: "park" | "ttl";
   status: ApprovalStatus; cause: string | null; entryId: string; requestId: string; ruleAddedText: string | null; timer?: ReturnType<typeof setTimeout>;
@@ -181,7 +191,7 @@ interface ApprovalRecord {
   /** Bug 142: the user declined by voice with a change ("say 10 minutes"): the Bot redoes it with this. */
   note?: string;
 }
-interface PendingReview { outcome: Extract<ReviewOutcome, { kind: "block" | "degraded" }>; cls: Classification; fingerprint: string }
+interface PendingReview { outcome: Extract<ReviewOutcome, { kind: "block" | "degraded" }>; cls: Classification; fingerprint: string; trigger?: ApprovalTriggerView | null; facts?: ActionFacts | null }
 
 /** Bug 142: a voice decline that asks for a change tells the Bot exactly that, so it redoes the action (a new card). */
 function denyText(rec: ApprovalRecord): string {
@@ -917,12 +927,19 @@ export class ApprovalGate {
     // other decision is final for this toolUseId, so it forgets the bookkeeping before returning.
     // Final secfix item 1: an allow is pinned from the ENRICHED classification (the draft_hash the card showed).
     let pinCls: Classification | undefined;
+    // Safety v2: the action's facts, once known, feed the rate ledger and the preview's history.
+    let facts: ActionFacts | null = null;
+    let counted = false;
     const finish = (d: PreToolDecision): PreToolDecision => {
       if (d.decision === "allow" && !d.updatedInput) {
         const input = this.pinned(botId, call, pinCls);
         if (input) d = { ...d, updatedInput: input };
       }
       if (d.decision !== "ask" && d.decision !== "defer") this.forgetCall(call.toolUseId);
+      if (facts && this.d.safety) {
+        if (d.decision === "allow" && !counted) this.d.safety.record(facts);
+        this.d.safety.remember(facts, d.decision === "allow" ? "allow" : d.decision === "deny" ? "deny" : "ask");
+      }
       return d;
     };
     const slot = this.slotFor(botId, call.toolUseId);
@@ -950,6 +967,33 @@ export class ApprovalGate {
     // Bug B: a detached card (its turn already ended) doesn't hold the Bot's later turns behind the barrier.
     if (cls.sideEffect && [...this.records.values()].some((r) => r.botId === botId && r.status === "pending" && !r.detached)) return finish({ decision: "deny", reason: TEXT.barrier });
     if (!cls.surface || !cls.target) return finish({ decision: "allow" });
+    const mode: PermMode = this.d.permMode?.(botId) ?? "ask";
+    // Bug 258: No limits (on top of Full auto): the send asks and the private-file reads go; the NEVER walls stay.
+    const noLimits = mode === "full-auto" && (this.d.noLimits?.(botId) ?? false);
+    const env = noLimits ? { ...this.fixedEnv(), noLimits: true } : this.fixedEnv();
+    // Safety v2: the classifier's own verdict (No limits off), worked out once. The hard core, the rules' facts, the
+    // Ask floor and Full auto (outside No limits) all read it.
+    const raw = cls.target.action === "approve_plan" ? null : fullAutoAskFor(call, cls, this.fixedEnv());
+    const rawKind = raw?.ask ? kindOfClassRule(raw.rule) : null;
+    // ---- SAFETY v2: THE HARD CORE. Every mode, any rule, a fooled reviewer: a deny the owner can't approve. ----
+    const sf = this.d.safety;
+    if (sf && raw) facts = sf.facts(botId, call, cls, raw);
+    const hc = raw ? hardCore(botId, call, cls, facts?.kinds ?? (rawKind ? [rawKind] : []), {
+      dataRoot: this.d.cfg.dataRoot, hostPrivate: this.d.cfg.hostPrivate, workspace: this.d.cfg.workspace,
+      lanOpen: () => (this.d.lanOpen ? this.d.lanOpen() : readLanOpen()), network: (id) => sf?.network(id) ?? null,
+    }) : null;
+    if (hc) return finish({ decision: "deny", reason: hc });
+    // ---- SAFETY v2: THE OWNER'S RULES, in code. Never beats Ask first beats Always allow; the owner's rules (and a
+    // strict preset rule) hold in every mode, No limits included, and Ask first wins over plans, trusted people and
+    // Full auto's direct-request pass. ----
+    const ruleHit = facts && sf ? sf.decideStrict(facts) : null;
+    if (ruleHit?.type === "never") return finish({ decision: "deny", reason: TEXT.ruleNever(ruleHit.rule.text) });
+    const ruleAsk: SafetyRule | null = ruleHit?.type === "ask" ? ruleHit.rule : null;
+    const ruleAllow: SafetyRule | null = ruleHit?.type === "allow" ? ruleHit.rule : null;
+    // Preset rules sit where the built-in checks always ran (so the modes keep their exemptions for them). A preset
+    // the owner removed or loosened for this action no longer raises its card or floor.
+    const presetRule = (k: ActionKind | null): SafetyRule | null => (sf && facts && k ? sf.preset(k, facts) : null);
+    const covered = (k: ActionKind | null): boolean => !sf || !facts || !k || presetRule(k) !== null;
     // Smarter approvals (plan): proposing a plan is always the owner's own card, and only on the owner's own wake —
     // a routine, an event, an email or another Bot can't even ask. Outside content never creates a grant.
     const planCard = cls.target.action === "approve_plan";
@@ -966,10 +1010,6 @@ export class ApprovalGate {
     // Ruling (b): an ownership gate, not a review. Another Bot's standing instructions change only with the user's
     // OK: a card even with Auto-review off, and neither the reviewer nor an Allow rule can skip it.
     // + P5 review C3/I5 (shared instructions, skills, servers, tools) and I1/I2 (a Mac-floor hit or zsh-opaque command).
-    const mode: PermMode = this.d.permMode?.(botId) ?? "ask";
-    // Bug 258: No limits (on top of Full auto): the send asks and the private-file reads go; the NEVER walls stay.
-    const noLimits = mode === "full-auto" && (this.d.noLimits?.(botId) ?? false);
-    const env = noLimits ? { ...this.fixedEnv(), noLimits: true } : this.fixedEnv();
     /**
      * full-auto-quiet — ONE policy for Full auto. In that mode the shared classifier (@synapse/shared full-auto.ts,
      * the same module the Mac coordinator and the Browser classifier call) is the only thing that raises a card, and
@@ -981,11 +1021,13 @@ export class ApprovalGate {
      * hardDeny, the walls and the fixed NEVER wall are untouched, in every mode.
      * The other modes are exactly as before.
      */
-    const fa = mode === "full-auto" ? fullAutoAskFor(call, cls, env) : null;
+    let fa = mode === "full-auto" ? (noLimits || !raw ? fullAutoAskFor(call, cls, env) : raw) : null;
+    if (fa?.ask && !covered(kindOfClassRule(fa.rule))) fa = { ask: false, category: null, rule: "full-auto.quiet", reason: "" };
     // Bug 439: Ask and Auto-accept edits are never weaker than Full auto. What Full auto would card is a floor here too,
     // decided before the reviewer model: code from the network run in place and data sent off the machine card at once
     // (hard); every other Full-auto category becomes a reviewer floor only a covering Allow rule can lift.
-    const askFloor = fa ? null : askModeFloor(call, cls, env);
+    let askFloor = fa || !raw ? null : askFloorOf(raw);
+    if (askFloor && !covered(kindOfClassRule(askFloor.result.rule))) askFloor = null;
     // fix-mac-gate-and-approval-expiry: in Full auto a zsh-opaque signal alone (e.g. the quoted glob in
     // `find ~/Downloads -name '*.pdf'`) doesn't force the card; the fixed rules' real parser below returns ALWAYS-ASK
     // for anything it can't prove. A Mac-floor hit still does, outside Full auto.
@@ -1000,8 +1042,13 @@ export class ApprovalGate {
     // Apps through Composio: every send or change in the user's connected app is a card, whatever the mode's
     // reviewer says (reads never get here: classify.ts keeps them quiet).
     const composio = !fa && cls.target.action === "composio_write";
+    // Safety v2: those cards are the presets "Sends" (a send) and "App writes" (any other change).
+    const appKind: ActionKind = facts?.kinds.includes("send") ? "send" : facts?.kinds.includes("delete") ? "delete" : "app-write";
+    const appCard = covered(appKind);
+    const googleCard = google && appCard;
+    const composioCard = composio && appCard;
     // google-setup security fix 1: replacing a working Google connection's client is a card in every mode.
-    const ownership = (!fa && (OWNERSHIP.has(cls.target.action) || isOwnershipAction(cls.target) || macCard || google || composio)) || cls.target.action === "replace_google_client" || planCard;
+    const ownership = (!fa && (OWNERSHIP.has(cls.target.action) || isOwnershipAction(cls.target) || macCard || googleCard || composioCard)) || cls.target.action === "replace_google_client" || planCard;
 
     // ---- LAYER 1: the fixed rules (feat-mac-access-parity), before the reviewer ----
     // NEVER is a hard deny no mode or rule can lift; ALWAYS-ASK forces a card outside Full auto; ALWAYS-ALLOW skips
@@ -1009,7 +1056,7 @@ export class ApprovalGate {
     const fixed = fixedRuleFor(call, cls, env);
     if (fixed.verdict === "never") return finish({ decision: "deny", reason: fixed.reason });
     const fixedAsk = !fa && fixed.verdict === "always-ask" && !ownership;
-    if (!ownership && !fixedAsk && !fa?.ask && !askFloor && fixed.verdict === "always-allow") return finish({ decision: "allow" }); // reads / build-test-git in a project dir
+    if (!ruleAsk && !ownership && !fixedAsk && !fa?.ask && !askFloor && fixed.verdict === "always-allow") return finish({ decision: "allow" }); // reads / build-test-git in a project dir
 
     // ORIG-GOOGLE draft-send card: gmail_send(draft_id) never raises a card until the draft's current
     // To/Cc/Bcc/Subject/body/attachments are fetched with the user's own token — so the user is never asked to
@@ -1029,7 +1076,10 @@ export class ApprovalGate {
     }
     pinCls = cardCls;
 
-    const { target, st: st0, unbound, refused, paths: readPaths, closedTree } = this.prepare(botId, call, cardCls);
+    const { target, st: st1, unbound, refused, paths: readPaths, closedTree } = this.prepare(botId, call, cardCls);
+    // Safety v2: F9 (pipe-to-shell) is the preset "Running code from the internet"; F8's git-control half is
+    // "Destructive git". F7 and F8's safety-controls half are the hard core and stay.
+    const st0 = this.presetFloors(st1, target, covered("fetch-run"), covered("git"));
     const st = withAskFloor(st0, askFloor);
     // Bug 71 ruling: the Bot's own read of the script was refused (a link to a secret or into host-private): denied.
     if (refused) return finish({ decision: "deny", reason: TEXT.unbound });
@@ -1046,19 +1096,28 @@ export class ApprovalGate {
     const fp = fingerprint(cls.surface, target);
     const rehearsal = this.d.rehearsals?.active(botId, call, slot) ?? false;
     if (rehearsal && (st.tierHint >= 2 || st.floorHits.length > 0)) return finish({ decision: "deny", reason: STR.rehearsalStopped });
-    if (this.deferApproved.delete(`${botId}:${fp}`)) return finish({ decision: "allow" });
+    if (this.deferApproved.delete(`${botId}:${fp}`)) {
+      counted = true; // settle() already counted this approved action toward rate limits
+      return finish({ decision: "allow" });
+    }
+    // Safety v2: the owner's Ask first rule is a card now, whatever the mode, a plan, trusted people or the reviewer say.
+    if (ruleAsk) { // (a rehearsal or a group turn is denied by card(), never asked)
+      const trigger = this.ruleTrigger(ruleAsk);
+      return this.card(botId, call, ctx, slot, { kind: "block", stage: "floor", reason: TEXT.ruleAsk(ruleAsk.text), proposedRule: null, verdict: null }, { ...cardCls, target }, fp, finish, trigger, facts);
+    }
     // Smarter approvals: a step of a plan the owner approved for this task, or a send to only trusted people, runs
     // with no card. Connector sends only; money, deletion, security, unknown tools and bulk values never do.
     if (!planCard && !unboundAsk && !emailInAsk && !rehearsal && (await this.smarterAllows(botId, call, cls, target, slot, env, st, fp))) return finish({ decision: "allow" });
     // ---- LAYER 1 (cont.) + MODES: reviewer skips, now that the static floor (F7/F8/F9) is known. A floor hit or an
     // ALWAYS-ASK always cards; otherwise Full auto runs, Auto-accept-edits runs an in-project edit, and Auto-review
     // OFF runs (the account master switch and the fixed NEVER already had their say above). Rehearsals win over all. ----
-    const mcpChangeAsk = !fa && mode !== "full-auto" && !this.d.settings.get().autoReviewEnabled && cls.target.action === "mcp" && mcpToolChanges(String(cls.target.arguments.tool ?? ""));
+    const mcpChangeAsk = !fa && mode !== "full-auto" && !this.d.settings.get().autoReviewEnabled && cls.target.action === "mcp" && mcpToolChanges(String(cls.target.arguments.tool ?? "")) && covered("app-write");
     const floorHit = st.floorHits.some((f) => f === "F7" || f === "F8" || f === "F9");
     // speed-fastpath #5 (the user's ruling): a box command that reads stored credentials (keys, tokens, the environment)
     // asks in EVERY mode, Full auto included; it never reaches the reviewer's fast path.
     const unresolvedAsk = cls.surface === "box_shell" && st.signals.includes("reads_unresolved_link");
-    const credAsk = cls.surface === "box_shell" && (st.signals.includes("reads_credentials") || unresolvedAsk);
+    // Safety v2: reading saved keys is the preset "Access and keys"; a link that couldn't be checked stays structure.
+    const credAsk = cls.surface === "box_shell" && ((st.signals.includes("reads_credentials") && covered("access")) || unresolvedAsk);
     // full-auto-quiet: in Full auto the F7/F8/F9 floor no longer holds a call back on its own either — F7
     // (credentials, exfiltration) and F9 (pipe-to-shell) are the classifier's SECURITY category, and F8's
     // git-control half is exactly the `git config --global` false positive this change removes.
@@ -1066,6 +1125,9 @@ export class ApprovalGate {
       // full-auto-quiet: the classifier said no card. The user's OWN written ask-first rules still win, so when they
       // have written any, the reviewer still runs below and a block that matched one becomes a card; with none
       // written (the usual case) routine work runs silently and costs no reviewer call, exactly as before.
+      // Safety v2: an Always allow rule decides what no Ask first or Never rule, preset, floor or structure claimed.
+      // …but not over an ask-first rule only the reviewer can read (a migrated one): Ask first wins, so it still runs.
+      if (ruleAllow && this.askRules() === 0) return finish({ decision: "allow" });
       if (mode === "full-auto" && this.askRules() === 0) return finish({ decision: "allow" });
       if (mode === "accept-edits" && modeAllowsWithoutCard("accept-edits", call, cls, this.fixedEnv())) return finish({ decision: "allow" });
       // Bug 403: Auto-review off no longer waves through an MCP tool that sends, deletes, pays, posts, creates or
@@ -1134,9 +1196,9 @@ export class ApprovalGate {
       : askFloor && (askFloor.hard || !this.d.settings.get().autoReviewEnabled) ? { kind: "block", stage: "floor", reason: askFloor.result.reason, proposedRule: null, verdict: null }
       : mcpChangeAsk ? { kind: "block", stage: "floor", reason: TEXT.mcpChange, proposedRule: null, verdict: null }
       : credAsk ? { kind: "block", stage: "floor", reason: unresolvedAsk && !st.signals.includes("reads_credentials") ? UNRESOLVED_READ_REASON : CREDENTIAL_READ_REASON, proposedRule: null, verdict: null }
-      : (ownership || fixedAsk) ? { kind: "block", stage: "floor", reason: ownership ? (google ? TEXT.googleWrite : composio ? TEXT.composioWrite : OWNERSHIP.has(cls.target.action) ? TEXT.ownership : macCard ? TEXT.macFloor : TEXT.ownershipShared) : fixed.reason, proposedRule: fixedAsk ? (fixed.proposedRule ?? null) : null, verdict: null } : await this.d.reviewer.review({
+      : (ownership || fixedAsk) ? { kind: "block", stage: "floor", reason: ownership ? (googleCard ? TEXT.googleWrite : composioCard ? TEXT.composioWrite : OWNERSHIP.has(cls.target.action) ? TEXT.ownership : macCard ? TEXT.macFloor : TEXT.ownershipShared) : fixed.reason, proposedRule: fixedAsk ? (fixed.proposedRule ?? null) : null, verdict: null } : await this.d.reviewer.review({
       botId, botName: bot.profile.name, botDescription: bot.profile.description, surface: cls.surface, toolName: call.toolName, target: reviewTarget,
-      origin, wake, context: reviewCtx,
+      origin, wake, context: reviewCtx, ...(sf ? { guidelines: sf.guidelines(botId).map((g) => g.text) } : {}),
       userMessageEpoch: this.d.bots.userMessageEpoch(botId), staticResult: st, fingerprint: fp,
       paths: [call.input.file_path, call.input.path, ...(readPaths ?? [])].filter((p): p is string => typeof p === "string"),
     });
@@ -1159,9 +1221,45 @@ export class ApprovalGate {
         return finish({ decision: "allow" });
       }
     }
+    // Safety v2: every card names what raised it: the preset rule behind a built-in check, or the reason.
+    // (The same order as the outcome chain above: the first thing that raised the card names it.)
+    const byPreset = (k: ActionKind | null) => this.ruleTrigger(presetRule(k));
+    const trigger: ApprovalTriggerView = (
+      planCard || unboundAsk || emailInAsk ? null
+      : fa?.ask ? byPreset(kindOfClassRule(fa.rule))
+      : askFloor && (askFloor.hard || !this.d.settings.get().autoReviewEnabled) ? byPreset(kindOfClassRule(askFloor.result.rule))
+      : mcpChangeAsk ? byPreset("app-write")
+      : credAsk ? (st.signals.includes("reads_credentials") ? byPreset("access") : null)
+      : ownership || fixedAsk ? (googleCard || composioCard ? byPreset(appKind) : null)
+      : askFloor && outcome.kind === "block" && !(outcome.verdict?.matched_ask_rule_ids.length) ? byPreset(kindOfClassRule(askFloor.result.rule))
+      : null
+    ) ?? { kind: "reason", label: outcome.reason };
+    return this.card(botId, call, ctx, slot, outcome, { ...cardCls, target }, fp, finish, trigger, facts);
+  }
+
+  /** Safety v2: a card for a rule (null = the rule is gone). */
+  private ruleTrigger(r: SafetyRule | null): ApprovalTriggerView | null {
+    return r ? { kind: "rule", label: r.text, ruleId: r.id, source: r.source } : null;
+  }
+
+  /** Safety v2: F9 without the preset "Running code from the internet", and F8's git-control half without "Destructive git". */
+  private presetFloors<T extends StaticResult>(st: T, target: RiskTarget, fetchRun: boolean, git: boolean): T {
+    if ((fetchRun || !st.floorHits.includes("F9")) && (git || !st.floorHits.includes("F8"))) return st;
+    const command = String(target.arguments.command ?? target.arguments.path ?? "");
+    const safetyControls = SECURITY_PATH.test(command) || st.signals.some((x) => x.startsWith("writes:") && SECURITY_PATH.test(x.slice(7)));
+    const drop = new Set<string>([...(fetchRun ? [] : ["F9"]), ...(git || safetyControls ? [] : ["F8"])]);
+    const floorHits = st.floorHits.filter((f) => !drop.has(f));
+    if (floorHits.length === st.floorHits.length) return st;
+    const tierHint = (floorHits.some((f) => ["F7", "F8", "F9"].includes(f)) ? 4 : Math.min(st.tierHint, 3)) as T["tierHint"];
+    return { ...st, floorHits, tierHint };
+  }
+
+  /** The card path: rehearsals and groups deny; otherwise the card is raised by the approval path in use. */
+  private async card(botId: string, call: ToolCall, ctx: GateCallCtx | undefined, slot: TurnSlot | null, outcome: Extract<ReviewOutcome, { kind: "block" | "degraded" }>, cardCls: Classification, fp: string, finish: (d: PreToolDecision) => PreToolDecision, trigger: ApprovalTriggerView | null, facts: ActionFacts | null): Promise<PreToolDecision> {
+    const rehearsal = this.d.rehearsals?.active(botId, call, slot) ?? false;
     if (rehearsal) return finish({ decision: "deny", reason: STR.rehearsalStopped });                       // ORIG-08 §08.3: denied, not asked
     if (slot?.context.group || slot?.source === "group-member") return finish({ decision: "deny", reason: STR.groupApprovalUnavailable }); // GRP-07
-    this.reviews.set(call.toolUseId, { outcome, cls: { ...cardCls, target }, fingerprint: fp });
+    this.reviews.set(call.toolUseId, { outcome, cls: cardCls, fingerprint: fp, trigger, facts });
     const reason = outcome.kind === "block" ? outcome.reason : outcome.reason;
     const path = this.d.flags().approvalPath;
     if (path === "canUseTool") return finish({ decision: "ask", reason });
@@ -1170,7 +1268,7 @@ export class ApprovalGate {
       return finish(perm.behavior === "allow" ? (perm.updatedInput ? { decision: "allow", updatedInput: perm.updatedInput } : { decision: "allow" }) : { decision: "deny", reason: perm.message });
     }
     // defer (§13.2 B): the query ends now; the answer resumes the session with a hidden message
-    const summary = cls.summary;
+    const summary = cardCls.summary;
     void this.canUseTool(botId, call, new AbortController().signal, ctx).then((perm) => {
       if (perm.behavior === "allow") {
         this.deferApproved.add(`${botId}:${fp}`);
@@ -1234,6 +1332,7 @@ export class ApprovalGate {
       stage: pr.outcome.kind === "block" ? pr.outcome.stage : "degraded", createdAt: t, settledAt: null,
       policy: !slot || slot.lane === "user" ? "park" : "ttl", status: "pending", cause: null,
       entryId: sendEntryId(turn, k), requestId: slot?.requestId ?? "", ruleAddedText: null,
+      trigger: pr.trigger ?? null, facts: pr.facts ?? null,
     };
     this.records.set(rec.id, rec);
     // Bug B: every card waits for the answer; one left unanswered for 7 days is withdrawn for hygiene (cause ttl).
@@ -1303,13 +1402,20 @@ export class ApprovalGate {
       approvalId: r.id, requestId: r.requestId, surface: r.surface, title: r.title, reason: r.reason, summary: r.summary, locationLine: loc,
       details: r.command ? truncateDetails(r.command) : null, command: r.command,
       items: r.items.length > 1 ? r.items.map((i) => ({ toolUseId: i.toolUseId, summary: i.summary, status: i.status })) : [],
-      hasProposedRule: Boolean(r.proposedRule), status: r.status, cause: r.cause,
+      hasProposedRule: Boolean(r.proposedRule) || this.canExcept(r), status: r.status, cause: r.cause,
       verdict: r.verdict
         ? { reason: r.verdict.reason, tier: r.verdict.risk_tier, matchedRuleIds: [...r.verdict.matched_ask_rule_ids, ...r.verdict.matched_allow_rule_ids], floorCategory: r.verdict.floor_category, stage: r.stage }
         : { reason: r.reason, tier: null, matchedRuleIds: [], floorCategory: null, stage: r.stage },
       ruleAddedText: r.ruleAddedText, createdAt: r.createdAt, settledAt: r.settledAt,
       ...(r.items[0]?.cls.target?.action === "approve_plan" ? { planSteps: planLines({ title: "", steps: r.items[0].cls.target.arguments.steps as PlanStep[] }) } : {}),
+      ...(r.trigger ? { trigger: r.trigger } : {}),
+      ...(r.facts ? { suggestedRule: suggestRule(r.facts) } : {}),
     };
+  }
+
+  /** Safety v2: "Always allow this" on a rule's card adds an exception to that rule (one card, one action). */
+  private canExcept(r: ApprovalRecord): boolean {
+    return r.items.length === 1 && r.trigger?.kind === "rule" && !!r.trigger.ruleId && !!r.facts && exceptionFor(r.facts) !== null && !!this.d.safety;
   }
 
   // ---------- resolution ----------
@@ -1322,7 +1428,12 @@ export class ApprovalGate {
     if (rec.status !== "pending") return rec.status;
     if (choice === "deny" && note?.trim()) rec.note = note.trim().slice(0, 500);
     if (choice === "deny") this.settle(rec, "denied");
-    else if (choice === "always" && rec.proposedRule) {
+    else if (choice === "always" && this.canExcept(rec)) {
+      const added = this.d.safety!.addException(rec.trigger!.ruleId!, rec.facts!);
+      if (added) rec.ruleAddedText = STR.ruleLoosened(added.rule.text, scopeWords(added.scope));
+      this.d.reviewer.clearCache();
+      this.settle(rec, "always");
+    } else if (choice === "always" && rec.proposedRule) {
       const added = this.d.settings.addAllowRule(rec.proposedRule);
       rec.ruleAddedText = STR.ruleAdded(added.rule);
       this.d.reviewer.clearCache();
@@ -1356,7 +1467,10 @@ export class ApprovalGate {
     rec.cause = cause ?? null;
     rec.settledAt = this.now();
     if (rec.timer) clearTimeout(rec.timer);
-    if (status === "approved" || status === "always") this.grantPlans(rec);
+    if (status === "approved" || status === "always") {
+      this.grantPlans(rec);
+      if (rec.facts) this.d.safety?.record(rec.facts); // an approved send counts toward "at most N an hour"
+    }
     if (rec.detached) {
       // Bug B: nobody is waiting on these tool calls any more. The answer resumes the Bot (the defer path): an
       // approval is one-time and bound to the exact call's fingerprint and this Bot (deferApproved), and a stale
@@ -1428,4 +1542,19 @@ export class ApprovalGate {
       this.d.bots.setAwaiting(botId, next ? { tabId: "auto-review", reason: STR.approvalNeeded(next.items[0]!.summary), since: next.createdAt, approvalId: next.id } : null);
     }
   }
+}
+
+
+/**
+ * Safety v2 "Make this a rule…": a plain-English Always allow rule for one action, written so the rule compiler reads
+ * it exactly (shared/safety-rules.ts compileRule). null when the action names nothing narrow enough.
+ */
+export function suggestRule(f: ActionFacts): string | null {
+  const kind = f.kinds.find((k) => k !== "mac" && k !== "command" && k !== "app-write") ?? f.kinds.find((k) => k !== "mac") ?? null;
+  if (!kind) return null;
+  const what = KIND_LABEL[kind].toLowerCase();
+  const scope = exceptionFor(f);
+  if (!scope) return null;
+  const where = scope.people ? `to ${scope.people.join(" ")}` : scope.domains ? `to ${scope.domains.join(" ")}` : scope.paths ? `in ${scope.paths.join(" ")}` : scope.apps ? `in ${scope.apps.join(" ")}` : "";
+  return `Always allow ${what} ${where}`.trim();
 }

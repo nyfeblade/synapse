@@ -188,7 +188,9 @@ export function modeAllowsWithoutCard(mode: PermMode, call: ToolCall, cls: Class
 /**
  * Code from the network run in place, and data sent off this machine (uploads, remote copies, raw sockets, a
  * script's own connection, a command's output put into a request): a card every time, in every mode and with
- * Auto-review off. No Allow rule, exact rule or reviewer verdict lifts it (the same standing as F7–F9).
+ * Auto-review off, before the reviewer. No Allow rule, exact rule or reviewer verdict lifts it.
+ * Safety v2: these are the preset rules "Uploads to unknown sites" and "Running code from the internet" (Balanced
+ * and Careful). The owner can remove or loosen them; with a Bot's network locked, the hard core denies them outright.
  */
 export const HARD_FLOOR_RULES: ReadonlySet<string> = new Set([
   "security.pipe-to-shell", "security.fetch-and-run", "send.webhook", "send.network", "send.network-script", "send.exfil", "send.cloud-upload",
@@ -208,7 +210,11 @@ export interface AskFloor {
 
 /** The floor Ask and Auto-accept edits take from the Full-auto classifier, or null when Full auto would stay quiet. */
 export function askModeFloor(call: ToolCall, cls: Classification, env: FixedRulesEnv): AskFloor | null {
-  const r = fullAutoAskFor(call, cls, { ...env, noLimits: false });
+  return askFloorOf(fullAutoAskFor(call, cls, { ...env, noLimits: false }));
+}
+
+/** Safety v2: the Ask floor from a classifier verdict already worked out (No limits off), so the gate classifies once. */
+export function askFloorOf(r: FullAutoResult): AskFloor | null {
   if (!r.ask || !r.category) return null;
   const hard = HARD_FLOOR_RULES.has(r.rule);
   return { result: r, hard, code: hard ? "F9" : (CATEGORY_FLOOR[r.category] ?? "F5") };

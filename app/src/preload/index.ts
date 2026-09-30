@@ -93,6 +93,9 @@ contextBridge.exposeInMainWorld("synapse", {
   providers: {
     saveKey: (provider: string, value: string) => ipcRenderer.invoke("providers:save-key", provider, value),
     testKey: (provider: string, value: string) => ipcRenderer.invoke("providers:test-key", provider, value),
+    addKey: (provider: string, value: string, label: string) => ipcRenderer.invoke("keys:add", provider, value, label),
+    makeDefault: (provider: string, keyId: string) => ipcRenderer.invoke("keys:make-default", provider, keyId),
+    removeKey: (provider: string, keyId: string) => ipcRenderer.invoke("keys:remove", provider, keyId),
   },
   box: {
     update: (force: boolean) => ipcRenderer.invoke("box:update", force),

@@ -20,7 +20,12 @@ export function cdpDenied(method: string): boolean {
   return DENIED_CDP_PREFIXES.some((p) => method.startsWith(p)) || DENIED_CDP_METHODS.has(method);
 }
 
-interface Deps { botId: string; viewId(): string; hub: BrowserHub; bus: SseHub; now(): number; timeouts?: { actionMs: number; navigateMs: number } }
+interface Deps {
+  botId: string; viewId(): string; hub: BrowserHub; bus: SseHub; now(): number; timeouts?: { actionMs: number; navigateMs: number };
+  /** A model that can't read images: results carry no screenshot (browser_snapshot is its view of the page), and
+   *  browser_take_screenshot isn't offered. */
+  textOnly?: boolean;
+}
 class UnknownRef extends Error {}
 
 function within<T>(ms: number, p: Promise<T>, what: string): Promise<T> {
@@ -50,6 +55,19 @@ export function createBrowserTools(d: Deps): BotToolDef[] {
     if (id === null) throw new UnknownRef(`Unknown ref ${ref}. Take a fresh browser_snapshot and use a ref from it.`);
     return id;
   };
+  /** An element by ref (from browser_snapshot), CSS selector, or its visible text / label. */
+  const target = async (page: CdpPage, a: Record<string, unknown>): Promise<number> => {
+    const given = ["ref", "selector", "text"].filter((k) => typeof a[k] === "string" && String(a[k]).trim());
+    if (given.length !== 1) throw new UnknownRef("Give exactly one of ref, selector or text.");
+    if (given[0] === "ref") return node(String(a.ref));
+    const found = given[0] === "selector"
+      ? await page.send<{ result: { objectId?: string; subtype?: string } }>("Runtime.evaluate", { expression: `document.querySelector(${JSON.stringify(String(a.selector))})`, returnByValue: false })
+      : await page.send<{ result: { objectId?: string; subtype?: string } }>("Runtime.evaluate", { expression: `(${FIND_BY_TEXT})(${JSON.stringify(String(a.text))})`, returnByValue: false });
+    if (!found.result.objectId || found.result.subtype === "null") throw new UnknownRef(given[0] === "selector" ? `No element matches the selector ${String(a.selector)}.` : `No element shows the text “${String(a.text)}”. Take a browser_snapshot to see what's there.`);
+    const { node: n } = await page.send<{ node: { backendNodeId: number } }>("DOM.describeNode", { objectId: found.result.objectId });
+    return n.backendNodeId;
+  };
+  const where = (a: Record<string, unknown>) => (a.element ? `“${String(a.element)}”` : a.ref ? String(a.ref) : a.selector ? String(a.selector) : `“${String(a.text ?? "")}”`);
   const center = async (page: CdpPage, backendNodeId: number): Promise<{ x: number; y: number; box: number[] }> => {
     await page.send("DOM.scrollIntoViewIfNeeded", { backendNodeId });
     const { model } = await page.send<{ model: { content: number[] } }>("DOM.getBoxModel", { backendNodeId });
@@ -69,12 +87,13 @@ export function createBrowserTools(d: Deps): BotToolDef[] {
   };
   const done = async (t: BotTab, text: string, checkBlock = false): Promise<BotToolResult> => {
     await d.hub.remember(t);
-    return { text: text + (checkBlock ? await blocked(t.page) : ""), images: await shot(t.page) };
+    const body = text + (checkBlock ? await blocked(t.page) : "");
+    return d.textOnly ? { text: `${body} Take a browser_snapshot to see the page now.` } : { text: body, images: await shot(t.page) };
   };
   const tool = (name: (typeof BROWSER_TOOL_NAMES)[number], description: string, schema: BotToolDef["schema"], readOnly: boolean, handler: (a: Record<string, unknown>) => Promise<BotToolResult>): BotToolDef =>
     ({ name, description, schema, readOnly, handler });
 
-  return [
+  const all = [
     tool("browser_navigate", "Open a URL in your browser tab.", { url: z.string() }, false, (a) =>
       run("browser_navigate", async (t) => {
         await t.page.goto(String(a.url), { timeoutMs: navigateMs });
@@ -87,12 +106,12 @@ export function createBrowserTools(d: Deps): BotToolDef[] {
         d.hub.setRefs(t.viewId, s.refs);
         return { text: `Page: ${t.page.url()} — “${await t.page.title()}”\n${s.text}` };
       })()),
-    tool("browser_click", "Click an element by ref.", { ref: z.string(), element: z.string().optional(), button: z.enum(["left", "right", "middle"]).optional(), double: z.boolean().optional() }, false, (a) =>
+    tool("browser_click", "Click an element: by ref (from browser_snapshot), by CSS selector, or by its visible text.", { ref: z.string().optional(), selector: z.string().optional(), text: z.string().optional(), element: z.string().optional(), button: z.enum(["left", "right", "middle"]).optional(), double: z.boolean().optional() }, false, (a) =>
       run("browser_click", async (t) => {
-        const c = await center(t.page, node(String(a.ref)));
+        const c = await center(t.page, await target(t.page, a));
         await t.page.mouse.click(c.x, c.y, { button: a.button as "left" | undefined, count: a.double ? 2 : 1 });
         await emit(t, "click", c.x, c.y);
-        return done(t, `Clicked ${a.element ? `“${String(a.element)}”` : String(a.ref)}.`, true);
+        return done(t, `Clicked ${where(a)}.`, true);
       })()),
     tool("browser_mouse_click_xy", "Click at page coordinates (CSS pixels of the viewport).", { x: z.number(), y: z.number(), element: z.string().optional() }, false, (a) =>
       run("browser_mouse_click_xy", async (t) => {
@@ -100,14 +119,14 @@ export function createBrowserTools(d: Deps): BotToolDef[] {
         await emit(t, "click", Number(a.x), Number(a.y));
         return done(t, `Clicked at (${Number(a.x)}, ${Number(a.y)}).`, true);
       })()),
-    tool("browser_type", "Type text into an element by ref (keystrokes). Set submit to press Enter after.", { ref: z.string(), text: z.string().max(LIMITSC.textMax), submit: z.boolean().optional() }, false, (a) =>
+    tool("browser_type", "Type text (keystrokes) into an element: by ref (from browser_snapshot) or by CSS selector. Set submit to press Enter after.", { ref: z.string().optional(), selector: z.string().optional(), text: z.string().max(LIMITSC.textMax), submit: z.boolean().optional() }, false, (a) =>
       run("browser_type", async (t) => {
-        const c = await center(t.page, node(String(a.ref)));
+        const c = await center(t.page, await target(t.page, { ref: a.ref, selector: a.selector }));
         await t.page.mouse.click(c.x, c.y);
         await t.page.keyboard.type(String(a.text));
         if (a.submit) await t.page.keyboard.press("Enter");
         await emit(t, "type", null, null);
-        return done(t, `Typed into ${String(a.ref)}${a.submit ? " and pressed Enter" : ""}.`);
+        return done(t, `Typed into ${String(a.ref ?? a.selector)}${a.submit ? " and pressed Enter" : ""}.`);
       })()),
     tool("browser_fill", "Replace the value of an input by ref.", { ref: z.string(), value: z.string().max(LIMITSC.textMax) }, false, (a) =>
       run("browser_fill", async (t) => {
@@ -179,7 +198,7 @@ export function createBrowserTools(d: Deps): BotToolDef[] {
           const p = await b.newPage();
           if (a.url) await p.goto(String(a.url), { timeoutMs: navigateMs });
           await d.hub.setView(d.botId, d.viewId(), p);
-          return { text: `Opened a new tab and made it yours.\n${await list()}`, images: await shot(p) };
+          return { text: `Opened a new tab and made it yours.\n${await list()}`, ...(d.textOnly ? {} : { images: await shot(p) }) };
         }
         const target = pages[Number(a.index ?? -1)];
         if (a.action === "close") {
@@ -191,11 +210,31 @@ export function createBrowserTools(d: Deps): BotToolDef[] {
           if (!target) return { text: "No tab at that index.", isError: true };
           await target.bringToFront();
           await d.hub.setView(d.botId, d.viewId(), target);
-          return { text: `Tab ${Number(a.index)} is now yours.`, images: await shot(target) };
+          return { text: `Tab ${Number(a.index)} is now yours.`, ...(d.textOnly ? {} : { images: await shot(target) }) };
         }
         return { text: await list() };
       })()),
     tool("browser_take_screenshot", "Screenshot of your tab.", {}, true, () =>
       run("browser_take_screenshot", async (t) => ({ text: `Screenshot of ${t.page.url()}.`, images: await shot(t.page) }))()),
   ];
+  return d.textOnly ? all.filter((x) => x.name !== "browser_take_screenshot") : all;
 }
+
+/** Page-side: the element a person would mean by `text` (its visible text, value, label or aria-label), clickable first. */
+const FIND_BY_TEXT = `function (want) {
+  const norm = (s) => String(s || "").replace(/\\s+/g, " ").trim().toLowerCase();
+  const w = norm(want);
+  if (!w) return null;
+  const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden"; };
+  const label = (el) => norm(el.innerText || el.value || el.getAttribute("aria-label") || el.getAttribute("title") || el.getAttribute("placeholder") || (el.labels && el.labels[0] && el.labels[0].innerText));
+  const clickable = [...document.querySelectorAll("a, button, input, select, textarea, summary, label, [role=button], [role=link], [role=tab], [role=menuitem], [role=option], [role=checkbox], [role=radio], [onclick], [tabindex]")].filter(visible);
+  const exact = clickable.find((el) => label(el) === w);
+  if (exact) return exact;
+  const part = clickable.filter((el) => label(el).includes(w)).sort((a, b) => label(a).length - label(b).length)[0];
+  if (part) return part;
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (norm(n.textContent).includes(w) && n.parentElement && visible(n.parentElement)) return n.parentElement;
+  }
+  return null;
+}`;

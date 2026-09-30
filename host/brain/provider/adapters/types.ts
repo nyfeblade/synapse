@@ -1,4 +1,4 @@
-import type { ProviderId } from "@synapse/shared";
+import type { EffortLevel, PromptCacheTtl, ProviderId } from "@synapse/shared";
 import type { ToolImage } from "../../types";
 
 /**
@@ -23,10 +23,14 @@ export interface CanonToolCall {
 export type CanonMessage =
   | { role: "user"; parts: CanonPart[] }
   | { role: "assistant"; text: string; toolCalls: CanonToolCall[]; providerMeta?: unknown }
-  | { role: "tool"; toolCallId: string; name: string; text: string; isError: boolean; images?: ToolImage[] };
+  | { role: "tool"; toolCallId: string; name: string; text: string; isError: boolean; images?: ToolImage[]; toolRefs?: string[] };
 
 /** A function tool as the model sees it. */
-export interface WireTool { name: string; description: string; parameters: Record<string, unknown>; strict: boolean }
+export interface WireTool {
+  name: string; description: string; parameters: Record<string, unknown>; strict: boolean;
+  /** Deferred (tool search): sent for the API to expand on a tool_reference, outside the prompt until then (Anthropic). */
+  defer?: boolean;
+}
 
 export type ReasoningEffort = "none" | "low" | "medium" | "high";
 
@@ -45,6 +49,14 @@ export interface CanonRequest {
   jsonSchema?: { name: string; schema: Record<string, unknown>; strict: boolean };
   /** Provider-specific extras merged into the body last (OpenRouter's web plugin). */
   extra?: Record<string, unknown>;
+  /** Anthropic only: the Bot's effort level as it is (low … max); the adapter sends it where the model takes it. */
+  claudeEffort?: EffortLevel;
+  /** Anthropic only: the prompt-cache TTL of the cache breakpoints (the "Keep conversations ready" setting). */
+  cacheTtl?: PromptCacheTtl;
+  /** Anthropic only: no thinking where the model allows it off (the voice front, as on the CLI path). */
+  thinkingOff?: boolean;
+  /** Anthropic only: server tools (web_search) sent beside the function tools, as they are. */
+  serverTools?: Record<string, unknown>[];
 }
 
 /** Token usage one model call reported (or that was estimated when it reported none). */
@@ -59,6 +71,10 @@ export interface CallUsage {
   promptTokens: number;
   /** No usage frame arrived (an aborted or broken stream): these numbers are estimated from the bytes. */
   estimated?: boolean;
+  /** Anthropic: the part of cacheWriteTokens written with the 1-hour TTL (priced 2x input, the rest 1.25x). */
+  cacheWrite1hTokens?: number;
+  /** Anthropic: server-side web searches this call made ($10 per 1,000). */
+  webSearchRequests?: number;
 }
 
 export type DecodedEvent =
@@ -93,4 +109,9 @@ export interface ProviderAdapter {
   decoder(): StreamDecoder;
   /** Maps a usage object the provider reported (in a stream chunk or a JSON response) to CallUsage. */
   usage(raw: unknown): CallUsage | null;
+  /**
+   * A per-call usage tracker for a stream whose usage arrives in pieces (Anthropic: message_start carries the input
+   * counts, message_delta the output). Absent: each chunk's `usage` field is read with `usage()`.
+   */
+  meter?(): { push(chunk: unknown): CallUsage | null };
 }

@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  AVATAR_COLORS, AVATAR_MATERIALS, AVATAR_MOTIONS, DEFAULT_AVATAR_SHAPE, normalizeAvatarColor, normalizeAvatarShape, LIMITS, STR, activityEntryId, isAgentMessage, isEffortLevel, isModelId, isProviderModelRef, isAcpModelRef, isSafeFolderId,
+  AVATAR_COLORS, AVATAR_MATERIALS, AVATAR_MOTIONS, DEFAULT_AVATAR_SHAPE, normalizeAvatarColor, normalizeAvatarShape, LIMITS, STR, activityEntryId, isAgentMessage, isEffortLevel, isBotEngine, botEngineOf, NEW_BOT_ENGINE, type BotEngine, isModelId, isProviderModelRef, isAcpModelRef, isSafeFolderId,
   type Activity, type AvatarMaterial, type AvatarMotion, type AvatarShape, type AwaitingUser, type BotProfile, type BotSettings, type BotSummary, type EffortLevel, type ModelId,
   type Presence, type SidebarMarker, type TranscriptEntry, type UserMessageEntry,
 } from "@synapse/shared";
+import type { KeyedProvider } from "@synapse/shared";
 import type { AcpModelRef, ProviderModelRef } from "@synapse/shared";
 import { isProviderSessionId, isProviderSessionPath, PROVIDER_SESSIONS_DIR, providerSessionFile } from "../brain/provider/session-store";
 import { ANIM_LIMITS, validateAvatarClip, type AvatarClip } from "@synapse/shared";
@@ -88,6 +89,8 @@ export class BotService {
      * null = leave it to Claude's default, as before.
      */
     newBotModel?: () => ProviderModelRef | null;
+    /** The engine a new Bot on a Claude model gets (default NEW_BOT_ENGINE). */
+    newBotEngine?: () => BotEngine;
     /** Bug #66: per-Bot OS accounts (walls/bot-accounts.ts); absent = every Bot runs as box. */
     accounts?: BotAccounts;
   }) {
@@ -137,13 +140,14 @@ export class BotService {
     writeJsonAtomic(path.join(agentsDir(this.d.cfg), "active-agent.json"), { activeAgentId: id }, 0o640);
   }
 
-  create(a: { name?: string; description?: string; title?: string; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel; model?: ModelId | ProviderModelRef | AcpModelRef; origin: "user" | "bot"; kickstart: boolean; group?: { memberIds: string[] } }): string {
+  create(a: { name?: string; description?: string; title?: string; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel; model?: ModelId | ProviderModelRef | AcpModelRef; engine?: BotEngine; origin: "user" | "bot"; kickstart: boolean; group?: { memberIds: string[] } }): string {
     if (this.bots.size >= LIMITS.maxBots) throw new GatewayError("MAX_BOTS", STR.maxBots, 409);
     const shape = a.avatarShape !== undefined ? checkAvatarShape(a.avatarShape) : undefined;
     const color = a.avatarColor !== undefined ? checkAvatarColor(a.avatarColor) : undefined;
     if (a.avatarMaterial !== undefined) checkAvatarMaterial(a.avatarMaterial);
     if (a.avatarMotion !== undefined) checkAvatarMotion(a.avatarMotion);
     if (a.effort !== undefined && !isEffortLevel(a.effort)) throw new GatewayError("BAD_ARGS", "Unknown effort.");
+    if (a.engine !== undefined && !isBotEngine(a.engine)) throw new GatewayError("BAD_ARGS", "Unknown engine.");
     // Any-key setup: with no Anthropic key, a new Bot (or a starter made for Claude) runs on the account's provider.
     const fallback = a.group ? null : this.d.newBotModel?.() ?? null;
     const model = fallback && (!a.model || isModelId(a.model)) ? fallback : a.model;
@@ -163,6 +167,8 @@ export class BotService {
       ...(a.avatarMaterial ? { avatarMaterial: a.avatarMaterial } : {}),
       ...(a.effort ? { effort: a.effort } : {}),
       ...(model ? { model } : {}),
+      // A new Bot records its engine, so a later change of the default never moves it (only the owner does).
+      ...(a.group ? {} : { engine: a.engine ?? this.d.newBotEngine?.() ?? NEW_BOT_ENGINE }),
     };
     const settings: BotSettings = { notifyOnAgentUpdates: true, hiddenFromSidebar: false };
     writeJsonAtomic(path.join(dir, "profile.json"), profile, 0o640);
@@ -186,7 +192,7 @@ export class BotService {
     return id;
   }
 
-  update(id: string, patch: { name?: string; title?: string; description?: string; model?: ModelId | ProviderModelRef | AcpModelRef; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel }): BotSummary {
+  update(id: string, patch: { name?: string; title?: string; description?: string; model?: ModelId | ProviderModelRef | AcpModelRef; avatarShape?: AvatarShape; avatarColor?: string; avatarMaterial?: AvatarMaterial; avatarMotion?: AvatarMotion; effort?: EffortLevel; engine?: BotEngine }): BotSummary {
     const b = this.require(id);
     const next: BotProfile = { ...b.profile };
     if (patch.name !== undefined) {
@@ -218,6 +224,10 @@ export class BotService {
       if (!isEffortLevel(patch.effort)) throw new GatewayError("BAD_ARGS", "Unknown effort.");
       next.effort = patch.effort;
     }
+    if (patch.engine !== undefined) {
+      if (!isBotEngine(patch.engine)) throw new GatewayError("BAD_ARGS", "Unknown engine.");
+      next.engine = patch.engine;
+    }
     const changed: string[] = [];
     if (next.name !== b.profile.name) changed.push(`name "${next.name}"`);
     if (next.title !== b.profile.title) changed.push(`label "${next.title}"`);
@@ -246,6 +256,24 @@ export class BotService {
     const next: BotProfile = { ...rec.profile, avatarAnimations: clips };
     if (!clips.length) delete next.avatarAnimations;
     if (cue) next.avatarCue = { name: cue.name, seq: (rec.profile.avatarCue?.seq ?? 0) + 1 };
+    writeJsonAtomic(path.join(botDir(this.d.cfg, id), "profile.json"), next, 0o640);
+    rec.profile = next;
+    this.publish(id);
+    return this.summary(id);
+  }
+
+  /**
+   * 0.1.7: which saved key pays for this Bot's calls on `provider` (null = the provider's default key). The key proxies
+   * read it per call, so a change applies from the Bot's next call; a key that is later removed falls back to the default.
+   */
+  setModelKey(id: string, provider: KeyedProvider, keyId: string | null): BotSummary {
+    const rec = this.require(id);
+    const keys = { ...(rec.profile.modelKeys ?? {}) };
+    if (keyId === null) delete keys[provider];
+    else keys[provider] = keyId;
+    const next: BotProfile = { ...rec.profile, modelKeys: keys };
+    if (!Object.keys(keys).length) delete next.modelKeys;
+    if (JSON.stringify(next.modelKeys ?? null) === JSON.stringify(rec.profile.modelKeys ?? null)) return this.summary(id);
     writeJsonAtomic(path.join(botDir(this.d.cfg, id), "profile.json"), next, 0o640);
     rec.profile = next;
     this.publish(id);
@@ -327,7 +355,7 @@ export class BotService {
       ...(p.avatarMaterial ? { avatarMaterial: p.avatarMaterial } : {}),
       ...(p.avatarMotion ? { avatarMotion: p.avatarMotion } : {}),
       ...(p.effort ? { effort: p.effort } : {}),
-      ...(p.model ? { model: p.model } : {}), origin, kickstart: false,
+      ...(p.model ? { model: p.model } : {}), engine: botEngineOf(p), origin, kickstart: false,
     });
     const dst = botDir(this.d.cfg, copy);
     // ORIG-GOOGLE: Google access is the user's per-Bot choice; a copy a Bot makes starts with it off.

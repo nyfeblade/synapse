@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { STR, type ApprovalCardView, type ApprovalChoice } from "@synapse/shared";
+import { STR, STR_RULES, type ApprovalCardView, type ApprovalChoice } from "@synapse/shared";
 import { call, GatewayCallError } from "../bridge";
 import { useUi } from "../store";
 import { FullRequestSheet } from "./FullRequestSheet";
@@ -11,6 +11,7 @@ const COULD_NOT_SEND = "Couldn't send your answer. Check your connection and try
 
 export function ApprovalCard({ botId, approval: a, isNew = false }: { botId: string; approval: ApprovalCardView; isNew?: boolean }) {
   const botName = useUi((s) => s.bots[botId]?.profile.name);
+  const openSettings = useUi((s) => s.openSettings);
   // New-user walk, finding 20: the card names the Bot ("Scout would like…"), not "Your Bot".
   const named = (t: string) => (botName ? t.replace(/^Your Bot\b/, botName) : t);
   const [busy, setBusy] = useState(false);
@@ -79,12 +80,20 @@ export function ApprovalCard({ botId, approval: a, isNew = false }: { botId: str
           {a.locationLine && <div className="card-loc"><ServerIcon /> {a.locationLine}</div>}
         </>
       )}
+      {/* Safety v2: the card names the rule that raised it (a label, not a subtitle). */}
+      {a.trigger?.kind === "rule" && <div className="card-rule"><b>{STR_RULES.cardRule}</b>{a.trigger.label}</div>}
       {err && <div role="alert" className="card-error">{err}</div>}
       <div className="card-actions">
         <button type="button" className="btn-primary" disabled={busy} onClick={() => void choose("once")}>{a.planSteps?.length ? STR.approve : STR.allowOnce}</button>
         {a.hasProposedRule && <button type="button" className="btn-outline" disabled={busy} onClick={() => void choose("always")}>{STR.alwaysAllow}</button>}
         <button type="button" className="btn-outline" disabled={busy} onClick={() => void choose("deny")}>{STR.deny}</button>
         <span className="grow" />
+        {a.suggestedRule !== undefined && !a.planSteps?.length && (
+          <button type="button" className="link-btn" onClick={() => openSettings(a.suggestedRule ? `auto-review/add:${encodeURIComponent(a.suggestedRule)}` : "auto-review")}>{STR_RULES.makeRule}</button>
+        )}
+        {a.trigger?.kind === "rule" && a.trigger.ruleId && (
+          <button type="button" className="link-btn" onClick={() => openSettings(`auto-review/rule:${a.trigger!.ruleId}`)}>{STR_RULES.loosenRule}</button>
+        )}
         <button type="button" className="link-btn" aria-label={STR.viewFullRequestLabel} onClick={() => setSheet(true)}>{STR.details}</button>
       </div>
       {sheet && <FullRequestSheet approval={a} onClose={() => setSheet(false)} />}

@@ -127,7 +127,9 @@ describe("badges come from measured evidence only", () => {
     expect(sol).toMatchObject({ label: "GPT-6.1 Sol", badges: ["supported"], contextWindow: 1_050_000 });
     expect(v.groups[1]!.models.find((m) => m.ref === "openai:gpt-6-astra")!.badges).toEqual(["unchecked"]);
     expect(v.groups[2]!.models[0]).toMatchObject({ ref: "ollama:qwen3:4b", badges: ["unchecked", "local"] });
-    expect(Object.fromEntries(sol.whatWorks.map((w) => [w.label, w.state]))).toEqual({ "Tools and replies": "yes", "Auto-review": "asks", "Web search": "yes", Images: "yes", "Voice calls": "yes", "Coding agents": "no", Subagents: "yes" });
+    expect(Object.fromEntries(sol.whatWorks.map((w) => [w.label, w.state]))).toEqual({ "Tools and replies": "yes", "Auto-review": "asks", "Web search": "yes", Images: "yes", "Voice calls": "yes", "Coding agents": "yes", Subagents: "yes", "Computer and browser": "yes" });
+    // Spec §8: coding agents run on the model itself, so they follow its tool-use result; unchecked stays unchecked.
+    expect(whatWorks("openai:gpt-6-astra", { usable: () => true, evidence: ev, reviewerQualified: () => true }).find((w) => w.label === "Coding agents")!.state).toBe("unchecked");
     expect(whatWorks("ollama:qwen3:4b", { usable: () => false, evidence: ev, reviewerQualified: () => true }).find((w) => w.label === "Web search")!.state).toBe("no");
     // Gemini's search grounding is fake-tested only: Experimental, on Gemini and on a Bot that would borrow it.
     const search = (ref: string, usable: (p: string) => boolean) => whatWorks(ref, { usable, evidence: ev, reviewerQualified: () => true }).find((w) => w.label === "Web search")!.state;

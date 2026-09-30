@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { defaultSafetyState, describeRule, type SafetyView } from "@synapse/shared";
 import type { BotSummary, HostSettingsView, SseEvent } from "@synapse/shared";
 
 type Canned = Record<string, unknown | ((args: never) => unknown)>;
@@ -17,7 +18,14 @@ export function settingsFixture(): HostSettingsView {
 
 // Defaults for the commands App's loadAll() fires on every "connected" render, so a test that
 // renders <App /> without canning them doesn't crash on `.map` of an uncanned `{}`.
+/** Safety v2: Settings → Rules reads the rules once it opens (Balanced, no rules of the owner's). */
+export function safetyFixture(): SafetyView {
+  const s = defaultSafetyState();
+  return { preset: s.preset, rules: s.rules.map((r) => ({ ...r, words: describeRule(r) })), guidelines: [], networks: {} };
+}
+
 const BOOT_DEFAULTS: Record<string, unknown> = {
+  getSafety: safetyFixture(),
   listAgents: { agents: [], activeAgentId: null },
   getHostSettings: settingsFixture(),
   getTrays: { trays: [] },

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { PROVIDER_KEY_RE, STR, STR_KEY_STEP, STR_PROVIDER_UI, type ProviderTestResult, type ProviderView, type ProvidersView } from "@synapse/shared";
+import { PROVIDER_KEY_RE, STR, STR_KEY_STEP, STR_PROVIDER_UI, isKeyedProvider, type ProviderTestResult, type ProviderView, type ProvidersView } from "@synapse/shared";
 import { callQuiet } from "../../bridge";
+import { KeyList } from "./KeyList";
+import { useKeysView } from "./keys-store";
 
 const reason = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, "").replace(/^[A-Z_]+: /, "") || STR.hostNoAnswer;
 
@@ -14,10 +16,11 @@ export function ProvidersBlock() {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { void callQuiet("getProviders", {}).then((v) => { if (Array.isArray(v?.providers)) setView(v); }).catch((e) => setError(reason(e))); }, []);
   if (!view) return error ? <p role="alert" className="error">{error}</p> : null;
+  const refresh = () => void callQuiet("getProviders", {}).then((v) => { if (Array.isArray(v?.providers)) setView(v); }).catch((e) => setError(reason(e)));
   return (
     <div className="settings-card providers-block">
       <h3>{STR_PROVIDER_UI.sectionTitle}</h3>
-      {view.providers.map((p) => <ProviderRow key={p.id} p={p} onView={setView} />)}
+      {view.providers.map((p) => <ProviderRow key={p.id} p={p} onView={setView} onKeys={refresh} />)}
     </div>
   );
 }
@@ -27,7 +30,7 @@ export function ProvidersBlock() {
  * onboarding/KeyStep.tsx): the consent shows at once, Save key tests the key before it saves it, and `onReady` fires
  * once the key (or the app on this Mac) answered.
  */
-export function ProviderRow({ p, onView, firstRun = false, onReady }: { p: ProviderView; onView(v: ProvidersView): void; firstRun?: boolean; onReady?(): Promise<void> | void }) {
+export function ProviderRow({ p, onView, firstRun = false, onReady, onKeys }: { p: ProviderView; onView(v: ProvidersView): void; firstRun?: boolean; onReady?(): Promise<void> | void; onKeys?(): void }) {
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,12 +69,16 @@ export function ProviderRow({ p, onView, firstRun = false, onReady }: { p: Provi
   const remove = () => run(async () => { onView(await callQuiet("clearProviderKey", { provider: p.id })); setTest(null); });
 
   const consentOpen = asking || (firstRun && !p.consented);
+  // 0.1.7: several keys per provider in Settings; a host before it (no key list) keeps the one-key form.
+  const keys = useKeysView();
+  const list = !firstRun && !!keys.view && isKeyedProvider(p.id);
   return (
     <div className="provider-row" aria-label={p.label}>
       {!firstRun && (
         <div className="settings-row">
           <strong className="grow">{p.label}</strong>
-          <span className="muted">{p.local ? STR_PROVIDER_UI.local : p.key ? p.key.masked : STR_PROVIDER_UI.noKey}</span>
+          {/* 0.1.7: a provider that's allowed lists its keys below (KeyList); the row keeps only its name. */}
+          {(p.local || !p.consented || !list) && <span className="muted">{p.local ? STR_PROVIDER_UI.local : p.key ? p.key.masked : STR_PROVIDER_UI.noKey}</span>}
           {!p.consented && !asking && <button type="button" className="btn-outline" disabled={busy} onClick={() => setAsking(true)}>{STR_PROVIDER_UI.allow}</button>}
         </div>
       )}
@@ -86,7 +93,8 @@ export function ProviderRow({ p, onView, firstRun = false, onReady }: { p: Provi
           </div>
         </section>
       )}
-      {p.consented && !p.local && (
+      {p.consented && !p.local && list && isKeyedProvider(p.id) && <KeyList provider={p.id} onChanged={() => onKeys?.()} />}
+      {p.consented && !p.local && !list && (
         <form className="settings-row" onSubmit={(e) => { e.preventDefault(); void save(); }}>
           <input aria-label={STR_PROVIDER_UI.keyLabel(p.id)} type="password" autoComplete="off" spellCheck={false} className="text-input grow" placeholder={STR_PROVIDER_UI.keyPlaceholder}
             value={key} onChange={(e) => setKey(e.target.value)} />

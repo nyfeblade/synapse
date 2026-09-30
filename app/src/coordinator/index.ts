@@ -1,3 +1,5 @@
+import type { MacRulesView, SafetyRule } from "@synapse/shared";
+import type { LocalPolicyStore } from "./local-exec/policy";
 import type { MessagePortMain } from "electron";
 import type { BotSummary } from "@synapse/shared";
 import { GatewayClient, notConnectedMessage, type ConnectionState } from "./gateway-client";
@@ -16,6 +18,9 @@ installProcessGuards(process);
 
 let client: GatewayClient | null = null;
 let daemon: LocalExecDaemon | null = null;
+/** Safety v2: the owner's rules as the host last sent them, and the Mac gate that applies them. */
+let macRules: MacRulesView | null = null;
+let localPolicy: LocalPolicyStore | null = null;
 let keyProxy: MacKeyProxy | null = null;
 let macKey: MacKeyStore | null = null;
 let rport: MessagePortMain | null = null;
@@ -105,11 +110,16 @@ process.parentPort.on("message", (e) => {
     // copy of the API key. The key itself never goes back up.
     const id = msg.id;
     const reply = (result: unknown) => process.parentPort.postMessage({ type: "mac-key-result", id, result });
-    const m = msg as unknown as { op?: string; key?: string };
+    const m = msg as unknown as { op?: string; key?: string; keyId?: string; oldId?: string | null };
+    const done = (fn: () => unknown) => { try { reply({ ok: true, result: fn() }); } catch (e) { reply({ ok: false, error: (e as Error).message }); } };
     if (!macKey) reply({ ok: false, error: "This Mac's Bots aren't connected yet. Try again in a moment." });
     else if (m.op === "save" && typeof m.key === "string") void macKey.save(m.key).then((r) => reply({ ok: true, result: r }), (e: Error) => reply({ ok: false, error: e.message }));
     else if (m.op === "clear") { try { macKey.clear(); reply({ ok: true }); } catch (e) { reply({ ok: false, error: (e as Error).message }); } }
     else if (m.op === "has") reply({ ok: true, result: macKey.has() });
+    // 0.1.7: the copy follows the box's default Anthropic key; other keys added here wait beside it as spares.
+    else if (m.op === "save-spare" && typeof m.keyId === "string" && typeof m.key === "string") done(() => macKey!.saveSpare(m.keyId!, m.key!));
+    else if (m.op === "drop-spare" && typeof m.keyId === "string") done(() => macKey!.dropSpare(m.keyId!));
+    else if (m.op === "promote" && typeof m.keyId === "string") done(() => macKey!.promote(m.keyId!, typeof m.oldId === "string" ? m.oldId : null));
     else reply({ ok: false, error: "unknown" });
   } else if (msg.type === "approval-answer") {
     // Smarter approvals: Approve / Deny on a card's macOS notification. The same gateway command as the in-app card
@@ -143,6 +153,8 @@ process.parentPort.on("message", (e) => {
         // 4.4: one macOS notification per connector break (the host decided "once"); the tray shows it in the app.
         else if (ev.channel === "connector-alert" && !focused) process.parentPort.postMessage({ type: "notify-app", title: ev.payload.title, body: ev.payload.body, section: "connections" });
         daemon?.onEvent(ev);
+        // Safety v2: the owner's rules, for the Mac's own gate (commands, files, the browser and apps on this Mac).
+        if (ev.channel === "safety") { macRules = { rules: ev.payload.rules, timeZone: ev.payload.timeZone ?? "UTC" }; localPolicy?.setRules(macRules); }
         // Wave 4.1: only while Telegram is on, and only the Bots' send-message entries (replies and approval cards).
         if (telegramWatch && forTelegram(ev)) {
           process.parentPort.postMessage({ type: "telegram-event", ev });
@@ -153,6 +165,10 @@ process.parentPort.on("message", (e) => {
     });
     client.start();
     void vncReady.then((v) => post({ vnc: v }));
+    void client
+      .call("getSafety", {} as never)
+      .then((v) => { const r = v as { rules?: SafetyRule[]; timeZone?: string }; if (Array.isArray(r.rules)) { macRules = { rules: r.rules, timeZone: r.timeZone ?? "UTC" }; localPolicy?.setRules(macRules); } })
+      .catch(() => {});
     void client
       .call("listAgents", {} as never)
       .then((r) => { policy.baseline((r as { agents: BotSummary[] }).agents); work.setActiveBot((r as { activeAgentId?: string | null }).activeAgentId ?? null); })
@@ -172,6 +188,8 @@ process.parentPort.on("message", (e) => {
           onReset: () => build(),
         });
         daemon = made.daemon;
+        localPolicy = made.policy;
+        localPolicy.setRules(macRules);
         keyProxy = made.keyProxy;
         macKey = made.macKey;
         void daemon.start();

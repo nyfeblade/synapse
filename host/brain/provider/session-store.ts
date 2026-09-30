@@ -65,7 +65,7 @@ export function toRecord(m: CanonMessage, extra: { model?: string; usage?: Recor
     };
   }
   const content: Block[] = [{ type: "text", text: m.text }, ...(m.images ?? []).map((i) => ({ type: "image", source: { type: "base64", media_type: i.mimeType, data: i.data } }))];
-  return { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: m.toolCallId, content, is_error: m.isError }] }, provider: { toolName: m.name } };
+  return { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: m.toolCallId, content, is_error: m.isError }] }, provider: { toolName: m.name, ...(m.toolRefs?.length ? { toolRefs: m.toolRefs } : {}) } };
 }
 
 /** Claude JSONL records (after the last compact boundary) → canonical messages. Unknown records are skipped. */
@@ -77,7 +77,7 @@ export function fromRecords(records: Record<string, unknown>[]): CanonMessage[] 
   for (const r of records.slice(start)) {
     const msg = r.message as { role?: string; content?: unknown } | undefined;
     const content = Array.isArray(msg?.content) ? (msg!.content as Block[]) : typeof msg?.content === "string" ? [{ type: "text", text: msg.content }] : [];
-    const prov = (r.provider ?? {}) as { calls?: Record<string, { rawArguments?: string; providerMeta?: unknown }>; providerMeta?: unknown; toolName?: string };
+    const prov = (r.provider ?? {}) as { calls?: Record<string, { rawArguments?: string; providerMeta?: unknown }>; providerMeta?: unknown; toolName?: string; toolRefs?: unknown };
     if (r.type === "assistant") {
       const text = content.filter((b) => b.type === "text").map((b) => String(b.text ?? "")).join("");
       const toolCalls: CanonToolCall[] = content.filter((b) => b.type === "tool_use").map((b) => {
@@ -100,6 +100,7 @@ export function fromRecords(records: Record<string, unknown>[]): CanonMessage[] 
           out.push({
             role: "tool", toolCallId: id, name: prov.toolName ?? names.get(id) ?? "", isError: b.is_error === true,
             text: inner.filter((x) => x.type === "text").map((x) => String(x.text ?? "")).join("\n"), ...(images.length ? { images } : {}),
+            ...(Array.isArray(prov.toolRefs) && prov.toolRefs.length ? { toolRefs: prov.toolRefs.map(String) } : {}),
           });
         }
       } else {

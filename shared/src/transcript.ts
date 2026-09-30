@@ -28,7 +28,14 @@ export interface ApprovalCardView {
   settledAt: number | null;
   /** Smarter approvals: a plan card's steps, one line each (absent on every other card). */
   planSteps?: string[];
+  /** Safety v2: what raised the card: a rule (preset or the owner's), or the reason. */
+  trigger?: ApprovalTriggerView;
+  /** Safety v2: "Make this a rule…": a plain-English Always allow rule for this action, or null. */
+  suggestedRule?: string | null;
 }
+
+/** Safety v2: a card names its rule ("Sends", "Never email eve@x.com") or its reason. */
+export interface ApprovalTriggerView { kind: "rule" | "reason"; label: string; ruleId?: string; source?: string }
 
 /** CHAT-12: reactions are stored on the target entry. `by` is "user" or the reacting Bot's id. */
 export interface Reaction { emoji: string; by: "user" | string }

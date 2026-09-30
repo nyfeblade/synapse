@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { BADGE_LABELS, DEFAULT_BOT_MODEL, STR, STR5, STRL, modelLabel, type ModelId } from "@synapse/shared";
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { DEFAULT_BOT_MODEL, STR, STR5, STRL, keyedProviderOf, modelLabel, type ModelId } from "@synapse/shared";
 import { call, GatewayCallError } from "../bridge";
 import { BudgetAskCard } from "./BudgetAskCard";
 import { composerState, useComposer, type PendingAttachment } from "../composer-store";
@@ -10,8 +10,11 @@ import { ComposerPlusMenu } from "./ComposerPlusMenu";
 import { MicIcon, SendIcon, StopIcon } from "./Icons";
 import { acceptAgent, useUi } from "../store";
 import { pickableModels, startModelAccessSync, useModelAccess } from "../model-access";
-import { hasProviders, useModelCatalog } from "../model-catalog";
+import { useModelCatalog } from "../model-catalog";
+import { useModelPicks } from "../model-picks";
+import { ModelPicker } from "./ModelPicker";
 import { Menu, type MenuItem } from "./Menus";
+import { overlaysOpen } from "../overlay-stack";
 import { extractMentions, mentionQuery, MentionPicker, useMentionNames } from "./MentionPicker";
 import { PrivacySettingsButton } from "../voice/PrivacySettingsButton";
 import { ServerSpeechAllow } from "../voice/ServerSpeechAllow";
@@ -35,8 +38,12 @@ export function ModelModePills({ botId }: { botId: string }) {
   useEffect(() => { startModelAccessSync(); }, []);
   const catalog = useModelCatalog((s) => s.view);
   useEffect(() => { if (open?.kind === "model") void useModelCatalog.getState().load(); }, [open?.kind]);
+  // 0.1.7: the same picker as Bot settings in its compact form (recent and in-use models, then "All models…").
+  const picks = useModelPicks(botId, `${open?.kind === "model"}|${JSON.stringify(bot?.profile.modelKeys ?? null)}`, !!bot && !bot.group);
   if (!bot || bot.group) return null;
   const current = (bot.profile.model ?? DEFAULT_BOT_MODEL) as string;
+  const keyedP = keyedProviderOf(current);
+  const currentKey = keyedP ? bot.profile.modelKeys?.[keyedP] ?? null : null;
   const permMode = bot.settings.permMode ?? "ask";
   const noLimits = permMode === "full-auto" && bot.settings.noLimits === true;
   const mode = noLimits ? STR5.permModeNoLimits : { ask: STR5.permModeAsk, "accept-edits": STR5.permModeAcceptEdits, "full-auto": STR5.permModeFullAuto }[permMode];
@@ -45,28 +52,52 @@ export function ModelModePills({ botId }: { botId: string }) {
     const r = e.currentTarget.getBoundingClientRect();
     setOpen(open?.kind === kind ? null : { kind, x: r.left, y: r.top - 6 });
   };
-  const pick = (m: string) => { if (m !== current) call("updateAgent", { id: botId, model: m as ModelId }).then((r) => acceptAgent(r.agent)).catch(fail); };
-  // Spec §10: with a provider set up, the models come grouped by provider (a separator between groups), each with its badge.
-  const grouped: MenuItem[] | null = hasProviders(catalog)
-    // A provider's long live list (OpenRouter's) stays in Bot settings, where it can be searched; this short menu keeps
-    // the models in use.
-    ? catalog.groups.flatMap((g, i): MenuItem[] => [...(i ? [{ separator: true as const }] : []), ...g.models.filter((m) => !m.liveOnly || m.ref === current).map((m) => ({
-      label: m.ref.includes(":") ? modelLabel(m.ref as never) : m.label, checked: m.ref === current, onSelect: () => pick(m.ref),
-      ...(m.badges[0] ? { badge: BADGE_LABELS[m.badges[0]] } : {}),
-    }))])
-    : null;
+  const pick = (m: string, keyId: string | null = null) => {
+    setOpen(null);
+    if (m === current && keyId === currentKey) return;
+    call("pickAgentModel", { id: botId, model: m, keyId }).then((r) => acceptAgent(r.agent)).catch(fail);
+  };
+  // The key's label rides on the chip only when the Bot pays with a key other than the provider's default.
+  const keyLabel = keyedP && currentKey ? picks?.keys[keyedP]?.find((k) => k.id === currentKey && !k.isDefault)?.label ?? null : null;
   const items: MenuItem[] = open?.kind === "model"
-    ? grouped ?? pickableModels(access, current as ModelId).map((m) => ({ label: modelLabel(m), checked: m === current, onSelect: () => pick(m) }))
+    ? pickableModels(access, current as ModelId).map((m) => ({ label: modelLabel(m), checked: m === current, onSelect: () => pick(m) }))
     : (["ask", "accept-edits", "full-auto"] as const).map((m) => ({
       label: { ask: STR5.permModeAsk, "accept-edits": STR5.permModeAcceptEdits, "full-auto": STR5.permModeFullAuto }[m], checked: !noLimits && m === permMode,
       onSelect: () => { if (noLimits || m !== permMode) call("setAgentPermMode", { id: botId, mode: m }).then((r) => acceptAgent(r.agent)).catch(fail); },
     }));
   return (
     <>
-      <button type="button" className="composer-pill" aria-haspopup="menu" aria-expanded={open?.kind === "model"} onClick={at("model")}>{modelLabel(current as ModelId)}</button>
+      <button type="button" className="composer-pill" aria-haspopup={catalog ? "listbox" : "menu"} aria-expanded={open?.kind === "model"} onClick={at("model")}>{modelLabel(current as ModelId)}{keyLabel ? ` · ${keyLabel}` : ""}</button>
       <button type="button" className="composer-pill" aria-haspopup="menu" aria-expanded={open?.kind === "mode"} onClick={at("mode")}>{mode}</button>
-      {open && <Menu label={open.kind === "model" ? STR.model : STR5.permMode} x={open.x} y={open.y} anchor="bottom" items={items} onClose={() => setOpen(null)} />}
+      {open?.kind === "model" && catalog
+        ? <ComposerModelPop x={open.x} y={open.y} onClose={() => setOpen(null)}>
+          <ModelPicker compact view={catalog} picks={picks} current={{ ref: current, keyId: currentKey }} botId={botId} onPick={pick} />
+        </ComposerModelPop>
+        : open && <Menu label={open.kind === "model" ? STR.model : STR5.permMode} x={open.x} y={open.y} anchor="bottom" items={items} onClose={() => setOpen(null)} />}
     </>
+  );
+}
+
+/** The Composer's model popover: opens up from the chip, never past the window's edges; Escape or a click outside closes it. */
+function ComposerModelPop({ x, y, onClose, children }: { x: number; y: number; onClose(): void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [left, setLeft] = useState(x);
+  useLayoutEffect(() => {
+    const w = ref.current?.getBoundingClientRect().width ?? 0;
+    setLeft(Math.max(8, Math.min(x, window.innerWidth - w - 8)));
+  }, [x]);
+  useEffect(() => {
+    // Capture: the picker's own search field would otherwise take Escape (it clears a search) before this sees it.
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !overlaysOpen()) { e.preventDefault(); e.stopPropagation(); onClose(); } };
+    const onDown = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node) && !(e.target as HTMLElement | null)?.closest?.(".composer-pill")) onClose(); };
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("mousedown", onDown);
+    return () => { window.removeEventListener("keydown", onKey, true); window.removeEventListener("mousedown", onDown); };
+  }, [onClose]);
+  return (
+    <div ref={ref} className="composer-model-pop" style={{ left, bottom: Math.max(8, window.innerHeight - y), maxHeight: Math.max(200, y - 16) }}>
+      {children}
+    </div>
   );
 }
 

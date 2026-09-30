@@ -7,6 +7,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 export const STR5 = {
   notAvailable: "Not available",
+  // Advanced: what a Claude Bot's coding agents run on (a provider Bot's always run on Synapse's own loop).
   // Marketplace (Marketplace.dc.html K1–K9; PLG-01, 04, 11, 12; TPL-04)
   marketplace: "Marketplace",
   closeMarketplace: "Close Marketplace",

@@ -37,6 +37,9 @@ export interface ProviderQuirks {
   extraBody?: Record<string, unknown>;
   extraHeaders?: Record<string, string>;
   contextProbe: "none" | "ollama-ps" | "lmstudio-models";
+  /** The provider shrinks an image whose shorter side is longer than this before the model sees it. Computer
+   *  subagents then get screenshots already at that size, so the model's coordinates match what it saw. */
+  imageShortSideMax?: number;
 }
 
 const BASE = { parallelToolCalls: true, nativeSearch: false, maxTools: 128, errorArrays: false, contextProbe: "none", streamUsage: true } as const;
@@ -47,6 +50,8 @@ export const PROVIDER_QUIRKS: Readonly<Record<Exclude<ProviderId, "anthropic">, 
     // Chat Completions tool messages carry text only; an image goes in a user message after the results.
     toolImages: "followup-user-message", reasoningParam: "reasoning_effort", maxTokensParam: "max_completion_tokens",
     cacheKeyParam: "prompt_cache_key", usageShape: "openai", structuredOutput: "json_schema", nativeSearch: true,
+    // OpenAI's image input (high detail): fit in 2048×2048, then the shorter side scaled to 768 px.
+    imageShortSideMax: 768,
   },
   openrouter: {
     ...BASE, id: "openrouter", baseUrl: "https://openrouter.ai/api/v1", authHeader: "bearer", schemaDialect: "loose",

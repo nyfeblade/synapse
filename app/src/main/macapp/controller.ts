@@ -8,6 +8,7 @@
  *
  * Nothing here polls, and nothing returns an image.
  */
+import { STR_RULES, macAppFacts, macRuleDecision, type MacRulesView } from "@synapse/shared";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -53,6 +54,8 @@ export interface MacAppCall {
   args: MacAppArgs;
   /** The user answered the card for exactly this call. */
   approved: boolean;
+  /** Safety v2: the owner's rules (from the Mac's gate), judged here on the app, the person and the pressed label. */
+  rules?: MacRulesView | null;
 }
 export type MacAppResult = { ok: true; reply: MacAppReply } | { ok: false; error: string; needsApproval?: boolean; summary?: string };
 
@@ -214,6 +217,11 @@ export class MacAppController {
       const node = s.ax?.nodes.find((n) => n.ref === a.ref);
       if (node) why = macAppLabelConsequence(node.name);
     }
+    // Safety v2: the owner's rules. Never is a refusal; Ask first is this call's card (answered: approved).
+    const label = (a.action === "ui.press" || a.action === "ui.focus") ? s.ax?.nodes.find((n) => n.ref === a.ref)?.name ?? null : null;
+    const rule = macRuleDecision(call.rules ?? null, macAppFacts(call.botId, a, { label }), { now: Date.now(), home: this.d.home });
+    if (rule?.type === "never") return { ok: false, error: STR_RULES.macNever(rule.rule.text) };
+    if (rule?.type === "ask" && !call.approved) { const summary = macAppSummary(a); return { ok: false, needsApproval: true, summary, error: `${summary}. ${STR_RULES.macAsk(rule.rule.text)}` }; }
     if (!why) return null;
     if (call.approved) return null;
     const summary = macAppSummary(a);

@@ -61,10 +61,14 @@ export const STRC = {
   // The preview dialled a screen the host says exists and the connection did not come up.
   previewFailed: "Preview unavailable",
   computerUseBusy: "Another computerUse subagent has the box's desktop right now; only one at a time.",
-  /** 0.1.6: computer and browser helpers always run on Claude (ruling 65), so they need the Anthropic key. */
-  computerNeedsClaude: "Computer and browser helpers run on Claude, so they need an Anthropic API key, and none is saved. Do the task with your own tools, or tell the user it needs an Anthropic key in Settings → Account.",
-  /** 0.1.6: coding agents run on the Claude Agent SDK, so they need the Anthropic key whatever the Bot's own model. */
-  codingNeedsClaude: "Coding agents run on Claude, so they need an Anthropic API key, and none is saved. Save one in Settings → Account to use them.",
+  /** A coding agent runs on the Bot's own model; a Bot on Claude needs the Anthropic key it runs on. */
+  codingClaudeNoKey: "This Bot runs on Claude, and no Anthropic API key is saved, so its coding agents can't start. Save a key in Settings → Account, or pick another model for this Bot.",
+  codingNoModel: "Coding agents run on the Bot's own model, and this Bot has none Synapse can use. Pick a model for it in its settings.",
+  /** The one hard stop: a model whose API refuses tools can't code (no badge or check ever blocks one). */
+  codingModelNoTools: (model: string) => `${model} can't use tools, so it can't run coding work. Pick a model that can in this Bot's settings (one with Tools and replies: Yes).`,
+  /** A one-time note when coding or Engineering mode runs on a model that failed its tool-use check. */
+  toolUseCheckFailedTitle: "This model failed its tool-use check",
+  toolUseCheckFailed: (model: string) => `${model} failed Synapse's tool-use check, so coding work may not finish. It still runs; pick another model any time in this Bot's settings.`,
   stillStarting: "The computer is still getting ready (fetching its image or starting up). Try again shortly.",
   // TOOL-14
   tooManyTasks: "There are already as many background tasks as allowed; wait until one finishes.",

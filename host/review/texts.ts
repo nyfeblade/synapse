@@ -43,4 +43,7 @@ export const TEXT = {
   /** Bug 432. */
   wakeUnread: "What woke this Bot is longer than Auto-review can read in full, so this action needs your OK.",
   fallbackReason: "Blocked by Auto-review",
+  /** Safety v2: the owner's own rules, enforced in code. */
+  ruleNever: (text: string) => `Your rule “${text}” blocks this, so it did not run. Don't try it another way; tell the user what you couldn't do.`,
+  ruleAsk: (text: string) => `Your rule “${text}” asks first.`,
 };

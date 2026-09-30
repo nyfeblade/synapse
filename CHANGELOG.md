@@ -3,6 +3,53 @@
 Every version of Synapse. The website's Changelog page is built from this file.
 Newest first. A version headed `Unreleased` shows as "in progress".
 
+## 0.1.7 — 2026-09-30
+
+### Rules you write, enforced in code
+
+- **Settings → Rules** (it was Auto-review). Write a rule in plain English: **Always allow**, **Ask first** or **Never**. Scope it to every Bot or one, an app or account, a folder, or a person or site, and add a limit if you like: "Ask before anything over $50", "At most 5 sends an hour", "No sends between 22:00 and 07:00" (in your time zone).
+- **Checked, not guessed.** Synapse turns each rule into an exact check and shows it to you, with how many of your last 50 actions it would have changed. A rule it can't read exactly is refused, with the reason. Rules are enforced by the app, not by the reviewer, so a fooled reviewer can't skip them. Never beats Ask first, which beats Always allow.
+- **Presets.** Start from **Careful**, **Balanced** (the default, which asks before the same things as 0.1.6; a few, like changing the Bots' firewall, are now refused outright by the hard core) or **Hands-off** (asks only before payments and deletes). A preset sets the preset rules only: Auto-review and Synapse's other built-in checks still run under all three. Presets are ordinary rules you can edit, and picking one shows what changes first.
+- **Guidelines.** Standing instructions in plain English, for every Bot or one ("draft, don't send", "cite sources"). The Bot and Auto-review follow them; they aren't enforced like rules.
+- **Cards name their rule.** A card a rule raised says which rule it was. **Always allow** on it makes that rule skip this person, site or folder; **Make this a rule…** and **Loosen this rule…** open Rules.
+- **A Bot's rules and network** in its own settings: its rules, its guidelines, and **Network**: Open, **Only these sites** or **Block these sites**. Synapse's gate enforces it on what the Bot does in the Bots' computer. With **Only these sites**, the Bot can't upload to, or run code from, any other site (it can still read them); **Block these sites** stops every request to those sites that the gate can read. Not yet: a per-Bot firewall rule, so a site a script works out as it runs isn't caught.
+- **A hard core no rule or mode changes,** No limits included: Synapse's own settings, keys and private data; your Mac and your home network (unless Local network is on); the Bots' firewall; and a limited network's uploads and fetch-and-run. What used to be fixed floors (uploads to unknown sites, running code from the internet, sends, deletes, payments, destructive git, sudo, global installs, app writes, access and keys) are now preset rules, so you can loosen them.
+- **Your ask-first rules move over as they are.** Ones Synapse can read exactly are now enforced in code; the rest keep going to Auto-review, marked as such.
+- **On your Mac too.** Your Mac applies your own rules and Never rules itself, on what only it can see: the full file path, the page's address and the button's text in the browser, and the email address a message goes to. The preset rules keep the Mac's own checks as before.
+- **Rate limits survive a restart.** A rule like "At most 5 sends an hour" keeps counting across restarts.
+- **Security tests:** 63 of 63 attacks stopped, with new ones for the hard core in No limits, a limited network, a Never rule, and a Never rule on your Mac.
+
+### Coding on any model
+
+- **Coding agents run on the Bot's own model.** A Bot on OpenAI, Gemini, OpenRouter, Mistral, DeepSeek or a local model now runs its coding agents on that same model, with Synapse's own coding loop. No Anthropic key is needed for them. Every command goes through the same approvals and the same checks for loops and spend.
+- **Engineering mode works on every model.** A Bot on another provider gets Synapse's own engineering prompt when Engineering mode is on, instead of the standard one.
+- **A Claude Bot's coding agents follow its Engine.** On Claude Code (the default) they use Claude Code; set the Bot's Engine to Synapse and they run on Synapse's own loop with the same Claude model.
+- **Coding CLIs can run coding agents,** as Experimental: a Bot on GitHub Copilot, Kimi Code, Cursor or Mistral Vibe runs them with that CLI, and every action it asks for goes through the same gate.
+- **Glob and Grep** for Bots on other providers, with the same walls as reading a file.
+- **No model is blocked by its badge.** What works and the badges inform you. A model that failed its tool-use check still runs, with a one-time note. Only a model whose API refuses tools stops, and then Synapse says so and suggests picking another.
+
+### Computer and browser helpers on any model
+
+- **Computer and browser helpers run on the Bot's own model.** A Bot on OpenAI, Gemini, OpenRouter, Mistral, DeepSeek or a local model uses its own model for them, with the same screen and browser tools and the same approvals. No Anthropic key is needed for them.
+- **A model known to read images sees screenshots.** Any other works from text reads of the screen and page instead, as Experimental.
+- **The loop guard covers helpers too.** A helper whose same step keeps failing is stopped and says so.
+- **On Claude:** a Bot on Claude runs its computer and browser helpers, and its coding agents, on its Engine: Claude Code (the default, through Anthropic's Agent SDK) or Synapse's own loop (Experimental, below). Either uses the Anthropic key the Bot already runs on. Signing in with a Claude subscription or a Claude Code login still isn't supported.
+
+### Claude without Claude Code
+
+- **Experimental: Claude Bots can run on Synapse's own loop.** Set a Claude Bot's Engine to Synapse (Experimental) in its settings and it talks to Anthropic's API directly, with the same approvals, safety checks and prompt caching, and its coding agents and computer and browser helpers follow. Claude Code stays the default for every Bot, new and existing, until the new loop passes a live check: so far it has been checked against a recorded API only.
+
+### Several keys, one model picker
+
+- **Several named keys per provider** ("Personal", "Work") for Anthropic, OpenAI, OpenRouter, Gemini, Mistral and DeepSeek, in Settings → Account: Add key, Rename, Test, Make default, a monthly cap and Remove, with this month's spend for each. Your existing key moves over as the default.
+- **Each Bot pays with the key you choose** for its provider, or the default. Synapse's proxies pick the key for each call, so a Bot still never sees one. A key at its monthly cap stops its calls and says so. Removing a key moves its Bots to the default.
+- **One model picker** for every provider you've set up: searchable, grouped by provider, with Recent first. A provider with several keys shows each model once per key. The composer has a short version.
+- **Model and key when you create a Bot:** New chat, setup's first Bot, starters, templates and shared Bots show the model, and which key pays when there's more than one.
+
+### Smaller prompts
+
+- **Smaller prompts on Synapse's own loop.** A Bot on another provider, or a Claude Bot on the Synapse engine, loads tools it rarely uses only when it needs them, and coding agents on that loop get shorter tool descriptions and results. The savings are offline estimates from replayed tasks, not measured on a live model yet. Claude Code is unchanged.
+
 ## 0.1.6 — 2026-09-30
 
 ### Any AI provider

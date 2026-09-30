@@ -266,3 +266,55 @@ describe("per-task budget", () => {
     expect(await main(["--dry-run", "--max-weighted", "nope"], { makeBox: () => { throw new Error("no box"); }, out: () => {} })).toBe(2);
   });
 });
+
+describe("provider runner (fake box, fake model): the computerUse child on the Bot's own provider model", () => {
+  it("reads a provider child's session transcript: one record per model call, usage and images counted", () => {
+    const u = { input_tokens: 700, output_tokens: 40, cache_read_input_tokens: 500 };
+    const lines = [
+      { uuid: "a1", type: "assistant", message: { role: "assistant", model: "openai:gpt-6.1-sol", usage: u, content: [{ type: "tool_use", id: "call_1", name: "mcp__computer__Computer", input: {} }] }, provider: { calls: {} } },
+      { uuid: "r1", type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "call_1", content: [{ type: "text", text: "Done" }, { type: "image", source: { type: "base64", media_type: "image/webp", data: "x" } }] }] }, provider: { toolName: "mcp__computer__Computer" } },
+      { uuid: "a2", type: "assistant", message: { role: "assistant", model: "openai:gpt-6.1-sol", usage: u, content: [{ type: "text", text: "Report: done." }] }, provider: { calls: {} } },
+    ].map((l) => JSON.stringify(l)).join("\n");
+    const m = transcriptMetrics(lines);
+    expect(m.calls).toBe(2);
+    expect(m.usage).toEqual({ fresh: 1400, cacheRead: 1000, cacheWrite: 0, output: 80 });
+    expect(m.images).toBe(1);
+    expect(m.tools).toEqual({ "mcp__computer__Computer": 1 });
+  });
+
+  it("runs the suite on a provider model: Bots are created on it, the child's provider transcript is measured, the report names the runner", async () => {
+    const box = new FakeCuBox(solver);
+    const r = await runCuBench({ box, modes: ["screenshots"], taskIds: ["W1", "D1"], model: "openai:gpt-6.1-sol", runner: "provider", timeoutMs: 20_000, outDir: out() });
+    expect(r.results.map((x) => [x.taskId, x.success])).toEqual([["W1", true], ["D1", true]]);
+    expect(new Set(box.createdModels)).toEqual(new Set(["openai:gpt-6.1-sol"]));
+    const w1 = r.results[0]!;
+    expect([w1.images, w1.calls]).toEqual([6, 3 + 8]); // the parent's 3 turns + the child's 8 model calls
+    expect(w1.tools["mcp__computer__Computer"]).toBe(8);
+    expect(r.meta.runner).toBe("provider");
+    expect(fs.readFileSync(r.mdPath, "utf8")).toContain("provider runner · model openai:gpt-6.1-sol");
+    expect([...box.bots.values()].map((b) => b.name)).toEqual(["Research"]);
+  }, 30_000);
+
+  it("the runner and the model must agree", async () => {
+    await expect(runCuBench({ box: new FakeCuBox(solver), modes: ["screenshots"], taskIds: ["W1"], model: "claude-sonnet-5", runner: "provider", timeoutMs: 1_000, outDir: out() })).rejects.toThrow(/provider model ref/);
+    await expect(runCuBench({ box: new FakeCuBox(solver), modes: ["screenshots"], taskIds: ["W1"], model: "gemini:gemini-3.8-flash", runner: "claude", timeoutMs: 1_000, outDir: out() })).rejects.toThrow(/Claude model/);
+  });
+
+  it("CLI: --runner provider needs a provider --model, dry-runs on Screenshots only, and a real run still needs BENCH_REAL=1", async () => {
+    const lines: string[] = [];
+    const say = (s: string) => lines.push(s);
+    expect(await main(["--runner", "provider", "--dry-run"], { makeBox: () => { throw new Error("no box"); }, out: say })).toBe(2);
+    expect(lines.join("\n")).toMatch(/--model <provider>:<model>/);
+    lines.length = 0;
+    expect(await main(["--runner", "provider", "--model", "gemini:gemini-3.8-flash", "--dry-run", "--tasks", "W1"], { makeBox: () => { throw new Error("no box"); }, out: say })).toBe(0);
+    expect(lines.join("\n")).toContain("modes screenshots on the provider runner, model gemini:gemini-3.8-flash");
+    expect(lines.join("\n")).not.toMatch(/\[live\]/);
+    expect(await main(["--runner", "nope", "--dry-run"], { makeBox: () => { throw new Error("no box"); }, out: () => {} })).toBe(2);
+    delete process.env.BENCH_REAL;
+    lines.length = 0;
+    let built = 0;
+    expect(await main(["--runner", "provider", "--model", "openai:gpt-6.1-sol"], { makeBox: () => { built += 1; return new FakeCuBox(solver); }, out: say })).toBe(2);
+    expect(built).toBe(0);
+    expect(lines.join("\n")).toMatch(/BENCH_REAL=1/);
+  });
+});

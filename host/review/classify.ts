@@ -234,12 +234,13 @@ export function classifyTool(call: ToolCall, o: { workspace: string; hostPrivate
   if (name === "mcp__computer__Computer") {
     const a = input as unknown as ComputerStep & { then?: ComputerStep[] };
     // Enforce-mode rule checked before review so no card is raised for an action the tool would reject (BRW-03).
-    if ((o.enforce ?? true) && (a.action === "click" || a.action === "drag") && !a.description?.trim()) return deny(STRC.needsDescription);
+    if ((o.enforce ?? true) && (a.action === "click" || a.action === "double_click" || a.action === "drag") && !a.description?.trim()) return deny(STRC.needsDescription);
     const reviewed = REVIEWED_COMPUTER_ACTIONS.has(a.action) || (a.then ?? []).some((s) => REVIEWED_COMPUTER_ACTIONS.has(s.action));
     if (!reviewed) return none(a.action !== "screenshot" && a.action !== "wait");
     const purpose = a.description ? ` to ${lc(a.description.trim())}` : "";
     const summary =
       a.action === "click" ? `Click at (${a.x}, ${a.y})${on}${purpose}`
+      : a.action === "double_click" ? `Double-click at (${a.x}, ${a.y})${on}${purpose}`
       : a.action === "drag" ? `Drag from (${a.x}, ${a.y}) to (${a.x2 ?? a.path?.at(-1)?.x}, ${a.y2 ?? a.path?.at(-1)?.y})${on}${purpose}`
       : a.action === "type" ? `Type “${String(a.text).slice(0, 80)}”${on}`
       : a.action === "key" ? `Press ${a.key}${on}`
@@ -250,7 +251,7 @@ export function classifyTool(call: ToolCall, o: { workspace: string; hostPrivate
     };
   }
   // "Computer perception: Live (beta)": Look/Screenshot only read; Act is reviewed like Computer's click/type/key/drag.
-  if (name === "mcp__computer__Look" || name === "mcp__computer__Screenshot") return none(false);
+  if (name === "mcp__computer__Look" || name === "mcp__computer__Screenshot" || name === "mcp__computer__ReadScreen") return none(false);
   if (name === "mcp__computer__Act") {
     const kind = String(input.do ?? "");
     if (kind === "hover" || kind === "scroll") return none(true);
@@ -283,7 +284,7 @@ export function classifyTool(call: ToolCall, o: { workspace: string; hostPrivate
     const tool = name.slice("mcp__computer__".length);
     if (BROWSER_UNREVIEWED.has(tool)) return none(false);
     if (tool === "browser_tabs" && input.action !== "new" && input.action !== "close") return none(true);
-    const el = String(input.element ?? input.ref ?? "");
+    const el = String(input.element ?? input.ref ?? input.selector ?? input.text ?? "");
     const summary =
       tool === "browser_navigate" ? `Open ${String(input.url)} in the browser${on}`
       : tool === "browser_click" ? `Click “${el}” in the browser${on}`

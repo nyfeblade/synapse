@@ -1,6 +1,6 @@
-import { contextWindow, parseProviderModelRef, PROVIDER_CATALOG } from "@synapse/shared";
+import { contextWindow, PROVIDER_CATALOG } from "@synapse/shared";
 import { providerFetch } from "../../usage/metered-provider";
-import { ChatCompletionsAdapter } from "./adapters/chat-completions";
+import { adapterFor, modelTarget } from "./adapters/index";
 import type { CanonMessage } from "./adapters/types";
 import type { ProviderSessionStore } from "./session-store";
 
@@ -59,8 +59,9 @@ export function summaryMessage(summary: string, recent: string[]): CanonMessage 
 
 /** Picks the summarizer: the helper when the transcript fits in 80% of its window, else the Bot's own model. */
 export function summarizerFor(ref: string, transcriptTokens: number): string {
-  const p = parseProviderModelRef(ref);
-  const helper = p ? PROVIDER_CATALOG[p.provider].helperModel : null;
+  const p = modelTarget(ref);
+  // Claude compacts on the Bot's own model, as the CLI does (a cheaper summarizer would be an unmeasured quality cut).
+  const helper = !p || p.provider === "anthropic" ? null : PROVIDER_CATALOG[p.provider].helperModel;
   if (p && helper) {
     const h = `${p.provider}:${helper}`;
     if (transcriptTokens + SUMMARY_MAX_TOKENS < 0.8 * contextWindow(h)) return h;
@@ -78,8 +79,8 @@ export async function summarize(d: { botId: string; ref: string; history: CanonM
   const ref0 = summarizerFor(d.ref, Math.ceil(transcript.length / CPT));
   const budgetChars = Math.floor((0.8 * contextWindow(ref0) - SUMMARY_MAX_TOKENS) * CPT);
   if (transcript.length > budgetChars) transcript = `[…the oldest part of the conversation was cut to fit]\n${transcript.slice(transcript.length - budgetChars)}`;
-  const p = parseProviderModelRef(ref0)!;
-  const adapter = new ChatCompletionsAdapter(p.provider);
+  const p = modelTarget(ref0)!;
+  const adapter = adapterFor(p.provider);
   const body = adapter.encode({
     model: p.model, system: "You summarize a conversation between a user and their assistant Bot so the Bot can continue it.",
     messages: [{ role: "user", parts: [{ type: "text", text: `<conversation>\n${transcript}\n</conversation>\n\n${d.instructions}` }] }],

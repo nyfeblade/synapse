@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { STRB, STRGS, type BrowserArgs } from "@synapse/shared";
+import { STRB, STRGS, STR_RULES, compileRule, type BrowserArgs } from "@synapse/shared";
 import { BrowserController, type BrowserDriver, type ControllerRequest, type Tab } from "../../src/main/browser/controller";
 import { pageAgent, type PageAgent } from "../../src/main/browser/page-agent";
 // Fake Google client values are assembled at run time, so no test file holds a string GitHub push protection reads as a real secret.
@@ -386,5 +386,33 @@ describe("google-setup re-review 1: no planting a client by typing", () => {
     expect(r.editable).not.toContain(("999999999999-zyxwvutsrqponmlk0123456789abcdef." + GU));
     // Elsewhere the field report isn't needed and isn't sent.
     expect((await ok(req({ action: "open", url: "http://t.test/" }))).editable).toBeUndefined();
+  });
+});
+
+// Safety v2: the owner's rules, judged here against the live page's address and the control's own text.
+describe("the owner's rules on the Mac's browser", () => {
+  const view = (...texts: string[]) => ({
+    timeZone: "UTC",
+    rules: texts.map((t, i) => { const r = compileRule(t); if (!r.ok) throw new Error(r.reason); return { ...r.rule, id: `r${i}`, source: "owner" as const, enabled: true, createdAt: 0 }; }),
+  });
+  it("an Ask first rule on a domain cards a submit there, in Full auto, and the answered card lets exactly it through", async () => {
+    const rules = view("Ask before anything at t.test");
+    const r = await ok(req({ action: "open", url: "http://t.test/" }, { mode: "full-auto", rules: view() }));
+    const more = refOf(r.text, "Show more");
+    const first = await c.handle(req({ action: "click", ref: more }, { mode: "full-auto", rules }));
+    expect(first).toMatchObject({ ok: false, needsApproval: true, error: STR_RULES.macAsk("Ask before anything at t.test") });
+    expect(drv.windows[0]!.clicks).toEqual([]);
+    await ok(req({ action: "click", ref: more }, { mode: "full-auto", rules, approved: true }));
+    expect(drv.windows[0]!.clicks).toEqual(["Show more"]);
+  });
+  it("an Ask first rule for app writes matches a consequential form, and beats a site always-allow", async () => {
+    const r = await ok(req({ action: "open", url: "http://t.test/signup" }, { mode: "full-auto" }));
+    const x = await c.handle(req({ action: "click", ref: refOf(r.text, "Create account") }, { mode: "full-auto", origins: ["t.test"], rules: view("Ask before app writes at t.test") }));
+    expect(x).toMatchObject({ ok: false, needsApproval: true });
+  });
+  it("a Never rule on a domain stops even opening it", async () => {
+    const x = await c.handle(req({ action: "open", url: "http://t.test/" }, { mode: "full-auto", rules: view("Never browse t.test") }));
+    expect(x).toMatchObject({ ok: false, error: STR_RULES.macNever("Never browse t.test") });
+    expect((x as { needsApproval?: boolean }).needsApproval).toBeUndefined();
   });
 });

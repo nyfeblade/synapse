@@ -72,7 +72,7 @@ declare module "./gateway" {
     setProviderKey: { args: { provider: P; sealed: string }; result: ProvidersView };
     clearProviderKey: { args: { provider: P }; result: ProvidersView };
     /** The saved key, or a sealed candidate: a free model list, then one tiny metered call. */
-    testProviderKey: { args: { provider: P; sealed?: string }; result: ProviderTestResult };
+    testProviderKey: { args: { provider: P; sealed?: string; keyId?: string }; result: ProviderTestResult };
     /** The user agreed to version `textVersion` of the provider's consent text. */
     consentProvider: { args: { provider: P; textVersion: number }; result: ProvidersView };
   }

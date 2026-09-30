@@ -35,6 +35,15 @@ export const PROFILES: Record<RunnerName, CallProfile> = {
     // ~400 tokens of hook text per user message (compare/params.ts perMessageOverhead, calibrated on usage.db) [measured].
     perMessageExtra: 400,
   },
+  "provider-loop": {
+    // Synapse's coding prompt (~1,100 tokens) + the eight coding tools' schemas (~1,900) [inferred from the files'
+    // sizes at 4 chars a token]; no Bot prompt, no MCP servers, no SendMessage.
+    prefix: 1_100 + 1_900,
+    growthPerCall: 1_200,
+    outputPerCall: 350,
+    extraCalls: 0,
+    perMessageExtra: 0,
+  },
   cli: {
     // Claude Code's system tools 11,450 [measured, same CLI build] + its preset system prompt without
     // our Bot append, ~4,500 [inferred]; no MCP servers (--strict-mcp-config), no user skills.

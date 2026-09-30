@@ -7,7 +7,7 @@ import { PendingWakes } from "../../background/pending-wakes";
 import type { Completion } from "../../background/revivals";
 import { SubagentService, type ChildSpec } from "../../background/subagents";
 import { createSubagentTools } from "../../background/subagent-tools";
-import { FakeBrain, type FakeScript } from "../../brain/fake-brain";
+import { FakeBrain, type FakeScript, type FakeStep } from "../../brain/fake-brain";
 import { DEFAULT_FLAGS } from "../../brain/conformance/flags";
 import type { BrainWiring } from "../../brain/types";
 import { SseHub } from "../../gateway/sse-hub";
@@ -238,39 +238,79 @@ describe("final box verification: a child inherits the review origin of the turn
 });
 
 
-describe("0.1.6: computer and browser helpers run on Claude, whatever the parent's model", () => {
-  function launchOn(parentModel: string, claudeReady?: () => boolean) {
+describe("computer and browser helpers run on the Bot's own model: no feature needs Claude", () => {
+  function launchOn(parentModel: string, o: { seesImages?: (ref: string) => boolean; screenView?: (ref: string) => { w: number; h: number }; script?: FakeScript } = {}) {
     const sup = new Supervisor({ caps: { maxLive: 20, maxRunning: 20, warmIdleMs: 600_000, userPreemptAfterMs: 15_000 }, brainFactory: () => { throw new Error("no bots here"); } });
     const specs: ChildSpec[] = [];
+    const done: Completion[] = [];
     const svc = new SubagentService({
       supervisor: sup,
-      makeBrain: (spec) => { specs.push(spec); return new FakeBrain(`child:${spec.id}`, wiring(), () => [{ text: "ok" }]); },
-      revivals: { complete: () => {} }, pending: new PendingWakes(path.join(fs.mkdtempSync(path.join(os.tmpdir(), "sa-c-")), "pw.json")),
+      makeBrain: (spec) => { specs.push(spec); return new FakeBrain(`child:${spec.id}`, wiring(), o.script ?? (() => [{ text: "ok" }])); },
+      revivals: { complete: (c) => done.push(c) }, pending: new PendingWakes(path.join(fs.mkdtempSync(path.join(os.tmpdir(), "sa-c-")), "pw.json")),
       hub: new SseHub(), bots: { summary: () => ({ profile: { model: parentModel } }) as never, nextTurnNo: () => 11, userMessageEpoch: () => 1 },
-      transcriptPath: () => null, ...(claudeReady ? { claudeReady } : {}),
+      transcriptPath: () => null, ...(o.seesImages ? { seesImages: o.seesImages } : {}), ...(o.screenView ? { screenView: o.screenView } : {}),
     });
-    return { svc, specs };
+    return { svc, specs, done };
   }
 
-  it("a provider Bot's computerUse and browserUse children are Claude children; its generalPurpose child keeps its own model", async () => {
+  it("a provider Bot's computerUse and browserUse children run on its own model; a Claude Bot's on Claude", async () => {
     const got: [string, string][] = [];
-    for (const t of ["computerUse", "browserUse", "generalPurpose"]) { // one service each: only one desktop child runs at a time
-      const s = launchOn("openai:gpt-6.1-sol", () => true);
-      await s.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: t });
-      await flush();
-      got.push(...s.specs.map((x): [string, string] => [x.type, x.model]));
+    for (const parent of ["openai:gpt-6.1-sol", "claude-opus-5"]) {
+      for (const t of ["computerUse", "browserUse", "generalPurpose"]) { // one service each: only one desktop child runs at a time
+        const s = launchOn(parent);
+        await s.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: t });
+        await flush();
+        got.push(...s.specs.map((x): [string, string] => [x.type, x.model]));
+      }
     }
-    expect(got).toEqual([["computerUse", "claude-sonnet-5"], ["browserUse", "claude-sonnet-5"], ["generalPurpose", "openai:gpt-6.1-sol"]]);
+    expect(got).toEqual([
+      ["computerUse", "openai:gpt-6.1-sol"], ["browserUse", "openai:gpt-6.1-sol"], ["generalPurpose", "openai:gpt-6.1-sol"],
+      ["computerUse", "claude-sonnet-5"], ["browserUse", "claude-sonnet-5"], ["generalPurpose", "claude-opus-5"],
+    ]);
   });
 
-  it("without an Anthropic key they're refused up front with a reason the Bot can pass on; generalPurpose still runs", async () => {
-    const s = launchOn("gemini:gemini-3.8-flash", () => false);
+  it("nothing is refused for want of an Anthropic key: a Gemini Bot's helpers start", async () => {
     for (const t of ["computerUse", "browserUse"]) {
-      expect(await s.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: t })).toEqual({ text: STRC.computerNeedsClaude, isError: true });
+      const s = launchOn("gemini:gemini-3.8-flash");
+      const r = await s.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: t });
+      expect(r.isError).toBeFalsy();
+      await flush();
+      expect(s.specs.map((x) => x.model)).toEqual(["gemini:gemini-3.8-flash"]);
     }
-    expect((await s.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: "generalPurpose" })).isError).toBeFalsy();
+  });
+
+  it("a model that can't read images gets the text-only prompt; a shrunk view sets the coordinate range", async () => {
+    const t = launchOn("deepseek:deepseek-flash", { seesImages: () => false });
+    await t.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: "computerUse" });
     await flush();
-    expect(s.specs.map((x) => x.type)).toEqual(["generalPurpose"]);
-    expect(STRC.computerNeedsClaude).toContain("Anthropic API key");
+    expect(t.specs[0]!.textOnly).toBe(true);
+    expect(t.specs[0]!.systemAppend).toContain("Start with ReadScreen");
+    expect(t.specs[0]!.systemAppend).toContain("0..1279 × 0..799");
+    const b = launchOn("deepseek:deepseek-flash", { seesImages: () => false });
+    await b.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: "browserUse" });
+    await flush();
+    expect(b.specs[0]!.systemAppend).toContain("You can't see images: browser_snapshot is how you read the page");
+    const v = launchOn("openai:gpt-6.1-sol", { seesImages: () => true, screenView: () => ({ w: 1229, h: 768 }) });
+    await v.svc.launch("bot-a", { description: "x", prompt: "y", subagent_type: "computerUse" });
+    await flush();
+    expect(v.specs[0]!.textOnly).toBeUndefined();
+    expect(v.specs[0]!.view).toEqual({ w: 1229, h: 768 });
+    expect(v.specs[0]!.systemAppend).toContain("(1229×768, Linux desktop");
+    expect(v.specs[0]!.systemAppend).toContain("0..1228 × 0..767");
+    expect(v.specs[0]!.systemAppend).toContain("look at the latest screenshot");
+  });
+
+  it("the loop guard stops a child whose step keeps failing the same way, on any brain, and says so in its report", async () => {
+    const fail = (n: number): FakeStep[] => [
+      { emit: { kind: "tool_start", toolUseId: `c${n}`, name: "mcp__computer__browser_click", input: { ref: "e9" }, messageId: `m${n}` } },
+      { emit: { kind: "tool_end", toolUseId: `c${n}`, name: "mcp__computer__browser_click", isError: true, output: "Unknown ref e9. Take a fresh browser_snapshot and use a ref from it." } },
+    ];
+    const s = launchOn("openai:gpt-6.1-sol", { script: () => [...fail(1), ...fail(2), ...fail(3), ...fail(4), ...fail(5), { text: "still trying" }] });
+    await s.svc.launch("bot-a", { description: "Click it", prompt: "y", subagent_type: "browserUse" });
+    await flush();
+    await flush();
+    expect(s.done).toHaveLength(1);
+    expect(s.done[0]!.block).toContain("failed after");
+    expect(s.done[0]!.block).toContain("kept failing (4 tries in a row)");
   });
 });

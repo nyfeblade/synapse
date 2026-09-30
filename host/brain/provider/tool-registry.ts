@@ -21,6 +21,8 @@ export interface RegisteredTool {
   /** The zod validator for the tool's input. */
   validator: ZodType;
   wire: WireTool;
+  /** Behind ToolSearch: its schema reaches the model only once a ToolSearch result names it. */
+  deferred: boolean;
 }
 
 const handlers = new WeakMap<RegisteredTool, BotToolDef["handler"]>();
@@ -120,6 +122,11 @@ function requiredKeysValidator(schema: Record<string, unknown>): ZodType {
 
 /** Canonical names: bot tools are served as `mcp__bot__<name>` (the Claude brain's MCP server "bot"). */
 export const BOT_PREFIX = "mcp__bot__";
+/** A computer subagent's screen and browser tools (the Claude brain's restricted MCP server "computer"). */
+export const COMPUTER_PREFIX = "mcp__computer__";
+/** Bot and computer tools go to the model under their bare name (`Computer`, `browser_click`). */
+const bareName = (canonical: string) =>
+  canonical.startsWith(BOT_PREFIX) ? canonical.slice(BOT_PREFIX.length) : canonical.startsWith(COMPUTER_PREFIX) ? canonical.slice(COMPUTER_PREFIX.length) : canonical;
 
 export class ToolRegistry {
   private byCanonical = new Map<string, RegisteredTool>();
@@ -130,17 +137,17 @@ export class ToolRegistry {
    * byte-stable for prompt caching. Bot tools go to the model under their bare name (`SendMessage`), which is how the
    * standalone prompt names them; anything else keeps its sanitized canonical name.
    */
-  constructor(tools: { canonical: string; def: BotToolDef; jsonSchema?: Record<string, unknown> }[], dialect: SchemaDialect, maxTools = Number.POSITIVE_INFINITY) {
-    for (const { canonical, def, jsonSchema } of tools) {
+  constructor(tools: { canonical: string; def: BotToolDef; jsonSchema?: Record<string, unknown>; deferred?: boolean }[], dialect: SchemaDialect, maxTools = Number.POSITIVE_INFINITY) {
+    for (const { canonical, def, jsonSchema, deferred } of tools) {
       if (this.byCanonical.has(canonical) || this.byCanonical.size >= maxTools) continue;
-      const bare = canonical.startsWith(BOT_PREFIX) ? canonical.slice(BOT_PREFIX.length) : canonical;
+      const bare = bareName(canonical);
       let wireName = WIRE_RE.test(bare) ? bare : sanitizeName(bare);
       for (let n = 2; this.byWire.has(wireName); n++) wireName = `${sanitizeName(bare).slice(0, 60)}_${n}`;
       // An MCP server's tool (spec P2) brings its own JSON Schema; the server validates the rest itself.
       const { schema, strict } = sanitizeSchema(jsonSchema ? { type: "object", properties: {}, ...jsonSchema } : zodToJsonSchema(def.schema), dialect);
       const t: RegisteredTool = {
         canonical, wireName, description: def.description, readOnly: def.readOnly, validator: jsonSchema ? requiredKeysValidator(jsonSchema) : z.object(def.schema),
-        wire: { name: wireName, description: def.description, parameters: schema, strict },
+        wire: { name: wireName, description: def.description, parameters: schema, strict }, deferred: deferred === true,
       };
       handlers.set(t, def.handler);
       this.byCanonical.set(canonical, t);
@@ -152,8 +159,23 @@ export class ToolRegistry {
     return new ToolRegistry(defs.map((def) => ({ canonical: `${BOT_PREFIX}${def.name}`, def })), dialect, maxTools);
   }
 
+  /** Every tool, a deferred one marked `defer` (Anthropic sends them all; the API expands a tool_reference). */
   wireTools(): WireTool[] {
-    return [...this.byCanonical.values()].map((t) => t.wire);
+    return [...this.byCanonical.values()].map((t) => (t.deferred ? { ...t.wire, defer: true } : t.wire));
+  }
+  /**
+   * What a provider without native deferral gets: the tools that load up front, then the deferred ones a ToolSearch
+   * result has loaded, in the order they were loaded (append-only, so the request prefix stays stable after a load).
+   */
+  loadedWireTools(loaded: readonly string[]): WireTool[] {
+    const up = [...this.byCanonical.values()].filter((t) => !t.deferred).map((t) => t.wire);
+    const seen = new Set<string>();
+    const later = loaded.flatMap((c) => { const t = this.byCanonical.get(c); if (!t || !t.deferred || seen.has(c)) return []; seen.add(c); return [t.wire]; });
+    return [...up, ...later];
+  }
+  /** The deferred tools, for ToolSearch to find. */
+  deferredTools(): RegisteredTool[] {
+    return [...this.byCanonical.values()].filter((t) => t.deferred);
   }
   canonicalNames(): string[] {
     return [...this.byCanonical.keys()];
@@ -163,6 +185,6 @@ export class ToolRegistry {
     return this.byWire.get(name) ?? this.byCanonical.get(name);
   }
   wireName(canonical: string): string {
-    return this.byCanonical.get(canonical)?.wireName ?? sanitizeName(canonical.startsWith(BOT_PREFIX) ? canonical.slice(BOT_PREFIX.length) : canonical);
+    return this.byCanonical.get(canonical)?.wireName ?? sanitizeName(bareName(canonical));
   }
 }

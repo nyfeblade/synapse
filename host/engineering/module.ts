@@ -1,4 +1,4 @@
-import { NO_LIMITS_CONFIRM, STR5, type BotSettings } from "@synapse/shared";
+import { NO_LIMITS_CONFIRM, STR5, isProviderModelRef, type BotSettings } from "@synapse/shared";
 import type { BotToolDef, BotToolResult } from "../brain/types";
 import { postCard } from "../phase5/cards";
 import type { HostModule, ModuleContext } from "../phase5/types";
@@ -15,7 +15,7 @@ export function applyEngineeringMode(cur: BotSettings, enabled: boolean): Partia
   return patch;
 }
 
-export function createEngineeringModule(ctx: ModuleContext): HostModule {
+export function createEngineeringModule(ctx: ModuleContext, o: { onEngineering?(botId: string): void } = {}): HostModule {
   return {
     name: "engineering",
     handlers: {
@@ -48,7 +48,9 @@ export function createEngineeringModule(ctx: ModuleContext): HostModule {
           // Takes effect on the NEXT turn, not the next compaction: re-render the frozen prompt (one
           // cache miss), and tell the Bot once. The mode is in the spawn key, so a warm CLI respawns.
           ctx.bots.invalidatePromptSnapshots(a.id);
-          ctx.bots.noteModeChange(a.id, was, on, modeChangeNotice(on, systemPromptModeFor(ctx.cfg, a.id)));
+          ctx.bots.noteModeChange(a.id, was, on, modeChangeNotice(on, systemPromptModeFor(ctx.cfg, a.id), isProviderModelRef(ctx.bots.summary(a.id).profile?.model)));
+          // Any model can do engineering work: a badge never stops it. A model that failed its tool-use check gets one note.
+          if (on) o.onEngineering?.(a.id);
         }
         return { agent };
       },
@@ -72,6 +74,9 @@ export function createEngineeringModule(ctx: ModuleContext): HostModule {
       };
       return [tool];
     },
-    systemAppendExtra: (botId) => engineeringSystemExtra(ctx.bots.summary(botId).settings, systemPromptModeFor(ctx.cfg, botId)),
+    systemAppendExtra: (botId) => {
+      const { settings, profile } = ctx.bots.summary(botId);
+      return engineeringSystemExtra(settings, systemPromptModeFor(ctx.cfg, botId), isProviderModelRef(profile?.model));
+    },
   };
 }

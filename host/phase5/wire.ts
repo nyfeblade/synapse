@@ -13,10 +13,24 @@ import { SdkAvatarGenerator, StubAvatarGenerator, type AvatarGenerator } from ".
 import { buildBotEnv } from "../brain/spawn-options";
 import { claudeExecutableFor } from "../brain/tool-policy";
 import type { BotToolDef } from "../brain/types";
-import { CodingAgents, boxGit, codingModelFor, umaskGit } from "../coding/coding-agents";
+import { CodingAgents, boxGit, umaskGit } from "../coding/coding-agents";
+import { acpEngine } from "../coding/engines/acp";
+import { claudeCodeEngine } from "../coding/engines/claude-code";
+import { providerLoopEngine } from "../coding/engines/provider-loop";
+import { CodingEngineRegistry, pickCodingEngine } from "../coding/engines/registry";
+import { serviceShell } from "../coding/engines/shells";
+import type { AcpSpawn } from "../brain/acp/spawn";
+import type { ProviderSessionStore } from "../brain/provider/session-store";
+import type { ShellService } from "../background/shells";
+import type { BotFileRunner } from "../walls/bot-file";
+import type { AcpVendorId } from "@synapse/shared";
+import { DEFAULT_BOT_MODEL, STRC, modelLabel } from "@synapse/shared";
+
+/** A model's label for a note ("GPT-6.1 Sol · OpenAI"), or the ref itself when it has none. */
+const modelLabelOf = (ref: string): string => { try { return modelLabel(ref as never); } catch { return ref; } };
 import { CodingCardIds } from "../coding/card-ids";
 import { codingHooks, createCodingModule } from "../coding/module";
-import { gateForCoding, sdkChildFactory } from "../coding/sdk-child";
+import { gateForCoding } from "../coding/sdk-child";
 import { homeWorktreePrep, shellRunAsBot } from "../coding/home-worktree";
 import { botPathInfo, sudoFsQuery } from "../walls/home-fs";
 import { SudoShellSpawner } from "../background/shell-spawner";
@@ -124,6 +138,8 @@ export interface Phase5 {
   composio: ComposioServices;
   /** 4.4: connector health (the Bot's next-turn note, the key check's answer). */
   health: HealthServices;
+  /** 0.1.7: usage.db, for per-key spend and the picker's recent models. */
+  usage: UsageStore;
   /** The connected Google address (the gate lets a Gmail draft only to the user through without a card). */
   googleEmail(): string | null;
   /** Final secfix item 4: the built-in Google server is mounted for this Bot (the merge never mounts another under "google"). */
@@ -151,6 +167,19 @@ export function wirePhase5(ctx: ModuleContext, o: {
   remember?(botId: string, fact: string): boolean;
   /** C2: the one ApprovalGate; a coding agent's Bash is decided by it like any Shell. */
   gate?: ApprovalGateLike;
+  /**
+   * Coding engines beyond Claude Code (spec §8): what provider-loop and ACP coding agents need from the host. Absent: only
+   * the Claude Code engine (and, on a fake host, its stand-in).
+   */
+  coding?: {
+    files: BotFileRunner; store: ProviderSessionStore; shells(): ShellService | null;
+    reasoning?(ref: string): boolean;
+    /** Whether an Anthropic key is saved (a Claude Bot's agents run on it). */
+    claudeReady(): boolean;
+    acp?: { spawn: AcpSpawn; consented(v: AcpVendorId): boolean; home(botId: string): string | null; newId(): string };
+    /** The tool-use conformance result of a provider model: a failed one gets a one-time note, never a refusal. */
+    toolUse?(ref: string): "pass" | "fail" | null;
+  };
   /** Multi-provider (§7a): routes dreaming to the Bot's provider's helper model; absent = Claude only. */
   routeDreams?(claude: DreamLlm): DreamLlm;
   /** Multi-provider (§7a rows 9–10): avatars and template drafts on the account/Bot helper; absent = Claude only. */
@@ -240,6 +269,28 @@ export function wirePhase5(ctx: ModuleContext, o: {
   // mac-browser: the per-session chat card and the week's browser usage (screenshots counted apart).
   const browserCards = new BrowserCards({ bots: ctx.bots, now: ctx.now, file: hp("browser-usage.json"), log: (l) => console.log(l) });
   const cardIds = new CodingCardIds(hp("coding-agent-cards.json"));
+  // Owner rule 2026-09-30: no badge or check ever stops a model from coding or Engineering mode. A model that failed its
+  // tool-use check gets one quiet note (a tray, once per Bot and model); the owner decides.
+  const noteToolUse = (botId: string, model: string | undefined) => {
+    if (!model || o.coding?.toolUse?.(model) !== "fail") return;
+    ctx.trays.add({ botId, title: STRC.toolUseCheckFailedTitle, detail: STRC.toolUseCheckFailed(modelLabelOf(model)), dedupeKey: `tool-use-check:${botId}:${model}` });
+  };
+  const codingGate = o.gate ? gateForCoding(o.gate) : null;
+  // Bug 231 round 1: Write/Edit are checked by real path, resolved as the Bot inside its home.
+  const codingRealpaths = ctx.cfg.perBotUid ? botPathInfo(ctx.cfg, sudoFsQuery(ctx.cfg, execBuf)) : undefined;
+  const oc = o.coding;
+  const codingShell = oc ? serviceShell(oc.shells) : null;
+  const codingEngines = new CodingEngineRegistry({
+    claudeCode: o.fake ? null : claudeCodeEngine({ cfg: ctx.cfg, flags: ctx.flags, gate: codingGate, ...(codingRealpaths ? { realpaths: codingRealpaths } : {}) }),
+    providerLoop: oc && codingShell ? providerLoopEngine({
+      hostPrivate: ctx.cfg.hostPrivate, gate: codingGate, ...(codingRealpaths ? { realpaths: codingRealpaths } : {}), files: oc.files, shell: codingShell, store: oc.store,
+      ...(oc.reasoning ? { reasoning: oc.reasoning } : {}), effort: (b) => ctx.bots.summary(b).profile.effort, now: ctx.now,
+    }) : null,
+    acp: oc?.acp && codingShell ? (v) => acpEngine(v, {
+      hostPrivate: ctx.cfg.hostPrivate, gate: codingGate, ...(codingRealpaths ? { realpaths: codingRealpaths } : {}), files: oc.files, shell: codingShell, store: oc.store,
+      spawn: oc.acp!.spawn, consented: oc.acp!.consented, home: oc.acp!.home, newId: oc.acp!.newId, now: ctx.now,
+    }) : null,
+  });
   const cHooks = codingHooks(fullCtx, cardIds, () => agents);
   flushCodingWakes = () => cHooks.flushDeferred();
   const agents: CodingAgents = new CodingAgents({ workspace: ctx.cfg.workspace, registryFile: hp("coding-agents.json"), now: ctx.now,
@@ -247,14 +298,19 @@ export function wirePhase5(ctx: ModuleContext, o: {
     git: o.fake ? umaskGit : boxGit({ cfg: ctx.cfg, get runAs() { return ctx.flags().runAs; } }),
     // Bug 231: once the box runs per-Bot accounts, the agent's worktree is the Bot's own, in its private ~/code.
     prepare: o.fake ? undefined : homeWorktreePrep({ cfg: ctx.cfg, run: shellRunAsBot({ cfg: ctx.cfg, spawner: new SudoShellSpawner(execBuf) }) }),
-    child: o.fake ? fakeCodingChild : sdkChildFactory({ cfg: ctx.cfg, flags: ctx.flags, gate: o.gate ? gateForCoding(o.gate) : null,
-      // Bug 231 round 1: Write/Edit are checked by real path, resolved as the Bot inside its home.
-      realpaths: ctx.cfg.perBotUid ? botPathInfo(ctx.cfg, sudoFsQuery(ctx.cfg, execBuf)) : undefined }),
-    // 0.1.6: a coding agent runs on the Claude Agent SDK, so it takes the Bot's model only when that is a Claude model;
-    // a Bot on a provider or a coding CLI gets Claude's default (it never passes "openai:…" to the SDK), and without an
-    // Anthropic key none starts.
-    model: (id) => codingModelFor(ctx.bots.summary(id).profile.model),
-    ...(o.fake ? {} : { claudeReady: () => credentialsReady() }),
+    // Spec §8: the engine follows the Bot's own model (engines/registry.ts): a provider model runs Synapse's own loop on
+    // it, a coding CLI runs that CLI, a Claude model follows the Bot's Engine (Synapse: the provider loop). A fake
+    // host (FUZZ, E2E) has no Claude: its Claude Code agents are the stand-in; the other engines run for real.
+    child: (c) => (c.engine === "claude-code" && o.fake ? fakeCodingChild(c) : codingEngines.start({ engine: c.engine, model: c.model }, c)),
+    model: (id) => ctx.bots.summary(id).profile.model ?? DEFAULT_BOT_MODEL,
+    choose: (id) => {
+      const { profile } = ctx.bots.summary(id);
+      return pickCodingEngine(profile.model, profile.engine, {
+        claudeReady: () => o.fake || (o.coding?.claudeReady() ?? credentialsReady()),
+        ...(o.coding?.acp ? { acpConsented: o.coding.acp.consented } : {}),
+      });
+    },
+    note: (botId, model) => noteToolUse(botId, model),
     // I13: coding agents follow the usage ladder and count toward the Bot's spend.
     // A real coding child is a metered query and is recorded as it runs (usage/metered-query.ts); only the
     // FUZZ/E2E stand-in, which never calls Claude, reports its pretend usage here.
@@ -296,13 +352,13 @@ export function wirePhase5(ctx: ModuleContext, o: {
     createCodingModule(fullCtx, agents, cardIds, cHooks),
     { name: "dreaming", handlers: {}, observers: [dreamer, { onSettled: (t) => { if (t.source === "user") lastUserTurn.set(t.botId, t.endedAt); } }], start: () => dreamer.start(), stop: () => dreamer.stop() },
     createFollowupsModule(fullCtx, { store: followStore, heartbeat }),
-    createEngineeringModule(fullCtx),
+    createEngineeringModule(fullCtx, { onEngineering: (b) => noteToolUse(b, ctx.bots.summary(b).profile?.model) }),
     createHealthModule(healthSvc, { mcp }),
     createWorkFinishedModule(fullCtx),
   ];
 
   return {
-    modules, ladder, budgets,
+    modules, ladder, budgets, usage,
     routinePausedUntil: (routineId, owner) => {
       const ladderSays = ladder.routinePausedUntil(routineId);
       if (ladderSays !== null) return ladderSays;
