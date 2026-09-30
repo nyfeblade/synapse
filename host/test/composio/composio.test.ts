@@ -176,7 +176,7 @@ describe("per-Bot grants", () => {
     expect(await s.c.listTools(s.b)).toEqual([]);
     expect(await runComposioToolForFake(s.c, s.a, "mcp__composio_apps__GMAIL_FETCH_EMAILS", { query: "x" })).toContain("\"ok\":true");
     expect(await runComposioToolForFake(s.c, s.b, "mcp__composio_apps__GMAIL_FETCH_EMAILS", {})).toBe(STRX.toolNotGranted("Gmail"));
-    const exec = s.fake.requests.find((r) => r.path.startsWith("/tools/execute/"));
+    const exec = s.fake.requests.find((r) => r.path.startsWith("/tools/execute/GMAIL_FETCH_EMAILS"));
     expect(exec?.body).toMatchObject({ connected_account_id: expect.stringMatching(/^ca_/), arguments: { query: "x" } });
   });
 

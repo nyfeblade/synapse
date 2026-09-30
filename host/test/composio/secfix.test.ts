@@ -43,7 +43,8 @@ describe("secfix 400: quiet reads are a fixed allow-list; only listed slugs run"
     const out = await runComposioToolForFake(c, a, "mcp__composio_apps__GMAIL_MADE_UP_EXFIL", {});
     expect(out).toContain("No such tool");
     expect(fake.requests.filter((r) => r.path.startsWith("/tools?")).length).toBe(2); // listed once, refreshed once
-    expect(fake.requests.some((r) => r.path.startsWith("/tools/execute/"))).toBe(false);
+    // (4.3b: the host's own GMAIL_GET_PROFILE, which names the new account by its address, is the only other call.)
+    expect(fake.requests.some((r) => r.path.startsWith("/tools/execute/") && !r.path.startsWith("/tools/execute/GMAIL_GET_PROFILE"))).toBe(false);
     expect(await runComposioToolForFake(c, a, "mcp__composio_apps__GMAIL_SEND_EMAIL", {})).toContain("\"ok\":true");
     c.stop();
   });

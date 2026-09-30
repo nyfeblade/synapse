@@ -25,7 +25,7 @@ import { ScriptedFrontSession } from "../../voice/front-session";
 type Utt = (typeof fixture.utterances)[number];
 const M = fixture.model;
 
-export interface Line { text: string; phrase?: PhraseKind; queuedAt: number; audioStart: number | null; audioEnd: number | null; cutAt: number | null; pauseMs: number; turn: number }
+export interface Line { text: string; phrase?: PhraseKind; queuedAt: number; chunkAt: number; audioStart: number | null; audioEnd: number | null; cutAt: number | null; pauseMs: number; turn: number }
 export interface Turn {
   id: string;
   /** Absolute times. */
@@ -44,6 +44,11 @@ export interface Turn {
   cutIn: boolean;
   /** The helper's (last) final, ms after the end of speech: the earliest anything can answer. */
   finalAfterSpeechMs: number;
+  /**
+   * 5.8: the answer's stages, ms after the end of speech (null: that stage never came): the helper's final, the
+   * answer's first text in the app, its first line's first TTS chunk ready, its first audio out.
+   */
+  stages: { final: number; firstText: number | null; firstChunk: number | null; firstAudio: number | null };
   /** The host said, answering the send, that the reply it held already had words (bug 218: no sound then). */
   hostReady: boolean;
   speculations: number;
@@ -85,6 +90,11 @@ export interface Options {
   outputLatencyMs?: number;
   /** Override what the voice says on turn i (default: the 12 real Sonnet 5 replies, in turn). */
   replyText?: (i: number) => string;
+  /**
+   * 5.8: the helper's likely ends, utterance id → ms after the end of speech, in place of the recorded ones (the 5.8
+   * helper sends one per stretch of new words: fixtures/voice-budget-likely-5.8.json). Absent: the recorded events.
+   */
+  likely?: Record<string, number[]>;
 }
 
 export async function runCall(o: Options = {}): Promise<{ turns: Turn[]; lines: Line[]; tokens: number; canceledTokens: number; kept: number; sessions: ScriptedFrontSession[] }> {
@@ -106,7 +116,7 @@ async function run(o: Options) {
   let loop: VoiceLoop;
   const speak = (text: string, s?: { phrase?: PhraseKind; pauseMs?: number }) => new Promise<void>((resolve) => {
     const t = now();
-    const line: Line = { text, phrase: s?.phrase, queuedAt: t, audioStart: null, audioEnd: null, cutAt: null, pauseMs: s?.pauseMs ?? 0, turn: turnIndex };
+    const line: Line = { text, phrase: s?.phrase, queuedAt: t, chunkAt: t, audioStart: null, audioEnd: null, cutAt: null, pauseMs: s?.pauseMs ?? 0, turn: turnIndex };
     lines.push(line);
     const chars = text.length;
     let firstChunk: number;
@@ -116,6 +126,7 @@ async function run(o: Options) {
       firstChunk = start + M.tts.firstChunkBaseMs + M.tts.firstChunkPerCharMs * chars;
       synthFreeAt = Math.max(firstChunk, start + chars * 5);
     }
+    line.chunkAt = firstChunk;
     const audioStart = Math.max(firstChunk, playEnd) + (playEnd <= t ? o.outputLatencyMs ?? 0 : 0);
     const audioEnd = audioStart + chars * M.tts.playMsPerChar;
     playEnd = audioEnd + (s?.pauseMs ?? 0);
@@ -244,7 +255,7 @@ async function run(o: Options) {
       lastWord = u.words.at(-1)!.w.toLowerCase().replace(/[.,!?]/g, "");
       const linesBefore = lines.length;
       const marksBefore = marks.length;
-      scheduleUtterance(loop, u, base, o.finalAs === "whisper" ? whisperStyle : undefined);
+      scheduleUtterance(loop, u, base, o.finalAs === "whisper" ? whisperStyle : undefined, o.likely?.[u.id]);
       const speechEnd = base + u.speechEndMs;
       // Let it play out: the reply spoken to the end and the loop listening again.
       await vi.advanceTimersByTimeAsync(Math.max(...u.events.map((e) => e.t)) + 200);
@@ -259,8 +270,11 @@ async function run(o: Options) {
       const talking = u.words.map((w, k) => [base + (k ? u.words[k - 1]!.endAt : w.endAt - 250), base + w.endAt] as const).filter(([a, b]) => b - a < 1_500);
       const over = mine.filter((l) => l.audioStart !== null && talking.some(([a, b]) => l.audioStart! < b && (l.audioEnd ?? Infinity) > a));
       const overUser = over.filter((l) => !l.phrase).length;
+      const finalAt = base + Math.max(...u.events.filter((e) => e.type === "final").map((e) => e.t));
+      const textMark = m.find((x) => x.what === "first-text" && x.at >= finalAt);
       turns.push({
         id: u.id, speechEnd,
+        stages: { final: finalAt - speechEnd, firstText: textMark ? textMark.at - speechEnd : null, firstChunk: answer ? answer.chunkAt - speechEnd : null, firstAudio: answer ? answer.audioStart! - speechEnd : null },
         firstAudio, answerAudio: answer ? answer.audioStart! - speechEnd : null,
         answerQueuedToAudio: answer ? answer.audioStart! - answer.queuedAt : null,
         phrases: mine.filter((l) => l.phrase && l.audioStart !== null).map((l) => l.phrase!),
@@ -291,7 +305,7 @@ function isFragmentLine(l: Line): boolean {
 }
 
 /** The helper's side of one utterance: speech start, Apple's partials (trailing the words), likely end, final. */
-function scheduleUtterance(loop: VoiceLoop, u: Utt, base: number, finalAs?: (t: string) => string) {
+function scheduleUtterance(loop: VoiceLoop, u: Utt, base: number, finalAs?: (t: string) => string, likelyMs?: number[]) {
   const byU = new Map<number, { start: number; final: number }>();
   for (const e of u.events) {
     const x = byU.get(e.u) ?? { start: Infinity, final: Infinity };
@@ -309,7 +323,10 @@ function scheduleUtterance(loop: VoiceLoop, u: Utt, base: number, finalAs?: (t: 
     const own = words.filter((w) => w.u === uid);
     own.forEach((w, k) => at(Math.min(w.endAt + M.partialLagMs, x.final - 5), () => loop.onPartial(own.slice(0, k + 1).map((y) => y.w).join(" "))));
   }
-  for (const e of u.events) {
+  // A likely end belongs to the helper utterance whose final hasn't come yet at that moment.
+  const ownerAt = (t: number) => [...byU].sort((a, b) => a[1].final - b[1].final).find(([, x]) => t < x.final)?.[0] ?? [...byU.keys()].at(-1)!;
+  const events = likelyMs === undefined ? u.events : [...u.events.filter((e) => e.type !== "likely"), ...likelyMs.map((ms) => ({ t: u.speechEndMs + ms, u: ownerAt(u.speechEndMs + ms), type: "likely" }))];
+  for (const e of events) {
     if (e.type === "likely") at(e.t, () => { const t = textAt(e.u, e.t); if (t) loop.onLikelyEnd(t); });
     if (e.type === "final") at(e.t, () => { const t = words.filter((w) => w.u === e.u).map((w) => w.w).join(" "); loop.onFinal(finalAs ? finalAs(t) : t); });
   }
@@ -371,5 +388,21 @@ export function summary(r: Awaited<ReturnType<typeof runCall>>) {
     tokens: r.tokens, canceledTokens: r.canceledTokens,
     // (No tokens figure: the scripted voice's counts are estimates from text length, not the model's.)
     ...joins(r.lines),
+  };
+}
+
+/**
+ * 5.8: where the time goes, turn by turn (turns without a recorded cut-in): each stage's p50 / p90 after the end of
+ * speech, and the p50 of each gap between stages (final → first text → first TTS chunk → first audio).
+ */
+export function stageSummary(r: Awaited<ReturnType<typeof runCall>>) {
+  const t = r.turns.filter((x) => !x.cutIn && x.stages.firstAudio !== null);
+  const s = (f: (x: Turn) => number | null) => ({ p50: pct(t.map(f), 0.5), p90: pct(t.map(f), 0.9) });
+  const gap = (a: keyof Turn["stages"], b: keyof Turn["stages"]) => (x: Turn) => (x.stages[a] !== null && x.stages[b] !== null ? x.stages[b]! - x.stages[a]! : null);
+  return {
+    turns: t.length,
+    final: s((x) => x.stages.final), firstText: s((x) => x.stages.firstText), firstChunk: s((x) => x.stages.firstChunk), firstAudio: s((x) => x.stages.firstAudio),
+    gaps: { finalToText: s(gap("final", "firstText")), textToChunk: s(gap("firstText", "firstChunk")), chunkToAudio: s(gap("firstChunk", "firstAudio")) },
+    underBudget: t.filter((x) => x.stages.firstAudio! <= 1_200).length / t.length,
   };
 }

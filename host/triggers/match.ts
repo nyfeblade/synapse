@@ -81,10 +81,13 @@ function one(t: Trigger, ev: TriggerEvent, ctx: MatchContext): boolean {
     const c = t.calendar;
     if (ev.source !== "calendar" || Number(ev.raw.minutesBefore) !== c.minutesBefore) return false;
     if ((c.calendarId ?? "primary") !== String(ev.raw.calendarId ?? "primary")) return false;
+    // 4.3b: a trigger that names a Google account fires only for that account's events.
+    if (c.account && lower(c.account) !== lower(String(ev.raw.account ?? ""))) return false;
     return calendarTitleMatches(c.match, ev.subject);
   }
   const e = t.email;
-  return ev.source === "email" && ev.account === e.account && lower(ev.channel || "INBOX") === lower(e.folder ?? "INBOX") && ev.raw.query === e.query;
+  return ev.source === "email" && ev.account === e.account && lower(ev.channel || "INBOX") === lower(e.folder ?? "INBOX") && ev.raw.query === e.query
+    && (!e.googleAccount || lower(e.googleAccount) === lower(String(ev.raw.googleAccount ?? "")));
 }
 
 export function matchesTrigger(t: Trigger, ev: TriggerEvent, ctx: MatchContext): boolean {

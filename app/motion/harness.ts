@@ -70,6 +70,10 @@ export async function startRig(): Promise<Rig> {
       return body.result;
     };
     await page.goto(url);
+    // Connected and the (empty) Bot list loaded before a caller creates anything: a Bot created while a cold Vite was
+    // still compiling the renderer could land between its first list and its event stream, and never show (the
+    // sidebar kept only the first of four Bots and the motion check timed out in its setup).
+    await page.getByText("Create your first Bot").first().waitFor({ timeout: 90_000 });
     const record = async <T>(fn: () => Promise<T>): Promise<Recording> => {
       await page.evaluate(() => (window as unknown as { __motion: { start(): void } }).__motion.start());
       try { await fn(); } finally { /* always stop */ }

@@ -83,9 +83,22 @@ function worstClick(x: Float32Array): number {
   const d = new Float64Array(x.length);
   for (let i = 1; i < x.length; i++) d[i] = Math.abs(x[i]! - x[i - 1]!);
   let worst = 0;
+  // The median of d over [i - W, i + W), kept as a sliding SORTED window (drop the sample leaving, insert the one
+  // arriving: a binary search and one shift each step) — the same value a fresh sort of the window gives. The old
+  // copy-and-sort per sample made this one test take 12 s alone, and time out at 20 s on a loaded Mac.
+  const win = Float64Array.from(d.subarray(0, 2 * W)).sort();
+  const find = (v: number) => { let lo = 0, hi = win.length; while (lo < hi) { const m = (lo + hi) >> 1; if (win[m]! < v) lo = m + 1; else hi = m; } return lo; };
   for (let i = W; i < x.length - W; i++) {
+    if (i > W) {
+      const out = d[i - W - 1]!;
+      const inn = d[i + W - 1]!;
+      const at = find(out); // an index holding `out`
+      win.copyWithin(at, at + 1); // remove it (the last slot is now free)
+      const to = (() => { let lo = 0, hi = win.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (win[m]! < inn) lo = m + 1; else hi = m; } return lo; })();
+      win.copyWithin(to + 1, to, win.length - 1);
+      win[to] = inn;
+    }
     if (d[i]! < 0.02) continue;
-    const win = Array.from(d.subarray(i - W, i + W)).sort((a, b) => a - b);
     worst = Math.max(worst, d[i]! / Math.max(win[W] ?? 1e-4, 1e-4));
   }
   return worst;

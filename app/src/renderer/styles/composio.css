@@ -13,3 +13,11 @@
 /* Marketplace Gmail / Calendar / Drive: Connect directly (default) beside the quick Composio option. */
 .mkt-twin { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .mkt-twin-note { font-size: var(--type-small); }
+/* 4.3b: accounts. One row per account under its app, and per-Bot account checkboxes. Tokens only. */
+.account-row { padding-left: 12px; }
+.account-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-checks { display: flex; flex-direction: column; padding: 0 0 6px 12px; }
+.account-checks .check-row { min-width: 0; }
+.account-checks input[type="checkbox"] { margin: 0; flex-shrink: 0; }
+.account-group { flex-direction: column; align-items: stretch; gap: 2px; }
+.account-group-title { font-size: var(--type-ui); }

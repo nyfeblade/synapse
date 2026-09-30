@@ -13,6 +13,7 @@ import { chooseEngine, qwenVoiceId, targetRmsFor, type QwenTts } from "./qwen";
 import type { PhraseCache } from "./voice-cache";
 import type { MicAccess } from "./privacy";
 import type { LmCache } from "./stt-lm";
+import type { LatencyHooks } from "./voice-latency";
 import { WHISPER_STOP_WAIT_MS } from "./stt-whisper";
 
 export type DictationEvent =
@@ -44,7 +45,8 @@ export type DictationEvent =
   // Bug 142: the utterance is probably complete (the reply may start early); the final still follows.
   | { type: "likely-end"; text: string }
   // Bug 165: which engine's words these are ("apple" | "whisper") and what the re-transcription cost.
-  | { type: "final"; text: string; engine?: string; whisperMs?: number }
+  // 5.8: `sinceVoiceMs` — how long before this final the user's voice stopped (the end of speech, for the latency record).
+  | { type: "final"; text: string; engine?: string; whisperMs?: number; sinceVoiceMs?: number }
   // Bug 165: whisper finished loading (or could not). Log only — dictation works either way.
   | { type: "whisper"; ok: boolean; ms?: number; model?: string; reason?: string }
   | { type: "error"; message: string; code?: string }
@@ -105,6 +107,7 @@ export function parseDictationLine(line: string): DictationEvent | null {
         const out: DictationEvent = { type: "final", text: e.text };
         if (e.engine === "apple" || e.engine === "whisper") out.engine = e.engine;
         if (typeof e.whisperMs === "number" && Number.isFinite(e.whisperMs)) out.whisperMs = e.whisperMs;
+        if (typeof e.sinceVoiceMs === "number" && Number.isFinite(e.sinceVoiceMs) && e.sinceVoiceMs >= 0) out.sinceVoiceMs = e.sinceVoiceMs;
         return out;
       }
       case "whisper": {
@@ -241,6 +244,8 @@ export function registerDictation(o: {
   remote?: RemoteAudio;
   /** 0.1.4 first-run: the user allowed Apple's servers for speech (read at every session start). Absent = never. */
   serverSpeech?: () => boolean;
+  /** 5.8: a call's reply timings (voice-latency.ts). Absent = not recorded. */
+  latency?: LatencyHooks;
 }): { switchDevices(p: AudioPrefs): void; feedRemote(pcm: Buffer): boolean; remoteLive(): boolean; muteRemote(muted: boolean): void } {
   const log = o.log ?? ((line: string) => console.warn(line));
   const prosody = o.prosody ?? (() => prosodyFrom());
@@ -397,6 +402,11 @@ export function registerDictation(o: {
         if (e && (child === spawned || flushing.has(spawned))) {
           if (e.type === "end") { endedHere = true; if (child === spawned) sessionEnded = true; }
           if (e.type === "barge-in") o.tts?.cancel();
+          // 5.8: a call's reply timings — the end of turn (and how long ago the voice stopped), and a line's first audio out.
+          if (mode === "call" && child === spawned) {
+            if (e.type === "final") o.latency?.final(e.sinceVoiceMs);
+            else if (e.type === "speak-audio") o.latency?.audio(e.id);
+          }
           if (e.type === "error") { reported = true; log(`dictation[${sessionId.slice(0, 8)}] error ${e.code ?? ""}: ${e.message}`); }
           if (e.type === "audio-restart") log(`dictation[${sessionId.slice(0, 8)}] audio restarted (${e.reason})`);
           if (e.type === "device-fallback" || e.type === "device-restored" || e.type === "echo-unavailable" || e.type === "devices") {
@@ -453,7 +463,7 @@ export function registerDictation(o: {
   // voice-processing audio unit the microphone uses and echo cancellation can subtract it.
   // `first`/`more`: where this line sits in its reply (bug 164). The renderer knows — it is what
   // split the reply into sentences — and the hybrid needs it to decide which engine opens.
-  registerNative("dictation.speak", (a: { sessionId?: string; id?: unknown; text?: unknown; voice?: unknown; fallbackVoice?: unknown; rate?: unknown; lang?: unknown; queue?: unknown; pauseMs?: unknown; pauseMsQwen?: unknown; pan?: unknown; azimuth?: unknown; seat?: unknown; cache?: unknown; qwenBot?: unknown }) => {
+  registerNative("dictation.speak", (a: { sessionId?: string; id?: unknown; text?: unknown; voice?: unknown; fallbackVoice?: unknown; rate?: unknown; lang?: unknown; queue?: unknown; pauseMs?: unknown; pauseMsQwen?: unknown; pan?: unknown; azimuth?: unknown; seat?: unknown; cache?: unknown; qwenBot?: unknown; reply?: unknown }) => {
     if (typeof a?.text !== "string" || a.text.length > LIMITS5.voiceSpeakMaxChars) throw new Error("That reply can't be spoken.");
     if (!validSessionId(a.id)) throw new Error("That speech id isn't valid.");
     const validPause = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 1000;
@@ -463,6 +473,8 @@ export function registerDictation(o: {
     if (!c?.stdin) return { spoken: false };
     if (remoteHelpers.has(c)) o.remote?.line(a.text);
     const id = a.id;
+    // 5.8: a line of the Bot's reply (not the call's own "mm", filler or greeting): its first audio is the reply's.
+    if (a.reply === true) o.latency?.line(id);
     const cmd: Record<string, unknown> = { id, text: a.text };
     const cloned = f5VoiceId(a.voice);
     const qwen = qwenVoiceId(a.voice);
@@ -549,6 +561,7 @@ export function registerDictation(o: {
     if (voiceId && cached) {
       cmd.engine = "pcm";
       c.stdin.write(`speak ${JSON.stringify(cmd)}\n`);
+      o.latency?.chunk(id);
       for (let i = 0; i < cached.length; i += PCM_CHUNK_BYTES) c.stdin.write(`pcm ${JSON.stringify({ id, data: cached.subarray(i, i + PCM_CHUNK_BYTES).toString("base64") })}\n`);
       c.stdin.write(`pcm-end ${JSON.stringify({ id })}\n`);
       return { spoken: true, cached: true };
@@ -576,7 +589,7 @@ export function registerDictation(o: {
           ? (h: KokoroHandlers) => o.qwen!.synthQwen({ id, text, voice: voiceId!, speed, quality: "live", targetRms: qwenTarget }, h)
           : (h: KokoroHandlers) => tts.synth({ id, text, voice: voiceId!, speed }, h);
         send(withProsody(text, {
-          audio: (pcm) => { keep?.push(Buffer.from(pcm)); if (live()) c.stdin?.write(`pcm ${JSON.stringify({ id, data: pcm.toString("base64") })}\n`); },
+          audio: (pcm) => { keep?.push(Buffer.from(pcm)); if (live()) { o.latency?.chunk(id); c.stdin?.write(`pcm ${JSON.stringify({ id, data: pcm.toString("base64") })}\n`); } },
           done: () => {
             if (keep?.length) o.phrases!.put(voiceId, speed, text, Buffer.concat(keep), qwenTarget);
             if (live()) c.stdin?.write(`pcm-end ${JSON.stringify({ id })}\n`);
@@ -606,6 +619,7 @@ export function registerDictation(o: {
     if (!validSessionId(a.sessionId)) throw new Error("That dictation session isn't valid.");
     const ms = typeof a.ms === "number" && Number.isFinite(a.ms) ? ` (+${Math.round(a.ms)} ms)` : "";
     log(`dictation[${a.sessionId.slice(0, 8)}] mark ${a.what}${ms}`);
+    if (a.sessionId === session) o.latency?.mark(a.what);
     return {};
   });
   // Plan item 16 (call-behaviour): the Bot's last line asked something; the helper may end a short answer sooner.

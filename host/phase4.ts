@@ -46,7 +46,7 @@ import { MailboxStore, emailHandlers } from "./triggers/email/mailboxes";
 import { EventQueue } from "./triggers/event-queue";
 import { CalendarTriggers } from "./triggers/calendar-triggers";
 import type { GoogleGet } from "./triggers/email/gmail-history";
-import { GOOGLE_MAIL_ACCOUNT } from "./triggers/email/email-triggers";
+import { GOOGLE_MAIL_ACCOUNT, type GoogleAccountRef } from "./triggers/email/email-triggers";
 import { MacFolderWatch } from "./triggers/mac-folder";
 import { StandupService, standupHandlers } from "./standup/standup-service";
 import { FileTriggerWatcher } from "./triggers/file-watcher";
@@ -110,9 +110,12 @@ export interface Phase4Deps {
   /** I10: the Bot's scanner (vault values, connector secrets, webhook keys) for trigger/event text before it is stored or rendered. */
   redact?(botId: string, text: string): string;
   /** The built-in Google connector's API for triggers (null while not connected); host-side token, never the Bot's. */
-  googleGet?(api: "gmail" | "calendar"): GoogleGet | null;
-  /** The Bot has the Google connector turned on (per-Bot scoping of mail and calendar triggers). */
-  googleAllowed?(botId: string): boolean;
+  googleGet?(api: "gmail" | "calendar", accountId?: string): GoogleGet | null;
+  /** 4.3b: every connected Google account (mail and calendar triggers poll each one once, for every Bot). */
+  googleAccounts?(): GoogleAccountRef[];
+  /** The Bot has the Google connector turned on (per-Bot scoping of mail and calendar triggers); 4.3b: with an
+   *  account id, that account is granted to it. */
+  googleAllowed?(botId: string, accountId?: string): boolean;
   /** A Mac folder's listing over the local bridge, or null (Mac away, or the folder isn't an auto-run folder). */
   macList?(folder: string, botId: string): Promise<string | null>;
   /** Bug 134: the user's first name from their memory profile (null = not known; the Mac's account name is the fallback). */
@@ -263,8 +266,8 @@ function build(d: Phase4Deps) {
     lastRunEndedAt: (botId, routineId) => store.runs(botId, routineId)[0]?.finishedAt ?? null,
   });
   const mailboxes = new MailboxStore(cfg);
-  const email = new EmailTriggers({ store, queue, mailboxes, model, now, setTimer, clearTimer, googleMail: () => d.googleGet?.("gmail") ?? null, googleAllowed: (b) => d.googleAllowed?.(b) ?? false });
-  const calendar = new CalendarTriggers({ store, queue, source: () => d.googleGet?.("calendar") ?? null, allowed: (b) => d.googleAllowed?.(b) ?? false, now, setTimer, clearTimer });
+  const email = new EmailTriggers({ store, queue, mailboxes, model, now, setTimer, clearTimer, googleMail: (acc) => d.googleGet?.("gmail", acc) ?? null, ...(d.googleAccounts ? { googleAccounts: d.googleAccounts } : {}), googleAllowed: (b, acc) => d.googleAllowed?.(b, acc) ?? false });
+  const calendar = new CalendarTriggers({ store, queue, source: (acc) => d.googleGet?.("calendar", acc) ?? null, ...(d.googleAccounts ? { accounts: d.googleAccounts } : {}), allowed: (b, acc) => d.googleAllowed?.(b, acc) ?? false, now, setTimer, clearTimer });
   const macFolders = new MacFolderWatch({ store, queue, list: (f, b) => d.macList?.(f, b) ?? Promise.resolve(null), now, setTimer, clearTimer });
   // Bug 44(a): the arming pass that skips a routine it cannot subscribe now tells the user, on the
   // routine's own row, before the subscribers run — so nothing is left listed as Active that can never fire.

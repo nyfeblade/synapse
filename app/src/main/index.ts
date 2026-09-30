@@ -6,7 +6,7 @@ import { hkdfSync, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { availableMemory, refreshAvailableMemory, seedAvailableMemory } from "./mac-memory";
-import { STRF, scrubClaudeLogin, boxPortEnv, WRONG_HOST_MESSAGE, APP_NAME, CALL_FEEL, LIMITSC, VOICE_ENGINE_MEMORY_MB, defaultVoiceMode, isVoiceMode, resolveVoiceMode, shouldDropToLight, type VoiceMode } from "@synapse/shared";
+import { STRF, scrubClaudeLogin, boxPortEnv, WRONG_HOST_MESSAGE, APP_NAME, CALL_FEEL, LIMITSC, VOICE_ENGINE_MEMORY_MB, defaultVoiceMode, isVoiceMode, resolveVoiceMode, shouldDropToLight, type VoiceMode, type SseEvent, type LocalAskStatus } from "@synapse/shared";
 import { BoxLifecycle, OrbBoxOps, bundledImageVersion, defaultBoxDir, type LifecycleState } from "./box-lifecycle";
 import { BoxPin } from "./box-pin";
 import { CoordinatorHost, type CoordinatorProcess } from "./coordinator-host";
@@ -24,7 +24,7 @@ import { deployAndReconnect, hostMoved } from "./auto-update-steps";
 import { PROBE_ENV, codeIdentity, electronStore, migrationItemName, openLegacyKeychain, runProbeMode } from "./keychain";
 import { FileKeyStore } from "./file-key-store";
 import { SECRETS_RELOCKED_MESSAGE, mayCreateKey, openSealing, prepareSealing, retireStaleHashKey, sealer } from "./sealing";
-import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, MessageChannelMain, nativeTheme, screen, shell, systemPreferences, utilityProcess } from "electron";
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, MessageChannelMain, nativeTheme, powerMonitor, screen, shell, systemPreferences, utilityProcess } from "electron";
 import { ensureMicAccess, privacySettingsUrl } from "./native/privacy";
 import { captureScreen } from "./native/screen-share";
 import { clampRectToWorkArea, maximizeRect } from "./window-bounds";
@@ -38,6 +38,8 @@ import { registerClipboardBotLink, registerShareMenu } from "./native/share-menu
 import { registerOpenBotpacks } from "./native/open-botpacks";
 import { registerAudioDevices } from "./native/audio-devices";
 import { registerDictation, writeContextFile } from "./native/dictation";
+import { recordSelfTest, registerVoiceLatency } from "./native/voice-latency";
+import { reportDir, runVoiceSelfTest, scheduleVoiceSelfTest, writeReport } from "./native/voice-selftest";
 import { makeLmCache } from "./native/stt-lm";
 import { downloadModel, helperHasWhisper, helperWhisperArgs, humanBytes, whisperRoot, whisperStatus } from "./native/stt-whisper";
 import { registerWakeWord } from "./native/wake-wire";
@@ -82,6 +84,7 @@ import { registerMacBrowser } from "./browser/wire";
 import { registerMacApps } from "./macapp/wire";
 import { registerPhone } from "./phone/wire";
 import { registerMcp } from "./mcp/wire";
+import { registerTelegram, type TelegramWire } from "./telegram/wire";
 import { makeTailscale } from "./phone/tailscale";
 
 const profileDir = configureProfile(app, process.env);
@@ -414,14 +417,25 @@ async function start(): Promise<void> {
     openExternal: (url) => shell.openExternal(url),
   });
   app.on("will-quit", () => macApps.close());
+  // Wave 4.1: the Telegram bridge (made below, next to MCP) gets the Bots' send-message events while it's on.
+  let telegram: TelegramWire | null = null;
+  const telegramWaits = new Map<number, (r: { ok?: boolean; result?: unknown; error?: string }) => void>();
+  let telegramSeq = 0;
   const coordinator = new CoordinatorHost({
     fork: () => utilityProcess.fork(path.join(__dirname, "coordinator.cjs"), [], { serviceName: "Synapse Coordinator" }) as unknown as CoordinatorProcess,
     onMessage: (m) => {
       if (macBrowser.onMessage(m)) return;
       if (macApps.onMessage(m)) return;
       if (m.type === "gateway-refused") { onGatewayRefused(); return; }
+      if (m.type === "telegram-local-answer-result" && typeof m.id === "number") { telegramWaits.get(m.id)?.(m as never); telegramWaits.delete(m.id); return; }
+      if (m.type === "telegram-event") { telegram?.onEvent((m as unknown as { ev: SseEvent }).ev); return; }
       // The coordinator's stream: "connected" means its client proved this host for the connection (a restart drops it).
-      if (m.type === "conn-state") { streamUp = (m as { kind?: string }).kind === "connected"; return; }
+      if (m.type === "conn-state") {
+        const up = (m as { kind?: string }).kind === "connected";
+        if (up && !streamUp) telegram?.reportAgain(); // 4.4: a (re)started host has no word from Telegram yet
+        streamUp = up;
+        return;
+      }
       if (m.type === "mac-key-result" && typeof m.id === "number") {
         macKeyWaits.get(m.id)?.((m as { result?: unknown }).result);
         macKeyWaits.delete(m.id);
@@ -436,6 +450,13 @@ async function start(): Promise<void> {
         const approvalId = typeof raw === "string" ? raw : undefined;
         showBotNotification(win, { botId: m.botId, title: m.title ?? "", body: m.body ?? "", ...(approvalId ? { approvalId } : {}) },
           (a) => coordinator.postMessage({ type: "approval-answer", ...a }));
+        // 4.4: work finished, also through Telegram when the owner opted in (the bridge sends only when paired).
+        const tg = (m as { telegram?: unknown }).telegram;
+        if (typeof tg === "string" && tg) telegram?.bridge.notifyOwner(m.botId, tg);
+      }
+      // 4.4: a connector broke (once per break); a click opens Settings → Connections.
+      else if (m.type === "notify-app") {
+        showAppNotification(win, { title: m.title ?? "", body: m.body ?? "" }, () => emitNative("open-settings", { section: "connections" }));
       }
       else if (m.type === "badge") setDockBadge(m.count ?? 0);
     },
@@ -445,6 +466,7 @@ async function start(): Promise<void> {
     },
     onRespawn: () => {
       if (windowLoaded) wirePort();
+      telegram?.rewatch();
       if (!win.isDestroyed()) sendFocus();
     },
   });
@@ -612,6 +634,7 @@ async function start(): Promise<void> {
   // Bug 141: never pre-render while a call or dictation has the microphone; the lines calls asked for
   // are remembered so a new launch renders them before the next call.
   let micLive = false;
+  let voiceSelfTest: ReturnType<typeof scheduleVoiceSelfTest> | null = null;
   /** Bug 164: the low-memory watch, running only while a call holds the microphone. */
   let voiceMemoryTimer: NodeJS.Timeout | null = null;
   const prerender = registerVoiceCache({ cache: phraseCache, tts: kokoro, qwen, log: voiceLog, live: () => micLive, book: path.join(app.getPath("userData"), "voice-cache", "phrasebook.json") });
@@ -677,7 +700,10 @@ async function start(): Promise<void> {
   void phone.resume().catch((e: Error) => voiceLog(`phone: resume failed: ${e.message}`));
   // The tailnet mapping goes with the app (it is made again, and verified, at the next launch).
   app.on("will-quit", () => { phone.quit(); void phone.dispose(); });
+  // 5.8: every call's reply timings (numbers only), the budget check, and the last call's first audio in Settings → Voice.
+  const voiceLatency = registerVoiceLatency(registerNative, { userData: app.getPath("userData"), log: voiceLog });
   const dictation = registerDictation({
+    latency: voiceLatency.recorder,
     remote: phone.calls,
     lm: sttLm,
     whisper: (mode) => helperWhisperArgs({ status: readWhisperStatus(), mode, dictationOnly: !whisperInCalls() }),
@@ -697,6 +723,7 @@ async function start(): Promise<void> {
     // Wake word: dictation and calls own the microphone while they run.
     onActive: (active) => {
       micLive = active;
+      if (active) voiceSelfTest?.callStarted(); // 5.8: never beside a call (or dictation): the check stops at once
       wakeWire?.setActive(active);
       if (!active) prerender.kick();
       else prerender.pre.halt(); // bug 221: no pre-render (a Qwen take is seconds of GPU) beside the call just starting
@@ -713,6 +740,27 @@ async function start(): Promise<void> {
     // runs the fake helper and must never raise a real TCC prompt.
     micAccess: process.env.FUZZ === "1" ? undefined : () => ensureMicAccess(systemPreferences),
   });
+  // 5.8: the nightly voice check — a scripted call through the real helper and the natural voice, at a quiet hour on
+  // an idle Mac on power, never during a call; Settings → Voice turns it off. FUZZ never runs it.
+  voiceSelfTest = process.env.FUZZ === "1" ? null : scheduleVoiceSelfTest({
+    conditions: () => ({
+      enabled: switchValue(appSettingsStore.read(), "voiceSelfTest"), inCall: micLive || voiceLatency.recorder.inCall(),
+      onBattery: powerMonitor.isOnBatteryPower(), load1: os.loadavg()[0] ?? 0, cpus: os.cpus().length, idleMs: powerMonitor.getSystemIdleTime() * 1000,
+      ttsBusy: kokoro.busy?.() === true,
+    }),
+    lastRunAt: () => voiceLatency.store.read().selfTest.lastRunAt,
+    run: (signal) => runVoiceSelfTest({ helper: helperBinary, clip: resolveUnpacked(path.join(__dirname, "native", "voice-selftest.wav")), tts: kokoro, signal, log: voiceLog, history: voiceLatency.store.read().selfTest.history }),
+    done: (r) => {
+      // Quiet: a result file every night; the notice only on a regression against its own last nights.
+      const notice = recordSelfTest(voiceLatency.store, r, Date.now());
+      const host = handle ? gatewayCall(handle.baseUrl, handle.token, hostCallOpts) : null;
+      if (host && notice === "raise" && r.stages.firstAudio !== null && r.baselineMs) void host("voiceLatencyNotice", { on: true, kind: "selftest", p50Ms: r.stages.firstAudio, baselineMs: r.baselineMs }).catch(() => {});
+      if (host && notice === "clear") void host("voiceLatencyNotice", { on: false, kind: "selftest" }).catch(() => {});
+      try { writeReport(reportDir({ isPackaged: app.isPackaged, appPath: app.getAppPath(), userData: app.getPath("userData") }), r); } catch (e) { voiceLog(`voice-selftest: report not written: ${(e as Error).message}`); }
+    },
+    log: voiceLog,
+  });
+  app.on("will-quit", () => voiceSelfTest?.stop());
   audioDevices = registerAudioDevices({
     binary: helperBinary,
     log: voiceLog,
@@ -853,6 +901,26 @@ async function start(): Promise<void> {
   });
   void mcp.resume();
   app.on("will-quit", () => { void mcp.dispose(); });
+  // Wave 4.1: Telegram — the owner messages their Bots and answers cards from Telegram. Off by default; the token is
+  // sealed here and never leaves this process except to api.telegram.org.
+  telegram = registerTelegram({
+    userData: app.getPath("userData"),
+    reg: registerNative, emit: emitNative, log: (l) => console.log(l),
+    call: () => (handle ? gatewayCall(handle.baseUrl, handle.token, hostCallOpts) : null),
+    watch: (on) => coordinator.postMessage({ type: "telegram-watch", on }),
+    // A Mac card answered from Telegram goes through the coordinator's own gate, exactly as the in-app card does.
+    answerLocal: (args) => new Promise((resolve, reject) => {
+      const id = ++telegramSeq;
+      const t = setTimeout(() => { telegramWaits.delete(id); reject(new Error("the coordinator didn't answer")); }, 30_000);
+      telegramWaits.set(id, (r) => { clearTimeout(t); if (r.ok) resolve(r.result as { status: LocalAskStatus }); else reject(new Error(r.error ?? "refused")); });
+      coordinator.postMessage({ type: "telegram-local-answer", id, args });
+    }),
+    seal: { encrypt: (s) => sealer.require((k) => k.encryptString(s)), decrypt: (b) => sealer.require((k) => k.decryptString(b)) },
+  });
+  telegram.resume();
+  // The token is sealed: at launch the secrets may not be open yet, so it starts again once they are.
+  tapNative((ch, p) => { if (ch === "seal" && (p as { status?: string } | null)?.status === "ready") telegram?.resume(); });
+  app.on("will-quit", () => telegram?.dispose());
   registerComposioPaste({
     reg: registerNative,
     readClipboard: () => (process.env.FUZZ === "1" ? process.env.FUZZ_COMPOSIO_KEY ?? "ak_fuzz_example_key_0000" : clipboard.readText()),

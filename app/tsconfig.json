@@ -1,5 +1,5 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": { "jsx": "react-jsx", "lib": ["ES2023", "DOM", "DOM.Iterable"] },
-  "include": ["src", "test", "e2e", "phone-e2e", "walk", "look", "motion", "perf"]
+  "include": ["src", "test", "e2e", "phone-e2e", "walk", "look", "motion", "perf", "../scripts/journeys", "../scripts/perf"]
 }

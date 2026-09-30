@@ -1,5 +1,5 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
-import { STRV } from "@synapse/shared";
+import { STRV, latencyLabel } from "@synapse/shared";
 import { nativeCall } from "../native";
 import { SavedSwitch, useSavedNativeSwitch } from "../components/SavedSwitch";
 
@@ -38,6 +38,17 @@ export function CallFeelCard() {
   const ready = useSavedNativeSwitch("kokoro.keepReady.get", "kokoro.keepReady.set", setErr);
   // 0.1.4 first-run: speech to Apple's servers only with this opt-in (off by default; the notice's Allow turns it on).
   const server = useSavedNativeSwitch("speech.server.get", "speech.server.set", setErr);
+  // 5.8: the nightly voice check (default on), and the last call's reply time (end of speech → first audio, median).
+  const selfTest = useSavedNativeSwitch("voice.selftest.get", "voice.selftest.set", setErr);
+  const [lastMs, setLastMs] = useState<number | null>(null);
+  // No alarm for missing the 1.2 s goal (it isn't reachable yet): only a regression against the owner's own calls.
+  const [regressed, setRegressed] = useState(false);
+  useEffect(() => {
+    void nativeCall<{ firstAudioMs?: number | null; regressed?: boolean }>("voice.latency.last").then((r) => {
+      setLastMs(typeof r?.firstAudioMs === "number" ? r.firstAudioMs : null);
+      setRegressed(r?.regressed === true);
+    }, () => setLastMs(null));
+  }, []);
   // Bug 224: the bug-161 question-intonation switch is gone — no voice lifts a question any more.
   const [shortcut, setShortcut] = useState<string | null | undefined>(undefined);
   const [recording, setRecording] = useState(false);
@@ -73,6 +84,16 @@ export function CallFeelCard() {
         <span style={{ flexGrow: 1 }}>{STRV.speechServer}</span>
         <SavedSwitch label={STRV.speechServer} {...server} onToggle={server.toggle} />
       </div>
+      <div className="settings-row">
+        <span style={{ flexGrow: 1 }}>{STRV.voiceSelfTest}</span>
+        <SavedSwitch label={STRV.voiceSelfTest} {...selfTest} onToggle={selfTest.toggle} />
+      </div>
+      {lastMs !== null && (
+        <div className="settings-row">
+          <span style={{ flexGrow: 1 }}>{STRV.lastCallFirstAudio}</span>
+          <span style={{ color: regressed ? "var(--danger-ink)" : "var(--ink-muted)", fontVariantNumeric: "tabular-nums" }} data-testid="last-call-first-audio" data-regressed={regressed}>{latencyLabel(lastMs)}</span>
+        </div>
+      )}
       <div className="settings-row">
         <span style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: 2 }}>
           <span>{STRV.callShortcut}</span>

@@ -40,7 +40,7 @@ export function fullAutoIntentEligible(target: RiskTarget, fa: FullAutoResult | 
  * Wakes that carry the owner's own words in the chat. Everything else (routines, webhooks, email and other
  * listeners, broadcasts, other Bots, group members, revivals, kickstart) is not the owner asking for this action.
  */
-export const OWNER_SOURCES: ReadonlySet<WakeSource> = new Set<WakeSource>(["user", "reply-nudge", "closing-nudge", "ack-redrive", "widget-answer", "form-answer", "voice-delegate"]);
+export const OWNER_SOURCES: ReadonlySet<WakeSource> = new Set<WakeSource>(["user", "reply-nudge", "closing-nudge", "ack-redrive", "widget-answer", "form-answer", "voice-delegate", "loop-continue"]);
 
 export const BULK_VALUE = /^(all|everyone|everybody|@channel|@everyone|@here|\*)$/i;
 export const RECIPIENT_KEY = /^(to|cc|bcc|recipients?|recipient_emails?|extra_recipients|attendees|guests|invitees|members|users|user_ids|emails|channels|participants|people)$/i;
@@ -50,7 +50,12 @@ const BODY_KEY = /^(body|message_body|text|markdown_text|subject|description|sum
 const DESTRUCTIVE_KEY = /(trash|spam|delete|remove|discard|archive|purge|destroy)/i;
 const DESTRUCTIVE_VALUE = /^(trash|spam)$/i;
 /** The host's own card facts and the draft it fetched (the draft's recipients ARE counted, below). */
-const HOST_KEYS = new Set(["card_facts", "content_hash", "draft_hash"]);
+/** 4.3b: `account` is the owner's own account the host resolved (who it is sent FROM, never a recipient). */
+const HOST_KEYS = new Set(["card_facts", "content_hash", "draft_hash", "account"]);
+
+/** 4.3b: the owner's own addresses (every connected account), lowercased. */
+export type SelfAddrs = string | readonly string[] | null;
+export const selfSet = (self: SelfAddrs): Set<string> => new Set((typeof self === "string" ? [self] : self ?? []).map((e) => e.toLowerCase()));
 
 /** A calendar write (the built-in Google tool or a Composio calendar slug). */
 const CALENDAR_TOOL = /(^|_)(calendar|googlecalendar|event|events|meeting)(_|$)/;
@@ -104,9 +109,9 @@ function bodyOf(target: RiskTarget): string {
  * name part has a WHOLE token equal to a name in their message ("Uncle John" → john.harper@…, john-harper7@…).
  * No substrings (johnevil@ is not John), no role words (report@, notifications@), no token shorter than 3.
  */
-export function recipientLinked(email: string, userText: string, self: string | null): boolean {
+export function recipientLinked(email: string, userText: string, self: SelfAddrs): boolean {
   const e = email.toLowerCase();
-  if (userText.toLowerCase().includes(e) || (self && e === self.toLowerCase())) return true;
+  if (userText.toLowerCase().includes(e) || selfSet(self).has(e)) return true;
   return nameMatches(e, userText).length > 0;
 }
 
@@ -146,7 +151,7 @@ export function hasBulkValue(target: RiskTarget): boolean {
  * carries a link or site only outside content named. No "forward" exemption here: a plan or a trusted recipient
  * never lets copied outside text through without a card.
  */
-export function carriesOutside(target: RiskTarget, request: string, outside: OutsideView, self: string | null): boolean {
+export function carriesOutside(target: RiskTarget, request: string, outside: OutsideView, self: SelfAddrs): boolean {
   if (!outside.any && !outside.links.size) return false;
   const lower = request.toLowerCase();
   const mine = shingles(request);
@@ -154,7 +159,8 @@ export function carriesOutside(target: RiskTarget, request: string, outside: Out
   for (const h of shingles(bodyOf(target))) if (outside.shingles.has(h) && !mine.has(h) && ++hits >= 2) return true;
   const recipients = recipientsOf(target);
   const links = [...new Set(linksIn(JSON.stringify(argsOf(target))))].filter((u) => !recipients.some((r) => r.endsWith(u) || r.includes(`@${u}`)));
-  return links.some((u) => outside.links.has(u) && !lower.includes(u) && u !== self?.toLowerCase());
+  const own = selfSet(self);
+  return links.some((u) => outside.links.has(u) && !lower.includes(u) && !own.has(u));
 }
 
 export interface IntentFloorInput {
@@ -167,8 +173,10 @@ export interface IntentFloorInput {
   /** Outside content (bug 415): shingles and heads since the owner's request; addresses and links from the whole
    *  kept log, before the request too (bug 421). */
   outside: OutsideView;
-  /** The owner's own address(es). */
-  self: string | null;
+  /** The owner's own address(es): 4.3b, every connected account. */
+  self: SelfAddrs;
+  /** 4.3b: the account this send uses and the owner's accounts for its app (null: one account, nothing to choose). */
+  account?: AccountChoice | null;
   /** Bug 413: recipients and channels resolved on the host; null = they couldn't be resolved. */
   resolved: { recipients: string[]; channels: { name: string; members: number }[] } | null;
   /** Bug 417: intent-allowed sends already made for this request. */
@@ -232,12 +240,16 @@ export function fullAutoIntentFloor(i: IntentFloorInput): string | null {
   // Bug 440: a recipient the host couldn't resolve (or a message send it can place nowhere) never reaches the reviewer.
   if (!i.resolved || unresolvedRecipient(i.target, i.resolved)) return UNRESOLVED_REASON;
   const lower = request.toLowerCase();
-  const self = i.self?.toLowerCase() ?? null;
+  const mine = selfSet(i.self);
   const tool = snake(String(i.target.arguments.tool ?? ""));
   const args = argsOf(i.target);
 
   // Bug 412: a destructive flag on an allow-listed send (a TRASH/SPAM label, delete-after-send, a cancelled event).
   if (hasDestructiveFlag(i.target)) return "This also deletes, trashes or cancels something, so it needs your OK.";
+
+  // 4.3b: the account it sends from must be the one the owner named (or the only one this Bot can use).
+  const acct = i.account ? accountFloor(i.account, request) : null;
+  if (acct) return acct;
 
   if (i.sentForRequest >= FULL_AUTO_SENDS_PER_MESSAGE) return `This would be send number ${i.sentForRequest + 1} for one message from you, so it needs your OK.`;
 
@@ -256,7 +268,7 @@ export function fullAutoIntentFloor(i: IntentFloorInput): string | null {
   if (unnamedChannel) return `This posts in #${unnamedChannel.name}, which you didn't name, so it needs your OK.`;
 
   // Bugs 414/415: a link, site or address that outside content read since your message named, and you didn't write.
-  const own = (x: string) => lower.includes(x) || (!!self && x === self);
+  const own = (x: string) => lower.includes(x) || mine.has(x);
   const links = [...new Set(linksIn(JSON.stringify(args)))].filter((u) => !recipients.some((r) => r.endsWith(u) || r.includes(`@${u}`)));
   if (links.some((u) => i.outside.links.has(u) && !own(u))) return "Part of this came from an email, web page or file, not from you, so it needs your OK.";
   // Bug 420: someone the owner has mailed before, named in their message, is fine even when the Bot found the
@@ -272,7 +284,7 @@ export function fullAutoIntentFloor(i: IntentFloorInput): string | null {
   // The owner's correction (2026-09-29): "Sorry, I didn't want you to send him an invite … Do not send anything to
   // him." An event with guests emails them, so it is a message: it runs only when the owner explicitly asked to
   // invite, send or share. "Add a meeting with Uncle John" asks for an event on their own calendar, nothing more.
-  const others = recipients.filter((r) => r !== self);
+  const others = recipients.filter((r) => !mine.has(r));
   if (others.length && CALENDAR_TOOL.test(tool) && !INVITE_ASK.test(lower)) return "This would send a calendar invite, and you didn't ask to invite anyone, so it needs your OK.";
   // Bug 421: an address the owner didn't write out must be a known contact (mailed before) AND carry a name from
   // their message; a name match alone isn't enough.
@@ -286,5 +298,47 @@ export function fullAutoIntentFloor(i: IntentFloorInput): string | null {
     for (const h of shingles(bodyOf(i.target))) if (i.outside.shingles.has(h) && !mine.has(h) && ++hits >= 2) break;
     if (hits >= 2) return "This passes on text from an email, web page or file you didn't ask to forward, so it needs your OK.";
   }
+  return null;
+}
+
+/**
+ * 4.3b: which of the owner's accounts a send uses. `used` is the label the host resolved (an address for Google),
+ * `granted` the labels this Bot may use, `all` every account the owner has for this app.
+ */
+export interface AccountChoice { used: string; granted: readonly string[]; all: readonly string[] }
+
+/** Mail providers whose domain says nothing about which account (gmail.com is everybody's). */
+const GENERIC_DOMAINS = new Set(["gmail", "googlemail", "outlook", "hotmail", "live", "yahoo", "icloud", "me", "mac", "proton", "protonmail", "pm", "aol", "gmx", "fastmail", "hey", "zoho", "yandex", "mail"]);
+
+/** The words that name one account: the whole label, its name tokens, and a work domain (work@acme.com → work, acme). */
+function accountWords(label: string): string[] {
+  const l = label.toLowerCase().trim();
+  const [local = "", domain = ""] = l.includes("@") ? l.split("@") : [l, ""];
+  const words = local.split(/[^a-z0-9]+/).filter((t) => t.length >= 3 && !/^\d+$/.test(t));
+  const org = domain.split(".")[0] ?? "";
+  if (org.length >= 3 && !GENERIC_DOMAINS.has(org)) words.push(org);
+  return [...new Set(words)];
+}
+
+/** The accounts the owner's request names: by the whole label, or by a word no other account of theirs carries. */
+export function accountsNamed(all: readonly string[], request: string): string[] {
+  const lower = request.toLowerCase();
+  // Recipients' addresses aren't the owner naming their own account ("email dana@acme.com" isn't "from acme").
+  const words = new Set((lower.replace(/[^\s<>(),;:"']+@[^\s<>(),;:"']+/g, " ").match(/[a-z0-9]+/g) ?? []));
+  const byWord = new Map<string, string[]>();
+  for (const a of all) for (const w of accountWords(a)) byWord.set(w, [...(byWord.get(w) ?? []), a]);
+  return all.filter((a) => lower.includes(a.toLowerCase()) || accountWords(a).some((w) => words.has(w) && byWord.get(w)!.length === 1));
+}
+
+/**
+ * 4.3b: outside content can't pick the account. A request that names an account must get that one; with more than
+ * one account this Bot can use, a request that names none cards rather than letting the Bot's choice stand.
+ */
+export function accountFloor(c: AccountChoice, request: string): string | null {
+  if (c.all.length <= 1) return null;
+  const named = accountsNamed(c.all, request);
+  const used = c.used.toLowerCase();
+  if (named.length) return named.some((a) => a.toLowerCase() === used) ? null : `You asked for ${named[0]}, but this uses ${c.used}, so it needs your OK.`;
+  if (c.granted.length > 1) return `You didn't say which account to use, and this uses ${c.used}, so it needs your OK.`;
   return null;
 }

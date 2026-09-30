@@ -30,7 +30,7 @@ const IMPLEMENTED: Record<CommandName, true> = {
   getDiskPressure: true, openDiskSaver: true, snapshotBoxStoreNow: true, getBoxStoreStatus: true, listSnapshots: true,
   restoreSnapshot: true, deleteSnapshot: true, prepareBoxRestart: true, setBoxMaintenance: true,
   // Phase 5:
-  getUsageDashboard: true, getBudgets: true, setBudget: true, approveBudget: true, clearTaskAlert: true, getBudgetPrompt: true, dismissBudgetPrompt: true, setMonthlyBudget: true, macClaudeAuth: true, recordMacUsage: true, getModelAccess: true, getMarketplace: true, searchCatalog: true, getCatalogEntry: true, listPlugins: true, installPlugin: true,
+  getUsageDashboard: true, getBudgets: true, setBudget: true, approveBudget: true, clearTaskAlert: true, getBudgetPrompt: true, dismissBudgetPrompt: true, setMonthlyBudget: true, getSpendMeter: true, setSpendMeter: true, macClaudeAuth: true, recordMacUsage: true, getModelAccess: true, getMarketplace: true, searchCatalog: true, getCatalogEntry: true, listPlugins: true, installPlugin: true,
   uninstallPlugin: true, listMcpServers: true, addMcpServer: true, removeMcpServer: true, renameMcpAccount: true, setMcpToolEnabled: true,
   setMcpInstructions: true, restartMcpServers: true, setMcpServerEnabled: true, setMcpServerTrusted: true, setMcpServerHeader: true, setOAuthLoopbackPort: true, startMcpAuth: true, completeMcpOAuth: true, listPluginMarketplaces: true,
   addPluginMarketplace: true, removePluginMarketplace: true, draftTemplate: true, exportTemplate: true, getTemplate: true,
@@ -41,7 +41,7 @@ const IMPLEMENTED: Record<CommandName, true> = {
   completeOnboarding: true, listCodingAgents: true, cancelCodingAgent: true, setMemoryMode: true,
   setAgentFollowups: true, setAgentEngineeringMode: true, setAgentPermMode: true, setAgentNoLimits: true, setAgentSaveUsage: true, setAgentComputerPerception: true, getPhase5Settings: true,
   // Built-in Google connector:
-  getGoogleStatus: true, setGoogleClient: true, startGoogleAuth: true, disconnectGoogle: true, setAgentGoogle: true,
+  getGoogleStatus: true, setGoogleClient: true, startGoogleAuth: true, disconnectGoogle: true, setAgentGoogle: true, setAgentGoogleAccount: true, setAgentEmailIn: true, renameComposioAccount: true, setMcpServerBots: true,
   getComposioStatus: true, setComposioKey: true, clearComposioKey: true, acceptComposioDisclosure: true, connectComposioApp: true, disconnectComposioApp: true, setComposioGrant: true,
   startGoogleSetupTask: true, cancelGoogleSetupTask: true, getGoogleReconnectCheck: true, setGoogleReconnectCheck: true,
   getGitHubStatus: true, startGitHubSignIn: true, signOutGitHub: true,
@@ -49,9 +49,13 @@ const IMPLEMENTED: Record<CommandName, true> = {
   getAgentMemories: true, addAgentMemory: true, updateAgentMemory: true, deleteAgentMemory: true, clearAgentMemories: true, getHistoryArchiveStats: true,
   // Settings → Account (sign-in mode, API key):
   getAuth: true, setApiKey: true, clearApiKey: true, testAuthConnection: true, checkApiKey: true,
-  listBotCalls: true, answerBotCall: true, setBotCallPermission: true, getCallGreetings: true, wrapUpCall: true, voiceSpeculate: true, voiceSpeculateCancel: true,
+  listBotCalls: true, answerBotCall: true, setBotCallPermission: true, getCallGreetings: true, wrapUpCall: true, voiceSpeculate: true, voiceSpeculateCancel: true, voiceLatencyNotice: true,
+  // 5.6: the Mac's action log, undo and dry run (answered by the coordinator)
+  listMacActions: true, exportMacActions: true, undoMacAction: true, getLocalDryRun: true, setLocalDryRun: true,
   // 0.1.4: Synapse's MCP server
   mcpListBots: true, mcpStartTask: true, mcpTaskStatus: true, mcpTaskResult: true,
+  // 4.4: connector health
+  getConnectorHealth: true, reportConnectorHealth: true,
 };
 
 /** Tools the Phase 4 host registers, and the update_state targets it handles. */

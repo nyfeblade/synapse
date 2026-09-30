@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { readScriptCapped } from "./script-read";
-import { BROWSER_PERMISSION_PREFIX, LIMITS5, MACAPP_PERMISSION_PREFIX, STRMA, LOCAL_ADOPT_MODE, LOCAL_NEEDS_APPROVAL, MAC_UNCHECKED_RULES, STR5, STRB, evaluateFixedRules, fullAutoAsk, localActionOf, localFullAutoAction, localPermAction, macAutoRunEligible, macFloorHits, macFold, macRootAcceptable, macExemptTool, macSandboxExemptSimple, macSandboxInteractive, macUnsandboxedHandoff, macPrivateStoreRead, macPrivateStorePath, macQuietHandoff, localBindTarget, realOfDeepest, type ExecutionPolicy, type FullAutoResult, type LocalAction, type LocalComputer, type LocalExecRequest, type MacHandoffContext, type PermMode, type PermResult } from "@synapse/shared";
+import { BROWSER_PERMISSION_PREFIX, LIMITS5, MACAPP_PERMISSION_PREFIX, STRMA, LOCAL_ADOPT_MODE, LOCAL_NEEDS_APPROVAL, MAC_UNCHECKED_RULES, STR5, STRB, evaluateFixedRules, fullAutoAsk, localActionOf, localFullAutoAction, localPermAction, macAutoRunEligible, macFloorHits, macFold, macRootAcceptable, macExemptTool, macSandboxExemptSimple, macSandboxInteractive, macUnsandboxedHandoff, macPrivateStoreRead, macPrivateStorePath, macQuietHandoff, localBindTarget, realOfDeepest, type DryRunMode, type ExecutionPolicy, type FullAutoResult, type LocalAction, type LocalComputer, type LocalExecRequest, type MacActionVia, type MacHandoffContext, type PermMode, type PermResult } from "@synapse/shared";
 
 import { macAllowedApp, warmAllowedApps } from "./app-trust";
 import { readRaw, writeRaw } from "./policy-io";
@@ -20,7 +20,9 @@ export function bindHash(action: string, target: string): string {
 
 /** A check's answer. `quiet`: an everyday hand-off with no card (the executor runs it in the light sandbox);
  *  `noLimits`: the Bot is in No limits (the sandbox drops the private-store rules). Bug 258. */
-export type CheckResult = { ok: true; pin?: ToolPin; quiet?: boolean; noLimits?: boolean; target?: string } | { ok: false; reason: string };
+/** 5.6: `via` is what let it run (the action log's "approval that allowed it"). Bug 441: `target` is the real path a
+ *  file write was judged at; the executor writes there or nowhere. */
+export type CheckResult = { ok: true; pin?: ToolPin; quiet?: boolean; noLimits?: boolean; via?: MacActionVia; target?: string } | { ok: false; reason: string };
 
 /**
  * Bug 433: the most distinct paths one gate decision resolves on disk. Each check (fixed rules, Full auto, hand-offs,
@@ -32,6 +34,7 @@ const MISSING = Object.freeze(new Error("ENOENT (memoized)"));
 
 interface Approval { botId: string; expiresAt: number; bind: string; /** bug 235: the exempt tool as its card showed it. */ pin?: ToolPin }
 interface Grant { botId: string; action: LocalAction }
+interface DryRunRec { mode: DryRunMode; turn: string | null }
 
 /**
  * computers.json, local-tool-approvals.json, local-tool-grants.json, local-tool-retirements.json and the delivered
@@ -40,7 +43,7 @@ interface Grant { botId: string; action: LocalAction }
  * falls back to Ask.
  */
 export class LocalPolicyStore {
-  private files: { computers: string; approvals: string; grants: string; retirements: string; seen: string; modes: string; declines: string; origins: string; reset: string; noLimits: string };
+  private files: { computers: string; approvals: string; grants: string; retirements: string; seen: string; modes: string; declines: string; origins: string; reset: string; noLimits: string; dryRun: string };
   private key: Buffer;
 
   private home: () => string;
@@ -62,9 +65,10 @@ export class LocalPolicyStore {
     return real;
   };
 
-  constructor(dir: string, private now: () => number = Date.now, key?: Buffer, o: { home?: () => string; userData?: () => string | null } = {}) {
+  constructor(dir: string, private now: () => number = Date.now, key?: Buffer, o: { home?: () => string; userData?: () => string | null; dryRunShadow?: string } = {}) {
     this.home = o.home ?? (() => os.homedir());
     this.userData = o.userData ?? (() => null);
+    this.dryShadow = o.dryRunShadow ?? null;
     fs.mkdirSync(dir, { recursive: true });
     this.key = key ?? randomBytes(32); // tests only: the app always passes the profile key (or a throwaway one when it fails closed)
     this.files = {
@@ -72,7 +76,7 @@ export class LocalPolicyStore {
       retirements: path.join(dir, "local-tool-retirements.json"), seen: path.join(dir, "local-exec-delivered.json"),
       modes: path.join(dir, "local-bot-modes.json"), declines: path.join(dir, "local-bot-mode-declines.json"),
       origins: path.join(dir, "local-browser-origins.json"), reset: path.join(dir, "local-policy-reset.json"),
-      noLimits: path.join(dir, "local-bot-nolimits.json"),
+      noLimits: path.join(dir, "local-bot-nolimits.json"), dryRun: path.join(dir, "local-bot-dryrun.json"),
     };
   }
 
@@ -262,6 +266,80 @@ export class LocalPolicyStore {
       this.write(this.files.origins, origins);
     }
     this.setNoLimits(botId, false);
+    // A deleted Bot's dry run goes only from a record that can be trusted: this never rewrites a bad one.
+    const d = this.dryRecords();
+    if (d?.good && botId in d.all) this.setDryRun(botId, "off");
+  }
+
+  /**
+   * 5.6: dry run, per Bot, as set IN THIS APP (the host can't read or change it). "turn" (Next turn) lasts for one
+   * task: it binds to the owner message the first request belongs to (`task`, the host's user-message epoch) and ends
+   * when a request from a later owner message arrives; approval resumes and follow-up turns carry the same task. "on"
+   * stays until turned off. HMAC'd like the modes.
+   *
+   * Fails safe: a file that is unreadable, tampered with or fails its signature is not "off". Every Bot that had dry
+   * run at the last good read keeps it; with no good read at all this run, the state is "unknown" and the daemon
+   * refuses every change.
+   */
+  private dryLastGood: Record<string, DryRunRec> | null = null;
+  private dryShadow: string | null = null;
+  private dryRead(): Record<string, DryRunRec> | null {
+    const f = this.files.dryRun;
+    const exists = (p: string) => { try { fs.lstatSync(p); return true; } catch (e) { return (e as NodeJS.ErrnoException).code !== "ENOENT"; } };
+    if (!exists(f)) {
+      // Nothing set on this Mac: off for everyone. A run on a scratch folder (the key file can't be trusted) can't
+      // verify the real file, so that one is unknown, not off.
+      if (this.dryShadow && exists(this.dryShadow)) return null;
+      this.dryLastGood = {};
+      return {};
+    }
+    const raw = readRaw(f) as { data?: unknown; mac?: unknown } | null;
+    if (!raw || typeof raw.mac !== "string" || !("data" in raw) || !raw.data || typeof raw.data !== "object") return null;
+    const want = Buffer.from(this.mac(f, raw.data), "hex");
+    const got = Buffer.from(raw.mac, "hex");
+    if (got.length !== want.length || !timingSafeEqual(got, want)) return null;
+    this.dryLastGood = raw.data as Record<string, DryRunRec>;
+    return { ...this.dryLastGood };
+  }
+  /** The records to act on: this read, else the last good one, else null (unknown). */
+  private dryRecords(): { all: Record<string, DryRunRec>; good: boolean } | null {
+    const r = this.dryRead();
+    if (r) return { all: r, good: true };
+    return this.dryLastGood ? { all: { ...this.dryLastGood }, good: false } : null;
+  }
+  dryRunMode(botId: string): DryRunMode {
+    const d = this.dryRecords();
+    if (!d) return "on";
+    const r = d.all[botId];
+    return r?.mode === "on" || r?.mode === "turn" ? r.mode : "off";
+  }
+  setDryRun(botId: string, mode: DryRunMode): void {
+    if (!botId) return;
+    const d = this.dryRecords();
+    const all = d?.all ?? {};
+    if (mode === "on" || mode === "turn") all[botId] = { mode, turn: null };
+    else if (botId in all) delete all[botId];
+    else if (d?.good) return;
+    this.write(this.files.dryRun, all);
+    this.dryLastGood = all;
+  }
+  /** Whether this request runs dry: "on", "off", or "unknown" (the record can't be trusted and was never read). */
+  dryRunState(req: Pick<LocalExecRequest, "botId" | "task">): "on" | "off" | "unknown" {
+    const d = this.dryRecords();
+    if (!d) return "unknown";
+    const r = d.all[req.botId];
+    if (!r || (r.mode !== "on" && r.mode !== "turn")) return "off";
+    // A bad file never ends a Next turn: that needs a write this run can't trust.
+    if (r.mode === "on" || !req.task || !d.good) return "on";
+    if (r.turn === null) { d.all[req.botId] = { mode: "turn", turn: req.task }; this.write(this.files.dryRun, d.all); this.dryLastGood = d.all; return "on"; }
+    if (r.turn === req.task) return "on";
+    delete d.all[req.botId];
+    this.write(this.files.dryRun, d.all);
+    this.dryLastGood = d.all;
+    return "off";
+  }
+  dryRunFor(req: Pick<LocalExecRequest, "botId" | "task">): boolean {
+    return this.dryRunState(req) !== "off";
   }
 
   /**
@@ -390,6 +468,14 @@ export class LocalPolicyStore {
 
   /** LOC-05: a request runs only if the Mac's own settings allow it, whatever the host says. */
   check(req: LocalExecRequest): CheckResult {
+    const v = this.decide(req);
+    if (!v.ok) return v;
+    const { via: _via, ...rest } = v;
+    return rest;
+  }
+
+  /** 5.6: check(), plus what let it run (`via`), for the action log. */
+  decide(req: LocalExecRequest): CheckResult {
     // Bug 433: one decision resolves each path once, and at most REALPATH_BUDGET of them; past that, what it found
     // can't be trusted to allow: a card (an approval this call brought still counts).
     if (this.resolved) return this.checkOnce(req);
@@ -425,7 +511,7 @@ export class LocalPolicyStore {
     // Bug 258: No limits (this Mac's own record, confirmed in the app, on top of Full auto) and Full auto in effect.
     const noLimits = this.noLimitsFor(req);
     const inFullAuto = this.effectiveMode(req) === "full-auto";
-    const tag = (v: CheckResult): CheckResult => (v.ok && noLimits ? { ...v, noLimits: true } : v);
+    const tag = (v: CheckResult, via: MacActionVia = "card"): CheckResult => (v.ok ? { ...v, via, ...(noLimits ? { noLimits: true } : {}) } : v);
     // A fixed NEVER is a hard wall in every mode, with or without an approval id. In No limits it still walls the
     // app's own data (the policy key and files) and the keychain.
     const fixed = this.fixed(req, c, noLimits);
@@ -470,11 +556,11 @@ export class LocalPolicyStore {
       const strict = handoff ? `${handoff}${shown}` : exempt ? `${STR5.macOutsideSandbox(exempt)}${shown}` : storeRead ? STR5.macPrivateStoreRead : null;
       if (strict) return req.approvalId ? tag(this.consume(req.approvalId, req)) : { ok: false, reason: `${LOCAL_NEEDS_APPROVAL}${STR5.macRefused.alwaysAsk(strict)}` };
     }
-    const pass = (): CheckResult => tag(quiet ? { ok: true, quiet: true } : { ok: true });
+    const pass = (via: MacActionVia): CheckResult => tag(quiet ? { ok: true, quiet: true } : { ok: true }, via);
     // Final secfix round 2 (ruling A): ANY "Always" (computer-wide or a per-Bot grant) auto-runs only an allowlisted
     // read inside an auto-run root the user added (none by default). Everything else needs this call's own approval.
     const always = policy === "always" || this.granted(req.botId, localActionOf(req.op));
-    if (!req.approvalId && always && this.autoRunEligible(req)) return pass();
+    if (!req.approvalId && always && this.autoRunEligible(req)) return pass(policy === "always" ? "always-mac" : "always-bot");
     // fix-mac-gate-and-approval-expiry (Bug A): the Bot's mode, as set in THIS app. Full auto runs everything but a
     // fixed ALWAYS-ASK (which still needs this call's own approval); Auto-accept edits runs an edit/write the fixed
     // rules auto-allow (inside a project dir). Ask keeps the approval requirement below.
@@ -496,7 +582,7 @@ export class LocalPolicyStore {
     const passes = (m: PermMode) => m === "full-auto"
       ? !fa.ask
       : (!!fixed && fixed.verdict !== "always-ask" && !floor && !fa.ask && m === "accept-edits" && fixed.verdict === "always-allow" && (req.op === "edit-file" || req.op === "write-file"));
-    if (passes(mode)) return pass();
+    if (passes(mode)) return pass(mode === "full-auto" ? (noLimits ? "no-limits" : "full-auto") : "accept-edits");
     if (!req.approvalId && claim && claim !== "ask" && RANK[claim] > RANK[own] && passes(claim) && !this.declined(req.botId, claim)) {
       return { ok: false, reason: `${LOCAL_ADOPT_MODE}${STR5.localAdoptRefused}` };
     }

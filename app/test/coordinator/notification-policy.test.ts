@@ -17,7 +17,7 @@ function setup() {
 }
 
 describe("NotificationPolicy (NTF-01, BOT-23)", () => {
-  it("baselines at startup without notifying, then notifies needs-you and finished while unfocused", () => {
+  it("baselines at startup without notifying, then notifies needs-you while unfocused (finished is the host's work-finished, 4.4)", () => {
     const { p, sent, badges, tick } = setup();
     p.baseline([bot({ awaiting: { tabId: "widget", reason: "old", since: 1 }, marker: "blocked" })]);
     expect(sent).toEqual([]);
@@ -27,8 +27,9 @@ describe("NotificationPolicy (NTF-01, BOT-23)", () => {
     expect(sent.at(-1)).toEqual({ botId: "b1", title: "Courier needs you", body: "Approval needed: send 5 emails", kind: "needs-you" });
     p.update(bot({ running: true }));
     tick(6000);
+    // A turn ending is not a notification here any more: heartbeats and silent wakes end turns too.
     p.update(bot({ running: false, lastBotMessageAt: 5, statusLine: "Sent all 5.", marker: "unread" }));
-    expect(sent.at(-1)).toEqual({ botId: "b1", title: "Courier", body: "Sent all 5.", kind: "finished" });
+    expect(sent).toHaveLength(1);
     expect(badges.at(-1)).toBe(1);
   });
 
@@ -59,17 +60,13 @@ describe("NotificationPolicy (NTF-01, BOT-23)", () => {
     expect(sent).toHaveLength(2);
   });
 
-  it("uses the fallback bodies and caps at 140 chars", () => {
+  it("uses the fallback body and caps at 140 chars", () => {
     const { p, sent } = setup();
     p.baseline([bot()]);
     p.setFocused(false);
     p.update(bot({ awaiting: { tabId: "box", reason: "", since: 2 } }));
     expect(sent.at(-1)!.body).toBe("Waiting for your input.");
-    p.update(bot({ id: "b2", running: true }));
-    p.update(bot({ id: "b2", running: false, lastBotMessageAt: 9, statusLine: "" }));
-    expect(sent.at(-1)!.body).toBe("Open Synapse to see what it did.");
-    p.update(bot({ id: "b3", running: true }));
-    p.update(bot({ id: "b3", running: false, lastBotMessageAt: 9, statusLine: "x".repeat(200) }));
+    p.update(bot({ id: "b3", awaiting: { tabId: "widget", reason: "x".repeat(200), since: 3 } }));
     expect(sent.at(-1)!.body).toHaveLength(140);
   });
 });

@@ -89,7 +89,8 @@ export class McpProxyPool {
   /** One fresh in-process server per Bot spawn: an McpServer instance serves exactly one transport. */
   sdkServers(botId: string): Record<string, McpSdkServerConfigWithInstance> {
     const out: Record<string, McpSdkServerConfigWithInstance> = {};
-    for (const s of this.d.registry.list().filter((x) => this.d.registry.hostProxied(x) && x.enabled)) out[s.id] = this.serverFor(s.id, botId);
+    // 4.3b: a server (one account) not granted to this Bot never enters its spawn set.
+    for (const s of this.d.registry.list().filter((x) => this.d.registry.hostProxied(x) && x.enabled && this.d.registry.grantedTo(x, botId))) out[s.id] = this.serverFor(s.id, botId);
     return out;
   }
 
@@ -140,6 +141,8 @@ export class McpProxyPool {
   private async call(serverId: string, botId: string, tool: string, args: Record<string, unknown>): Promise<CallToolResult> {
     const s = this.d.registry.get(serverId);
     const name = s ? (s.label ? `${s.name} (${s.label})` : s.name) : serverId;
+    // 4.3b: re-checked at call time (a grant can change while a session is warm).
+    if (s && !this.d.registry.grantedTo(s, botId)) return text(`${name} isn't turned on for this Bot. The user can allow it in this Bot's settings.`, true);
     if (this.d.registry.disabledTools(serverId).includes(tool)) return text(`The user turned off ${tool} for ${name}. Don't use it.`, true);
     const status = await this.ensure(serverId);
     const e = this.entries.get(serverId);

@@ -28,12 +28,12 @@ test("Google: connect from the Marketplace, turn it on for a Bot, read mail, sen
     // Marketplace → Gmail opens the Connect Google sheet (not claude.ai)
     await win.getByRole("button", { name: "Marketplace", exact: true }).click();
     const mkt = win.getByRole("dialog", { name: "Marketplace" });
-    await mkt.getByRole("region", { name: "Featured plugins" }).getByRole("button", { name: "Add Gmail" }).click();
+    await mkt.getByRole("region", { name: "Featured plugins" }).getByRole("button", { name: "Connect directly Gmail" }).click();
     const sheet = win.getByRole("dialog", { name: "Connect Google" });
     await expect(sheet).toBeVisible();
     await expect(sheet.getByRole("list", { name: "Setup steps" }).getByRole("listitem")).toHaveCount(6);
-    await sheet.getByLabel("Client ID").fill("123-e2e.apps.googleusercontent.com");
-    await sheet.getByLabel("Client secret").fill("GOCSPX-e2e-secret");
+    await sheet.getByLabel("Client ID", { exact: true }).fill("123-e2e.apps.googleusercontent.com");
+    await sheet.getByLabel("Client secret", { exact: true }).fill("GOCSPX-e2e-secret");
     await sheet.getByRole("button", { name: "Connect" }).click();
     await expect(sheet.getByText("Connected as me@example.com")).toBeVisible();
     await expect(sheet.getByText("Access to Gmail, Calendar, Drive")).toBeVisible();
@@ -70,7 +70,7 @@ test("Google: connect from the Marketplace, turn it on for a Bot, read mail, sen
     await win.keyboard.press("Enter");
     const card = win.getByRole("region", { name: "Approval needed" });
     await expect(card).toBeVisible();
-    await expect(card).toContainText("Acts on your Google account");
+    await expect(card).toContainText("From me@example.com"); // 4.3b: the card names the sending account
     await expect(card).toContainText("dana@example.org");
     await card.getByRole("button", { name: "Allow once" }).click();
     await expect(log.getByText(/Sent \(message id/).first()).toBeVisible();

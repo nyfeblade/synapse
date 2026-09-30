@@ -2565,6 +2565,18 @@ func endOfTurn(text: String, silenceMs: Double, sinceWordsMs: Double, baseMs: Do
 func turnSilence(voiceSilenceMs: Double, sinceWordsMs: Double, settleMs: Double) -> Double {
   sinceWordsMs >= settleMs ? voiceSilenceMs : min(voiceSilenceMs, sinceWordsMs)
 }
+/// 5.8: how many likely ends one utterance may send (the first, then one per stretch of new words after it).
+enum LikelyEnds { static let max = 3 }
+/// 5.8: whether a likely end may go out: none yet, or new words since the last one (and fewer than LikelyEnds.max).
+func likelyAgain(sent: Bool, sentFor: String, count: Int, text: String) -> Bool {
+  if !sent { return true }
+  return count < LikelyEnds.max && spokenKey(text) != spokenKey(sentFor)
+}
+/// The words of a transcript without case or punctuation (Apple adds a "?" to the same words later).
+func spokenKey(_ s: String) -> String {
+  s.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == " " }.map(String.init).joined()
+    .split(separator: " ").joined(separator: " ")
+}
 /// Bug 189: how long the recognizer's words must have stood still before the voice's silence counts.
 enum WordsSettle { static let likelyMs = 150.0 }
 
@@ -3943,6 +3955,10 @@ func runVoiceSelfTest() -> Never {
   check("noise without new words still ends (5 s of voice with no words: a fan, the room)", !endOfTurn(text: "hello there", silenceMs: 0, sinceWordsMs: 4900, baseMs: b, segmentEnded: false).done
     && endOfTurn(text: "hello there", silenceMs: 0, sinceWordsMs: 5000, baseMs: b, segmentEnded: false).reason == "no-new-words")
   // Bug 142: the likely end of turn (a speculative start) — syntax + the recognizer's punctuation + a falling voice.
+  check("likely end (5.8): the first one always may go", likelyAgain(sent: false, sentFor: "", count: 0, text: "Remind me to call the dentist"))
+  check("likely end (5.8): not again for the same words (Apple only added the punctuation)", !likelyAgain(sent: true, sentFor: "Remind me to call the dentist", count: 1, text: "Remind me to call the dentist."))
+  check("likely end (5.8): again once the user went on after a mid-thought pause", likelyAgain(sent: true, sentFor: "Remind me to call the dentist", count: 1, text: "Remind me to call the dentist on Friday morning."))
+  check("likely end (5.8): at most \(LikelyEnds.max) an utterance", !likelyAgain(sent: true, sentFor: "a b", count: LikelyEnds.max, text: "a b c"))
   check("likely end: a finished question with a falling voice after 150 ms", likelyEnd(text: "What's on my calendar tomorrow?", silenceMs: 160, segmentEnded: false, tailFallDb: 6).likely)
   check("likely end: punctuation alone waits 250 ms", !likelyEnd(text: "Text Sam that I'm late.", silenceMs: 200, segmentEnded: false, tailFallDb: nil).likely
     && likelyEnd(text: "Text Sam that I'm late.", silenceMs: 260, segmentEnded: false, tailFallDb: nil).likely)
@@ -5054,6 +5070,12 @@ final class Utterance {
   /// Bug 142: (ms, dB) of this utterance's voiced frames (the last 3 s), and whether likely-end went out.
   var voiced: [(Double, Double)] = []
   var likelySent = false
+  /// 5.8: the words the last likely end went out for, and how many went out. A user who goes on after a likely end
+  /// (a mid-thought pause) gets another one at the real end, when new words close a clause — at most LikelyEnds.max.
+  var likelyFor = ""
+  var likelyCount = 0
+  /// 5.8: when this utterance's voice last sounded (the end of the user's speech), for the latency record.
+  var voiceEndAt = 0.0
   /// Bug 165: the same 16 kHz mono float samples that went to Apple, kept so whisper can re-read the
   /// whole utterance at the end of the turn. Empty unless whisper is loaded, so Light mode keeps not
   /// one sample: at 64 KB per second this is the only memory the hybrid costs outside the model.
@@ -5252,6 +5274,7 @@ final class Pipeline {
       let keep = max(floorDb + 7, -58)
       if db > keep {
         lastVoicedAt = now
+        if let u = current { u.voiceEndAt = now - Double(n - i) / 16 }
         if let u = current, opt.mode == .call {
           u.voiced.append((now, db))
           if u.voiced.count > 160 { u.voiced.removeFirst(u.voiced.count - 150) }
@@ -5440,7 +5463,12 @@ final class Pipeline {
     var flushed = false
     while let f = order.first, f.resolved {
       order.removeFirst()
-      if let o = f.outcome { emit(o); flushed = true }
+      if var o = f.outcome {
+        // 5.8: how long ago the user's voice stopped, as the final goes out (the app times the reply from there).
+        if o["type"] as? String == "final", f.voiceEndAt > 0 { o["sinceVoiceMs"] = Int(max(0, nowMs() - f.voiceEndAt)) }
+        emit(o)
+        flushed = true
+      }
     }
     // The composer now holds that final; show the sentence in progress after it again.
     if flushed, opt.mode == .dictation, let c = current, !c.finishing, !c.text.isEmpty { emitPartial(c) }
@@ -5555,8 +5583,9 @@ final class Pipeline {
       // Bug 189: the END of turn keeps its clock (from the later of the voice and the last partial; see turnSilence).
       let silence = now - last
       let eot = endOfTurn(text: u.text, silenceMs: silence, sinceWordsMs: sinceWords, baseMs: opt.silenceMs, segmentEnded: u.segmentEnded, shortAnswer: u.shortAnswer)
-      // Bug 142: a likely end goes out once, before the window runs out, so the app can start the reply early.
-      if opt.mode == .call && !u.likelySent && !eot.done && !u.text.isEmpty {
+      // Bug 142: a likely end goes out before the window runs out, so the app can start the reply early. 5.8: once per
+      // stretch of words — a user who went on after one (a mid-thought pause) gets another at the real end.
+      if opt.mode == .call && likelyAgain(sent: u.likelySent, sentFor: u.likelyFor, count: u.likelyCount, text: u.text) && !eot.done && !u.text.isEmpty {
         let fall = tailFall(u.voiced)
         let quiet = turnSilence(voiceSilenceMs: now - lastVoicedAt, sinceWordsMs: sinceWords, settleMs: WordsSettle.likelyMs)
         // (Plan item 16 ends a short answer sooner but gives it no early likely end: one sent in the pause after
@@ -5564,6 +5593,8 @@ final class Pipeline {
         let le = likelyEnd(text: u.text, silenceMs: quiet, segmentEnded: u.segmentEnded, tailFallDb: fall)
         if le.likely {
           u.likelySent = true
+          u.likelyFor = u.text
+          u.likelyCount += 1
           log("utterance \(u.id) likely end after \(Int(quiet)) ms (window \(Int(le.windowMs)) ms, fall \(fall.map { String(Int($0.rounded())) } ?? "-") dB)")
           emit(["type": "likely-end", "text": u.text])
         }

@@ -4,7 +4,7 @@ import { loopInView } from "../ambient-pause";
 import type { CSSProperties, ReactElement } from "react";
 import { STR, type ActivityIcon } from "@synapse/shared";
 import type { TranscriptItem } from "../transcript-items";
-import { CalendarIcon, CheckIcon, ChevronDownIcon, EditIcon, FileIcon, GlobeIcon, MailIcon, SearchIcon, TerminalIcon, ThoughtIcon, ToolIcon } from "./Icons";
+import { CalendarIcon, CheckIcon, ChevronDownIcon, CloseIcon, EditIcon, FileIcon, GlobeIcon, MailIcon, SearchIcon, TerminalIcon, ThoughtIcon, ToolIcon } from "./Icons";
 import { StepBodyView } from "./StepBody";
 
 const ICON: Record<ActivityIcon, () => ReactElement> = {
@@ -47,13 +47,16 @@ export function ActivityGroup({ item }: { item: Extract<TranscriptItem, { kind: 
       <button type="button" className="activity-rows" aria-expanded={open} aria-label={open ? "Hide steps" : "Show steps"} onClick={() => setOpen(!open)}>
         {/* Where the run stands, as one 14px mark: still going, or finished. The look study puts it
             at the head of the summary line, and it is the only colour the card carries. */}
-        <span ref={item.running ? loopInView : undefined} className={`activity-mark ${item.running ? "running" : item.waiting ? "waiting" : item.stopped ? "stopped" : "done"}`} aria-hidden="true">
-          {!item.running && !item.waiting && !item.stopped && <CheckIcon size={9} />}
+        {/* Bug 437: finished isn't "done" when steps failed: all failed is failed, some is partial. */}
+        <span ref={item.running ? loopInView : undefined} className={`activity-mark ${item.running ? "running" : item.waiting ? "waiting" : item.stopped ? "stopped" : item.outcome ?? "done"}`} aria-hidden="true">
+          {!item.running && !item.waiting && !item.stopped && !item.outcome && <CheckIcon size={9} />}
+          {!item.running && !item.waiting && !item.stopped && item.outcome === "failed" && <CloseIcon size={8} />}
         </span>
         <span className="activity-lines">
           {item.rows.map((r, i) => (
             <span key={i} ref={r.live ? loopInView : undefined} className={r.live ? "activity-row live" : "activity-row"}>
               {r.noun ? `${r.verb} ${r.count} ${r.noun}` : r.verb}
+              {r.times && r.times > 1 ? <span className="activity-times">{` ×${r.times}`}</span> : null}
             </span>
           ))}
           {item.more > 0 && <span className="activity-row">{STR.moreSteps(item.more)}</span>}

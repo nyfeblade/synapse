@@ -6,8 +6,31 @@ import { readJson, writeJsonAtomic } from "../util/atomic-json";
 export interface GoogleClient { clientId: string; clientSecret: string }
 /** refreshExpiresAt: Google said the refresh token expires (refresh_token_expires_in), as it does for a Testing app. */
 export interface GoogleTokens { accessToken: string; refreshToken: string; expiresAt: number; scope: string; refreshExpiresAt?: number }
-/** publishing: what the user ticked for "Publishing status: In production" in the guided sheet, when they did. */
-export interface GoogleAccount { client?: GoogleClient; tokens?: GoogleTokens; email?: string; needsReconnect?: boolean; publishing?: "testing" | "production" }
+/** 4.3b: one connected Google account (its own tokens), sealed with the rest. */
+export interface GoogleAccountRecord { id: string; email?: string; tokens: GoogleTokens; needsReconnect?: boolean }
+/**
+ * publishing: what the user ticked for "Publishing status: In production" in the guided sheet, when they did.
+ * 4.3b: `accounts` (oldest first) and `grants` (account id → Bot ids). A grant list that is missing belongs to an
+ * account from before per-account grants; the module fills it in once, from the Bots' Google switches.
+ * `tokens`/`email`/`needsReconnect` are the pre-4.3b single account: read() folds them into `accounts`.
+ */
+export interface GoogleAccount {
+  client?: GoogleClient; publishing?: "testing" | "production";
+  accounts?: GoogleAccountRecord[]; grants?: Record<string, string[]>;
+  tokens?: GoogleTokens; email?: string; needsReconnect?: boolean;
+}
+/** The id the pre-4.3b single account keeps. */
+export const LEGACY_ACCOUNT_ID = "g-primary";
+
+/** Folds the pre-4.3b single account into `accounts` (no grant list: the module fills that in). */
+function normalize(a: GoogleAccount): GoogleAccount {
+  if (!a.tokens || a.accounts?.length) {
+    const { tokens: _t, email: _e, needsReconnect: _n, ...rest } = a;
+    return rest;
+  }
+  const { tokens, email, needsReconnect, ...rest } = a;
+  return { ...rest, accounts: [{ id: LEGACY_ACCOUNT_ID, tokens, ...(email ? { email } : {}), ...(needsReconnect ? { needsReconnect } : {}) }] };
+}
 
 interface Sealed { v: 1; iv: string; tag: string; ct: string }
 const isSealed = (x: unknown): x is Sealed => typeof x === "object" && x !== null && (x as Sealed).v === 1 && typeof (x as Sealed).ct === "string";
@@ -29,7 +52,7 @@ export class GoogleStore {
       try {
         const d = createDecipheriv("aes-256-gcm", k, Buffer.from(raw.iv, "base64"));
         d.setAuthTag(Buffer.from(raw.tag, "base64"));
-        return JSON.parse(Buffer.concat([d.update(Buffer.from(raw.ct, "base64")), d.final()]).toString("utf8")) as GoogleAccount;
+        return normalize(JSON.parse(Buffer.concat([d.update(Buffer.from(raw.ct, "base64")), d.final()]).toString("utf8")) as GoogleAccount);
       } catch { /* try the next key */ }
     }
     return {}; // another key (a reset vault): treat as not configured

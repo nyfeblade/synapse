@@ -17,6 +17,12 @@ export interface SettledTurn {
   /** saving-settings: a spoken call turn, and whether a call the Bot is on was live when it started (usage.db). */
   voice?: boolean;
   callLive?: boolean;
+  /** 4.4: the owner caused this turn (their message, or a nudge / answer that follows one), not a wake. */
+  ownerTask?: boolean;
+  /** 4.4: a scheduled run's Bot asked to notify (SendMessage notify:true). */
+  notifyRequested?: boolean;
+  /** 4.4: the owner pressed Stop on it. */
+  stopped?: boolean;
 }
 
 export interface TurnObserver {

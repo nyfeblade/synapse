@@ -10,11 +10,13 @@ import { VoiceSettings } from "../voice/VoiceSettings";
 import { AdvancedSection } from "./AdvancedSection";
 import { BrowserRow } from "./BrowserRow";
 import { MacAppRow } from "./MacAppRow";
+import { ActivityEntry, DryRunRow } from "./DryRunRow";
 import { AvatarEditor } from "./AvatarEditor";
 import { FollowupsToggle } from "./FollowupsToggle";
 import { MemoryEntry } from "./MemoryPanel";
 import { GoogleToggle } from "../google/GoogleToggle";
 import { ComposioBotRows } from "../composio/ComposioBotRows";
+import { McpAccountRows } from "../marketplace/McpAccountRows";
 import { GitHubRow } from "../github/GitHubRow";
 import { askConfirm } from "./ConfirmDialog";
 import { BackIcon, CheckIcon, ChevronDownIcon, CloseIcon } from "./Icons";
@@ -238,12 +240,15 @@ export function BotSettingsPanel({ botId }: { botId: string }) {
         <SaveUsageRow botId={botId} onError={setError} />
         <BrowserRow botId={botId} />
         <MacAppRow botId={botId} />
+        <DryRunRow botId={botId} />
+        <ActivityEntry botId={botId} />
         <RatingsRow botId={botId} />
         {/* No "Computer perception" row: Live is shelved (decisions.md 2026-09-21); every Bot runs Screenshots. */}
       </div>
       <MemoryEntry onOpen={() => setPanel("memory")} />
       <GoogleToggle botId={botId} />
       <ComposioBotRows botId={botId} />
+      <McpAccountRows botId={botId} />
       <GitHubRow botId={botId} />
       <SecretsSection botId={botId} />
       <FollowupsToggle botId={botId} />

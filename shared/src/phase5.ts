@@ -68,6 +68,8 @@ export interface McpServerView {
   error: string | null;
   /** P5 review I6: the user trusts this non-curated server (its readOnlyHint tools may skip Auto-review). */
   trusted?: boolean;
+  /** 4.3b: the Bots this server (one account of an app) is granted to; null = every Bot. */
+  bots?: string[] | null;
   /** Remote servers only: the request headers set on this server, each with a redacted stand-in for
    *  its value. Absent for command servers, which have no headers. */
   headers?: McpHeaderView[];
@@ -194,6 +196,9 @@ export interface LocalExecRequest {
   botName?: string;
   explicit?: boolean;
   turn?: string;
+  /** 5.6: the owner message this request's work belongs to (the host's user-message epoch). Approval resumes and
+   *  follow-up turns keep it; the owner's next message changes it. Dry run's "Next turn" ends on a new one. */
+  task?: string;
   userTurn?: boolean;
 }
 export type LocalAskStatus = "pending" | "allowed" | "denied" | "always" | "never" | "expired";
@@ -298,6 +303,8 @@ declare module "./gateway" {
     addMcpServer: { args: AddMcpServerArgs; result: { server: McpServerView } };
     removeMcpServer: { args: { serverId: string }; result: None };
     renameMcpAccount: { args: { serverId: string; label: string }; result: { server: McpServerView } };
+    /** 4.3b: grant or revoke one MCP server (one account of an app) for one Bot. */
+    setMcpServerBots: { args: { serverId: string; botId: string; enabled: boolean }; result: { server: McpServerView } };
     setMcpToolEnabled: { args: { serverId: string; tool: string; enabled: boolean }; result: { server: McpServerView } };
     setMcpServerEnabled: { args: { serverId: string; enabled: boolean }; result: { server: McpServerView } };
     setMcpInstructions: { args: { serverId: string; instructions: string }; result: { server: McpServerView } };

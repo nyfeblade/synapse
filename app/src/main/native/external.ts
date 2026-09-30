@@ -16,7 +16,10 @@ export async function openExternalGuarded(url: string): Promise<{ opened?: false
     // FUZZ/E2E never opens a real browser. For the fake OAuth page it completes the loopback itself, as a browser would.
     const u = new URL(url);
     if (u.hostname === "example.com" && u.pathname === "/authorize") {
-      await fetch(`http://127.0.0.1:47823/mcp/oauth/callback?code=fuzz&state=${encodeURIComponent(u.searchParams.get("state") ?? "")}`).catch(() => {});
+      // The redirect the sign-in asked for: 47823, or the fallback port this app bound when another app holds it.
+      const r = u.searchParams.get("redirect_uri") ?? "";
+      const base = /^http:\/\/127\.0\.0\.1:\d+\/mcp\/oauth\/callback$/.test(r) ? r : "http://127.0.0.1:47823/mcp/oauth/callback";
+      await fetch(`${base}?code=fuzz&state=${encodeURIComponent(u.searchParams.get("state") ?? "")}`).catch(() => {});
     }
     return { opened: false };
   }

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { launchLocalHost } from "../../src/main/local-host";
@@ -28,6 +29,14 @@ describe("FUZZ local host", () => {
     expect(fs.readFileSync(path.join(second.root, "workspace", "marker.txt"), "utf8")).toBe("kept");
     await second.stop();
     expect(fs.existsSync(first.root)).toBe(false);
+  }, 30_000);
+
+  it("keepRoot (journeys, 5.9): the caller's store survives a final stop", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "synapse-fuzz-keep-"));
+    const h = await launchLocalHost({ bundle, dataDir: "/unused", disposable: true, nodePath: process.execPath, root, keepRoot: true });
+    await h.stop();
+    expect(fs.existsSync(path.join(root, "workspace"))).toBe(true);
+    fs.rmSync(root, { recursive: true, force: true });
   }, 30_000);
 });
 

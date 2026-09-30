@@ -37,6 +37,7 @@ import { overlaysOpen } from "./overlay-stack";
 import { useOverlays } from "./overlays";
 import { useUi } from "./store";
 import { startUsageSync } from "./usage/store";
+import { startSpendMeterSync } from "./usage/meter-store";
 import { startUpdatesSync } from "./updates/store";
 import { useWakeBridge } from "./voice/wake-bridge";
 import { usePhoneBridge } from "./voice/phone-bridge";
@@ -87,6 +88,7 @@ export function App() {
     // in the place the screen would have been, with a Retry.
     void loadDisplays();
     startUsageSync();
+    startSpendMeterSync();
     // host killed mid-connect: the next connect asks again. A host with no Claude sign-in (a new or recreated
     // box) goes straight to sign-in even when this profile saw the onboarding before.
     void callQuiet("getOnboarding", {}).then((o) => {

@@ -1,6 +1,16 @@
 import { BROWSER_PERMISSION_PREFIX, LIMITS5, MACAPP_PERMISSION_PREFIX, LOCAL_NEEDS_APPROVAL, NO_LIMITS_CONFIRM, STR5, type BrowserArgs, type BrowserReply, type MacAppArgs, type MacAppReply, type LocalAction, type LocalAskChoice, type LocalExecRequest, type PermMode, type SseEvent } from "@synapse/shared";
+import fs from "node:fs";
+import { LOCAL_ADOPT_MODE, STRAL, browserReadOnly, dryRunTally, macAppReadOnly, provenFileEffects, type DryRunMode, type MacActionFilter, type MacActionKind, type MacActionVia, type ProvenEffect } from "@synapse/shared";
+import type { ActionLog, ActionRecord } from "./action-log";
 import type { LocalExecutor } from "./executor";
 import { bindHash, type LocalPolicyStore } from "./policy";
+import { SnapshotStore, type FileUndo, type UndoScope } from "./snapshots";
+
+/** 5.6: what one Mac request is, for the action log: its kind, targets, and the files an undo would restore. */
+interface Plan { kind: MacActionKind; targets: string[]; paths?: boolean; command?: string; act?: string; files?: string[]; noUndo?: string; effect?: ProvenEffect | null }
+/** Ops that change the Mac: simulated or refused in dry run. Reads, glob, grep, list, copy-to-box and kill run. */
+const CHANGES = new Set(["write-file", "edit-file", "copy-from-box", "run-command", "send-input"]);
+const DRY_TURNS_MAX = 200;
 
 // The file/command card actions, whose answers go through the generic branch at the end of `intercept`.
 // "browser" and "mac-app" are absent on purpose: each has its own branch above it, because their "Always"
@@ -43,7 +53,12 @@ export class LocalExecDaemon {
     resetPolicy?(): Promise<{ ok: boolean }>;
     /** Bug 258 (fix round): verify a per-dialog No limits nonce with main (single-use). Absent in tests: the constant is accepted. */
     verifyNoLimits?(nonce: string): Promise<boolean>;
+    /** 5.6: the action log, and whether a path is inside the owner's project folders (only those are snapshotted). */
+    actions?: { log: ActionLog; scope(abs: string): UndoScope };
   }) {}
+
+  /** 5.6: each dry-run turn's simulated and refused kinds, for "So far this turn: would write 3 files, delete 1". */
+  private dryTurns = new Map<string, MacActionKind[]>();
 
   private get durable(): boolean { return this.d.durable !== false; }
 
@@ -89,6 +104,34 @@ export class LocalExecDaemon {
       return { handled: true, result: await this.d.resetPolicy() };
     }
     if (cmd === "getLocalComputer") return { handled: true, result: { computer: this.d.policy.current() } };
+    // 5.6: the action log, undo and dry run are answered here, on the Mac; the host never sees them.
+    if (cmd === "listMacActions") {
+      const a = (args ?? {}) as { botId?: unknown; filter?: unknown; before?: unknown; limit?: unknown };
+      const q = { ...(typeof a.botId === "string" && a.botId ? { botId: a.botId } : {}), ...(typeof a.filter === "string" ? { filter: a.filter as MacActionFilter } : {}), ...(typeof a.before === "number" ? { before: a.before } : {}), ...(typeof a.limit === "number" ? { limit: a.limit } : {}) };
+      return { handled: true, result: this.d.actions ? this.d.actions.log.list(q) : { entries: [], more: false } };
+    }
+    if (cmd === "exportMacActions") {
+      const a = (args ?? {}) as { botId?: unknown };
+      const day = new Date().toISOString().slice(0, 10);
+      return { handled: true, result: { fileName: `synapse-activity-${day}.jsonl`, text: this.d.actions ? this.d.actions.log.exportText(typeof a.botId === "string" && a.botId ? a.botId : undefined) : "" } };
+    }
+    if (cmd === "undoMacAction") {
+      const a = (args ?? {}) as { id?: unknown; confirm?: unknown };
+      if (a.confirm !== true || typeof a.id !== "string") throw new Error("Undo needs your confirmation.");
+      if (!this.d.actions) return { handled: true, result: { ok: false, conflict: false, message: STRAL.expired } };
+      try { return { handled: true, result: await this.d.actions.log.undo(a.id) }; } catch (e) { return { handled: true, result: { ok: false, conflict: false, message: (e as Error).message } }; }
+    }
+    if (cmd === "getLocalDryRun") {
+      const a = (args ?? {}) as { id?: unknown };
+      return { handled: true, result: { mode: typeof a.id === "string" ? this.d.policy.dryRunMode(a.id) : "off" } };
+    }
+    if (cmd === "setLocalDryRun") {
+      const a = (args ?? {}) as { id?: unknown; mode?: unknown };
+      if (typeof a.id !== "string" || !a.id) return { handled: true, result: { mode: "off" } };
+      const mode: DryRunMode = a.mode === "on" || a.mode === "turn" ? a.mode : "off";
+      this.d.policy.setDryRun(a.id, mode);
+      return { handled: true, result: { mode: this.d.policy.dryRunMode(a.id) } };
+    }
     if (cmd === "setLocalComputer") {
       const computer = this.d.policy.update(args as { label?: string });
       await this.register();
@@ -260,11 +303,31 @@ export class LocalExecDaemon {
       this.d.policy.forgetBot(req.botId);
       return void (await this.post("localExecDone", { execId: req.execId, exitCode: 0 }));
     }
-    if (req.op === "browser") return void (await this.browser(req));
-    if (req.op === "mac-app") return void (await this.macapp(req));
+    const dryState = req.op === "kill" ? "off" : this.d.policy.dryRunState(req);
+    const dry = dryState !== "off";
+    if (dryState === "unknown" && this.changes(req)) {
+      // 5.6: the dry-run record can't be trusted and was never read this run: a change is refused, never run.
+      const plan = this.plan(req) ?? { kind: req.op === "browser" ? "browser" as const : req.op === "mac-app" ? "app" as const : "command" as const, targets: [] };
+      this.log(req, plan, { outcome: "refused", via: "none", detail: STRAL.dryRunUnknown, dryRun: true });
+      return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: STRAL.dryRunUnknown }));
+    }
+    if (req.op === "browser") return void (await this.browser(req, dry));
+    if (req.op === "mac-app") return void (await this.macapp(req, dry));
     await this.d.policy.warm?.(req);
-    const verdict = this.d.policy.check(req);
-    if (!verdict.ok) return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: verdict.reason }));
+    const verdict = this.d.policy.decide(req);
+    const plan = this.plan(req);
+    if (!verdict.ok) {
+      // A refusal that only raises a card isn't logged (the approved retry is). In dry run a change that would ask
+      // is simulated without the card: nothing runs either way.
+      const asks = verdict.reason.startsWith(LOCAL_NEEDS_APPROVAL) || verdict.reason.startsWith(LOCAL_ADOPT_MODE);
+      if (dry && asks && CHANGES.has(req.op)) return void (await this.simulate(req, plan ?? { kind: "command", targets: [] }, "none", true));
+      if (plan && !asks) this.log(req, plan, { outcome: "refused", via: "none", detail: verdict.reason, dryRun: dry });
+      return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: verdict.reason }));
+    }
+    // Dry run never reaches the executor for a change, whatever else holds.
+    if (dry && CHANGES.has(req.op)) return void (await this.simulate(req, plan ?? { kind: "command", targets: [] }, verdict.via ?? "none", false));
+    const via = verdict.via ?? "none";
+    const snap = plan ? await this.snapshot(plan) : null;
     let buf: { stream: "stdout" | "stderr"; chunk: string }[] = [];
     const flush = async () => {
       const b = buf;
@@ -284,26 +347,171 @@ export class LocalExecDaemon {
       });
       clearInterval(flusher);
       await flush();
+      if (plan) {
+        const files: FileUndo[] | undefined = snap?.befores ? snap.befores.map((b, i) => ({ path: plan.files![i]!, before: b, after: SnapshotStore.stateOf(plan.files![i]!) })) : undefined;
+        const ok = r.exitCode === 0;
+        this.log(req, plan, { outcome: ok ? "done" : "failed", via, ...(req.op === "run-command" ? { detail: r.exitCode === null ? "Stopped" : `Exit ${r.exitCode}` } : {}), ...(files ? { files } : { noUndo: snap?.noUndo ?? plan.noUndo }) });
+      }
       await this.post("localExecDone", { execId: req.execId, exitCode: r.exitCode, ...(r.result !== undefined ? { result: r.result } : {}) });
     } catch (e) {
       clearInterval(flusher);
       await flush();
+      if (plan) {
+        // A file tool that threw changed nothing it can vouch for: its snapshots go, and there is no undo.
+        this.d.actions?.log.snapshots.drop(snap?.befores?.map((b) => b.snap) ?? []);
+        this.log(req, plan, { outcome: "failed", via, detail: (e as Error).message });
+      }
       await this.post("localExecDone", { execId: req.execId, exitCode: null, error: (e as Error).message });
     }
   }
 
+  /** 5.6: a request that could change the Mac (what dry run simulates or refuses). */
+  private changes(req: LocalExecRequest): boolean {
+    if (req.op === "browser") return !req.browser || !browserReadOnly(req.browser);
+    if (req.op === "mac-app") return !req.macapp || !macAppReadOnly(req.macapp);
+    return CHANGES.has(req.op);
+  }
+
+  /** 5.6: the kind, targets and undoable files of one file/command request. Null: nothing to log (kill). */
+  private plan(req: LocalExecRequest): Plan | null {
+    const x = this.d.executor;
+    const abs = (p: string | undefined): string => { try { return x.within(p ?? "."); } catch { return p ?? ""; } };
+    const absStrict = (p: string | undefined): string | null => { try { return x.within(p ?? ""); } catch { return null; } };
+    switch (req.op) {
+      case "read-file": case "list-directory": case "copy-to-box": return { kind: "read", targets: [abs(req.path)], paths: true };
+      case "glob": case "grep": return { kind: "read", targets: [`${req.op} ${req.pattern ?? ""} in ${abs(req.path)}`] };
+      case "write-file": case "edit-file": case "copy-from-box": {
+        const p = absStrict(req.path);
+        return { kind: req.op === "edit-file" ? "edit" : "write", targets: [p ?? req.path ?? ""], paths: true, ...(p ? { files: [p] } : {}) };
+      }
+      case "send-input": return { kind: "command", targets: [], act: "input", noUndo: STRAL.noUndoCommand };
+      case "run-command": {
+        const command = req.command ?? "";
+        let effect: ProvenEffect | null = null;
+        try { effect = provenFileEffects(command, x.within(req.cwd ?? "."), x.homeDir()); } catch { effect = null; }
+        const reg = (p: string) => { try { return fs.lstatSync(p).isFile(); } catch { return false; } };
+        const notDir = (p: string) => { try { return !fs.lstatSync(p).isDirectory() && !fs.statSync(p).isDirectory(); } catch { return true; } };
+        if (effect?.kind === "delete" && effect.paths.every(reg)) {
+          const paths = effect.paths.map((p) => absStrict(p)).filter((p): p is string => !!p);
+          if (paths.length === effect.paths.length) return { kind: "delete", targets: paths, paths: true, command, files: paths, effect };
+        }
+        if (effect?.kind === "move" && reg(effect.from) && notDir(effect.to)) {
+          const from = absStrict(effect.from);
+          const to = absStrict(effect.to);
+          if (from && to && from !== to) return { kind: "move", targets: [from, to], paths: true, command, files: [from, to], effect };
+        }
+        return { kind: "command", targets: [command], noUndo: STRAL.noUndoCommand, effect: null };
+      }
+      default: return null;
+    }
+  }
+
+  /** 5.6: clones every file the plan changes, or none (then the entry says why there is no undo). */
+  private async snapshot(plan: Plan): Promise<{ befores?: FileUndo["before"][]; noUndo?: string } | null> {
+    const a = this.d.actions;
+    if (!a || !plan.files?.length) return null;
+    const befores: FileUndo["before"][] = [];
+    const fail = (note: string) => { a.log.snapshots.drop(befores.map((b) => b.snap)); return { noUndo: note }; };
+    for (const f of plan.files) {
+      const where = a.scope(f);
+      if (where !== "ok") return fail(where === "outside" ? STRAL.noUndoOutside : STRAL.noUndoExcluded);
+      const t = await a.log.snapshots.take(f);
+      if (!t.ok) return fail(t.why === "too-big" ? STRAL.noUndoTooBig : t.why === "kind" ? STRAL.noUndoKind : STRAL.noUndoExcluded);
+      befores.push(t.before);
+    }
+    return { befores };
+  }
+
+  private log(req: LocalExecRequest, plan: Plan, r: Pick<ActionRecord, "outcome" | "via"> & Partial<Pick<ActionRecord, "detail" | "dryRun" | "files" | "noUndo">>): ActionRecord | null {
+    if (!this.d.actions) return null;
+    return this.d.actions.log.record({
+      botId: req.botId, kind: plan.kind, op: req.op, targets: plan.targets, ...(plan.paths ? { paths: true } : {}), ...(plan.command !== undefined ? { command: plan.command } : {}), ...(plan.act ? { act: plan.act } : {}),
+      outcome: r.outcome, via: r.via, ...(r.detail ? { detail: r.detail } : {}), ...(r.dryRun ? { dryRun: true } : {}),
+      ...(r.files ? { files: r.files } : r.noUndo ? { noUndo: r.noUndo } : {}),
+    });
+  }
+
+  /** 5.6: this turn's dry-run tally for a Bot, with one more kind added. */
+  private tally(req: LocalExecRequest, kind: MacActionKind): string {
+    const key = `${req.botId}\0${req.task ?? req.turn ?? ""}`;
+    const list = this.dryTurns.get(key) ?? [];
+    list.push(kind);
+    this.dryTurns.delete(key);
+    this.dryTurns.set(key, list);
+    if (this.dryTurns.size > DRY_TURNS_MAX) this.dryTurns.delete(this.dryTurns.keys().next().value!);
+    return dryRunTally(list);
+  }
+
+  /**
+   * 5.6: dry run. A file change is worked out and recorded, never made; a command (whose effect can't be simulated)
+   * is recorded and refused, never run. The Bot reads what would have happened, and the turn's tally.
+   */
+  private async simulate(req: LocalExecRequest, plan: Plan, via: MacActionVia, wouldAsk: boolean): Promise<void> {
+    const ask = wouldAsk ? ` ${STRAL.dryRunWouldAsk}` : "";
+    const done = async (detail: string) => {
+      this.log(req, plan, { outcome: "simulated", via, detail: `${detail}${ask}`, dryRun: true });
+      await this.post("localExecDone", { execId: req.execId, exitCode: 0, result: STRAL.dryRunDone(`${detail}${ask}`, this.tally(req, plan.kind)) });
+    };
+    const refuse = async (detail: string) => {
+      this.log(req, plan, { outcome: "refused", via: "none", detail, dryRun: true });
+      await this.post("localExecDone", { execId: req.execId, exitCode: null, error: STRAL.dryRunRefused(`${detail}${ask}`, this.tally(req, plan.kind)) });
+    };
+    try {
+      const p = this.d.executor.within(req.op === "run-command" || req.op === "send-input" ? "." : req.path ?? "");
+      const size = (() => { try { return fs.statSync(p).size; } catch { return null; } })();
+      if (req.op === "write-file") {
+        const n = Buffer.byteLength(req.content ?? "");
+        return void (await done(size === null ? `Would create ${p} (${n} bytes).` : `Would overwrite ${p} (${size} → ${n} bytes).`));
+      }
+      if (req.op === "edit-file") {
+        const old = req.oldString ?? "";
+        const text = fs.readFileSync(p, "utf8");
+        const count = old === "" ? 0 : text.split(old).length - 1;
+        if (count === 0) throw new Error("The exact text to replace was not found in the file.");
+        if (count > 1 && !req.replaceAll) throw new Error(`The text to replace appears ${count} times; pass replace_all or make it unique.`);
+        return void (await done(`Would edit ${p} (${count} replacement${count === 1 ? "" : "s"}).`));
+      }
+      if (req.op === "copy-from-box") return void (await done(`Would copy a file from the box to ${p}.`));
+      const what = plan.kind === "delete" ? `Would delete ${plan.targets.join(", ")}.` : plan.kind === "move" ? `Would move ${plan.targets[0]} to ${plan.targets[1]}.` : req.op === "send-input" ? "Would type into a running command." : "Would run the command.";
+      return void (await refuse(what));
+    } catch (e) {
+      this.log(req, plan, { outcome: "refused", via: "none", detail: (e as Error).message, dryRun: true });
+      await this.post("localExecDone", { execId: req.execId, exitCode: null, error: `Dry run: ${(e as Error).message}` });
+    }
+  }
+
   /** mac-browser: this Mac's gate, then the controller; a refusal it can card is prefixed for the host. */
-  private async browser(req: LocalExecRequest): Promise<void> {
+  private async browser(req: LocalExecRequest, dry = false): Promise<void> {
+    // 5.6: never the typed text or a chosen value; the action and the address it was sent to.
+    const plan: Plan = { kind: "browser", targets: req.browser?.url ? [req.browser.url] : [], act: req.browser?.action ?? "browser" };
+    if (dry && req.browser && !browserReadOnly(req.browser)) return void (await this.dryRefuse(req, plan));
     const v = this.d.policy.checkBrowser(req);
-    if (!v.ok) return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: v.reason }));
+    if (!v.ok) {
+      if (!v.reason.startsWith(LOCAL_NEEDS_APPROVAL)) this.log(req, plan, { outcome: "refused", via: "none", detail: v.reason });
+      return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: v.reason }));
+    }
     if (!this.d.browser || !req.browser) return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: "This app can't drive a browser." }));
+    const via: MacActionVia = v.approved ? "card" : "permission";
     try {
       const r = await this.d.browser({ botId: req.botId, botName: req.botName ?? "Bot", args: req.browser, approved: v.approved, origins: v.origins, mode: v.mode, explicit: req.explicit === true, turn: req.turn, userTurn: req.userTurn === true });
-      if (r.ok) await this.post("localExecDone", { execId: req.execId, exitCode: 0, result: JSON.stringify(r.reply) });
-      else await this.post("localExecDone", { execId: req.execId, exitCode: null, error: `${r.needsApproval ? LOCAL_NEEDS_APPROVAL : ""}${r.error}` });
+      if (r.ok) {
+        this.log(req, { ...plan, targets: r.reply.url ? [r.reply.url] : plan.targets }, { outcome: "done", via });
+        await this.post("localExecDone", { execId: req.execId, exitCode: 0, result: JSON.stringify(r.reply) });
+      } else {
+        if (!r.needsApproval) this.log(req, plan, { outcome: "failed", via, detail: r.error });
+        await this.post("localExecDone", { execId: req.execId, exitCode: null, error: `${r.needsApproval ? LOCAL_NEEDS_APPROVAL : ""}${r.error}` });
+      }
     } catch (e) {
+      this.log(req, plan, { outcome: "failed", via, detail: (e as Error).message });
       await this.post("localExecDone", { execId: req.execId, exitCode: null, error: `The browser failed: ${(e as Error).message}` });
     }
+  }
+
+  /** 5.6: a browser or app action in dry run that isn't read-only: recorded, never run. */
+  private async dryRefuse(req: LocalExecRequest, plan: Plan): Promise<void> {
+    const what = `Would ${plan.act ?? "act"}${plan.targets.length ? ` (${plan.targets.join(", ")})` : ""}.`;
+    this.log(req, plan, { outcome: "refused", via: "none", detail: what, dryRun: true });
+    await this.post("localExecDone", { execId: req.execId, exitCode: null, error: STRAL.dryRunRefused(what, this.tally(req, plan.kind)) });
   }
 
   /**
@@ -311,15 +519,28 @@ export class LocalExecDaemon {
    * main process. The controller applies the consequential gate itself — it is the only side that can see
    * the resolved recipient or the real button label — and a refusal it can card is prefixed for the host.
    */
-  private async macapp(req: LocalExecRequest): Promise<void> {
+  private async macapp(req: LocalExecRequest, dry = false): Promise<void> {
+    // 5.6: the action, the app and what it was aimed at; never the text, title or body.
+    const plan: Plan = { kind: "app", targets: [req.macapp?.app, req.macapp?.target].filter((x): x is string => typeof x === "string" && !!x), act: req.macapp?.action ?? "app" };
+    if (dry && req.macapp && !macAppReadOnly(req.macapp)) return void (await this.dryRefuse(req, plan));
     const v = this.d.policy.checkMacApp(req);
-    if (!v.ok) return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: v.reason }));
+    if (!v.ok) {
+      if (!v.reason.startsWith(LOCAL_NEEDS_APPROVAL)) this.log(req, plan, { outcome: "refused", via: "none", detail: v.reason });
+      return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: v.reason }));
+    }
     if (!this.d.macapp || !req.macapp) return void (await this.post("localExecDone", { execId: req.execId, exitCode: null, error: "This app can't drive the apps on this Mac." }));
+    const via: MacActionVia = v.approved ? "card" : "permission";
     try {
       const r = await this.d.macapp({ botId: req.botId, botName: req.botName ?? "Bot", args: req.macapp, approved: v.approved });
-      if (r.ok) await this.post("localExecDone", { execId: req.execId, exitCode: 0, result: JSON.stringify(r.reply) });
-      else await this.post("localExecDone", { execId: req.execId, exitCode: null, error: `${r.needsApproval ? LOCAL_NEEDS_APPROVAL : ""}${r.error}` });
+      if (r.ok) {
+        this.log(req, plan, { outcome: "done", via });
+        await this.post("localExecDone", { execId: req.execId, exitCode: 0, result: JSON.stringify(r.reply) });
+      } else {
+        if (!r.needsApproval) this.log(req, plan, { outcome: "failed", via, detail: r.error });
+        await this.post("localExecDone", { execId: req.execId, exitCode: null, error: `${r.needsApproval ? LOCAL_NEEDS_APPROVAL : ""}${r.error}` });
+      }
     } catch (e) {
+      this.log(req, plan, { outcome: "failed", via, detail: (e as Error).message });
       await this.post("localExecDone", { execId: req.execId, exitCode: null, error: `The app action failed: ${(e as Error).message}` });
     }
   }

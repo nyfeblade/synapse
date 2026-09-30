@@ -58,9 +58,13 @@ async function readCapped(r: Response, max: number): Promise<{ text: string; tru
 
 /** Google REST over fetch: Bearer from GoogleAuth (host-side only), one forced refresh on 401, capped reads. */
 export class GoogleApi {
-  constructor(private d: { auth: GoogleAuth; endpoints(): GoogleEndpoints; fetch?: typeof fetch }) {}
+  constructor(private d: { auth: GoogleAuth; endpoints(): GoogleEndpoints; fetch?: typeof fetch; accountId?: string }) {}
 
   get endpoints(): GoogleEndpoints { return this.d.endpoints(); }
+  /** 4.3b: the account these calls use (undefined: the first one). */
+  get accountId(): string | undefined { return this.d.accountId; }
+  /** 4.3b: the same API, signed in as another connected account. */
+  as(accountId: string): GoogleApi { return new GoogleApi({ ...this.d, accountId }); }
 
   async call<T = unknown>(url: string, req: ApiRequest = {}): Promise<T> {
     const r = await this.raw(url, req);
@@ -71,12 +75,12 @@ export class GoogleApi {
     const u = new URL(url);
     for (const [k, v] of Object.entries(req.query ?? {})) if (v !== undefined && v !== "") u.searchParams.set(k, String(v));
     const send = async (force: boolean) => {
-      const token = await this.d.auth.accessToken(force);
+      const token = await this.d.auth.accessToken(force, this.d.accountId);
       const headers: Record<string, string> = { authorization: `Bearer ${token}` };
       let body: string | Buffer | undefined;
       if (req.json !== undefined) { headers["content-type"] = "application/json"; body = JSON.stringify(req.json); }
       else if (req.body) { headers["content-type"] = req.contentType ?? "application/octet-stream"; body = req.body; }
-      return (this.d.fetch ?? fetch)(u, { method: req.method ?? "GET", headers, body: body as string | Uint8Array | undefined, signal: AbortSignal.timeout(GOOGLE_LIMITS.timeoutMs) });
+      return (this.d.fetch ?? fetch)(u, { method: req.method ?? "GET", headers, body: body as unknown as RequestInit["body"], signal: AbortSignal.timeout(GOOGLE_LIMITS.timeoutMs) });
     };
     let r = await send(false);
     if (r.status === 401) { await r.body?.cancel().catch(() => {}); r = await send(true); }

@@ -17,6 +17,8 @@ export const APP_SETTING_SWITCHES = [
   { get: "devTools.get", set: "devTools.set", key: "showDeveloperTools", dflt: false },
   // 0.1.4 first-run: speech to Apple's servers only with this opt-in (the notice's Allow, or Settings → Voice).
   { get: "speech.server.get", set: "speech.server.set", key: "serverSpeech", dflt: false },
+  // 5.8: the nightly voice check (a scripted call through the real pipeline at a quiet hour; default on).
+  { get: "voice.selftest.get", set: "voice.selftest.set", key: "voiceSelfTest", dflt: true },
 ] as const satisfies readonly { get: string; set: string; key: keyof AppSettings; dflt: boolean }[];
 
 export type SwitchKey = (typeof APP_SETTING_SWITCHES)[number]["key"];

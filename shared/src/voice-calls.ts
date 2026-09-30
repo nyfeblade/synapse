@@ -58,6 +58,8 @@ declare module "./gateway" {
     voiceSpeculate: { args: { id: string; specId: string; text: string }; result: { started: boolean } };
     /** Bug 142: the user kept talking: the early reply is dropped (its tokens are counted and logged). */
     voiceSpeculateCancel: { args: { id: string; specId: string }; result: None };
+    /** 5.8: a voice latency REGRESSION against the owner's own baseline — the last calls, or the nightly check (on) — or back to normal (off). */
+    voiceLatencyNotice: { args: { on: boolean; kind?: "calls" | "selftest"; p50Ms?: number; baselineMs?: number; calls?: number }; result: None };
   }
 }
 

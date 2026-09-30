@@ -3,6 +3,8 @@ import { STR, STR5, STRL, STR_COST, modelLabel } from "@synapse/shared";
 import { nativeCall } from "../../native";
 import { useUi } from "../../store";
 import { BILLING_URLS, formatTokens, startUsageSync, useUsage } from "../../usage/store";
+import { startSpendMeterSync, useSpendMeter } from "../../usage/meter-store";
+import { Segmented } from "../Segmented";
 import { registerSectionBlock, registerSettingsSection, SectionBlocks } from "./sections";
 import { SavingsCard } from "./SavingsCard";
 import { UsageDashboard } from "./UsageDashboard";
@@ -10,6 +12,25 @@ import { UsageDashboard } from "./UsageDashboard";
 const open = (url: string) => void nativeCall("openExternal", { url });
 /** Background calls are often fractions of a cent; "$0.00" would read as free. */
 const usd = (n: number) => (n > 0 && n < 0.005 ? "<$0.01" : `$${n.toFixed(2)}`);
+const METER_MODES = [
+  { value: "today", label: STR_COST.meterToday },
+  { value: "month", label: STR_COST.meterMonth },
+  { value: "off", label: STR_COST.meterOff },
+] as const;
+
+/** 5.7: the header's spend meter: today, this month, or hidden. */
+function MeterRow() {
+  const view = useSpendMeter((s) => s.view);
+  const setMode = useSpendMeter((s) => s.setMode);
+  useEffect(() => startSpendMeterSync(), []);
+  if (!view) return null;
+  return (
+    <div className="settings-row">
+      <span style={{ flexGrow: 1 }}>{STR_COST.meterSetting}</span>
+      <Segmented label={STR_COST.meterSetting} value={view.mode} options={METER_MODES} onChange={(m) => void setMode(m)} />
+    </div>
+  );
+}
 
 export function UsageSection() {
   const { view, error, load } = useUsage();
@@ -40,6 +61,7 @@ export function UsageSection() {
           <span style={{ flexGrow: 1 }}>{STR_COST.apiSpend}</span>
           <button type="button" className="btn-outline small" onClick={() => open(BILLING_URLS.consoleBilling)}>{STR5.billing}</button>
         </div>
+        <MeterRow />
       </div>
 
       <SavingsCard estimates={view.savings} />

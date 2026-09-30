@@ -11,7 +11,12 @@ import { botFixture, installFakeBridge } from "./fake-bridge";
 
 const view = (p: Partial<ComposioStatusView> = {}, states: Record<string, { state: ComposioStatusView["apps"][number]["state"]; bots?: string[] }> = {}): ComposioStatusView => ({
   keySet: false, disclosureAccepted: false,
-  apps: COMPOSIO_APPS.map((a) => ({ toolkit: a.toolkit, name: a.name, state: states[a.toolkit]?.state ?? "available", bots: states[a.toolkit]?.bots ?? [], error: null })),
+  apps: COMPOSIO_APPS.map((a) => {
+    const st = states[a.toolkit]?.state ?? "available";
+    const bots = states[a.toolkit]?.bots ?? [];
+    // 4.3b: one account per connected app here.
+    return { toolkit: a.toolkit, name: a.name, state: st, bots, error: null, accounts: st === "available" ? [] : [{ id: `ca_${a.toolkit}`, label: a.name, state: st, bots, error: null }] };
+  }),
   ...p,
 });
 
@@ -112,7 +117,7 @@ describe("per-Bot grants", () => {
     expect(scout.getAttribute("aria-checked")).toBe("false");
     expect(screen.getByRole("switch", { name: "Gmail: Pilot" }).getAttribute("aria-checked")).toBe("false");
     await act(async () => { fireEvent.click(scout); });
-    expect(fb.calls).toContainEqual(["setComposioGrant", { toolkit: "gmail", botId: "b1", enabled: true }]);
+    expect(fb.calls).toContainEqual(["setComposioGrant", { toolkit: "gmail", botId: "b1", enabled: true, accountId: "ca_gmail" }]);
   });
 
   it("Bot settings shows a switch per connected app only", async () => {

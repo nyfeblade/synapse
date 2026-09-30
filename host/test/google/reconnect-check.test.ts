@@ -99,14 +99,16 @@ describe("the reconnect check through the host (gateway, FUZZ fake Google)", () 
     await api("completeMcpOAuth", { state: new URL(authorizationUrl).searchParams.get("state")!, code: "fuzz" });
     expect(await api<GoogleReconnectCheckView>("getGoogleReconnectCheck")).toMatchObject({ enabled: true, explicit: false, testing: true });
 
-    const reconnectTrays = async () => (await api<{ trays: Tray[] }>("getTrays")).trays.filter((x) => x.dedupeKey === "google-reconnect");
+    // 4.3b: one health row (and tray) per account.
+    const acc = (await api<GoogleStatusView>("getGoogleStatus")).accounts![0]!.id;
+    const reconnectTrays = async () => (await api<{ trays: Tray[] }>("getTrays")).trays.filter((x) => x.dedupeKey === `health:google:${acc}`);
     await g.reconnect.runOnce();
     expect(await reconnectTrays()).toHaveLength(0);
     g.fake!.state.refreshInvalid = true;
     await g.reconnect.runOnce();
     const t = await reconnectTrays();
     expect(t).toHaveLength(1);
-    expect(t[0]!.buttons.map((b) => b.action)).toEqual(["reconnect-google", "reconnect-google-bot"]);
+    expect(t[0]!.buttons.map((b) => b.action)).toEqual(["fix-connector", "reconnect-google-bot"]);
     expect((await api<GoogleStatusView>("getGoogleStatus")).state).toBe("needs-reconnect");
 
     expect(await api<GoogleReconnectCheckView>("setGoogleReconnectCheck", { enabled: false })).toMatchObject({ enabled: false, explicit: true });

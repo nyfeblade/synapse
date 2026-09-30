@@ -30,6 +30,12 @@ export const ORB_LIMITS = {
   create: 20 * 60_000,
   /** Backups: a tar of the Bots' projects in or out. */
   transfer: 10 * 60_000,
+  /** 0.1.5 ready-made image: `orb import` of a ~1-2 GB .tar.zst (unpacks several GB; a slow disk takes minutes). */
+  import: 20 * 60_000,
+  /** `orb config set`: OrbStack's own settings, no machine command. */
+  config: 30_000,
+  /** image-prep.sh adopt, streamed in as root: a first boot of the imported machine plus its checks. */
+  adopt: 5 * 60_000,
 } as const;
 
 /**

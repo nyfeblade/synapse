@@ -64,11 +64,14 @@ export function registerSetup(o: {
     imageVersion: o.imageVersion, hostBuild: o.hostBuild, reconnect: o.reconnect, connected: o.connected,
     ...(o.connectError ? { connectError: o.connectError } : {}),
     forgetPin: o.forgetPin, mac: { cpus: os.cpus().length, totalMemBytes: os.totalmem() }, run: o.run,
+    // 0.1.5: the ready-made image (box/image.json, SHA-256 pinned in this signed app). SYNAPSE_BOX_IMAGE_URL: a mirror or
+    // a local file/server for a test (the hash is still the only trust); "off" sets up from scratch.
+    ...(o.skip ? {} : { image: { cacheDir: path.join(o.userData, "box-image"), freeBytes: () => freeBytes(o.userData), urlOverride: process.env.SYNAPSE_BOX_IMAGE_URL ?? null } }),
   });
   const provisioner = new BoxProvisioner({ steps: steps(), publish });
 
-  const freeBytes = (): number | null => {
-    try { const s = fs.statfsSync(o.home); return s.bavail * s.bsize; } catch { return null; }
+  const freeBytes = (dir = o.home): number | null => {
+    try { const s = fs.statfsSync(dir); return s.bavail * s.bsize; } catch { return null; }
   };
 
   o.reg("setup.status", async () => {

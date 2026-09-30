@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "imageVersion": "63d3489f344cdb76",
+  "hostBuild": "9fbd9349bdfc6b48",
+  "arch": "arm64",
+  "url": "https://github.com/nyfeblade/synapse/releases/download/box-63d3489f344cdb76/synapse-box-63d3489f344cdb76-arm64.tar.zst",
+  "sha256": "02be1b46a3d6c564e1d9871533a72cf86a92eefc52e4e3048620a58e1ad334be",
+  "bytes": 661426704,
+  "unpackedBytes": 2379501056
+}

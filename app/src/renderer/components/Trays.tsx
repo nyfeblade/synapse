@@ -1,10 +1,11 @@
 import { STR } from "@synapse/shared";
 import { call } from "../bridge";
 import { useGoogle } from "../google/store";
+import { fixConnector } from "../health/store";
 import { newFlag, useIsNew } from "../is-new";
 import { copyWithConfirmation } from "../toast";
 import { useUi } from "../store";
-import { CloseIcon } from "./Icons";
+import { CloseIcon, CopyIcon } from "./Icons";
 
 export function Trays({ botId }: { botId: string }) {
   const allTrays = useUi((s) => s.trays);
@@ -24,11 +25,13 @@ export function Trays({ botId }: { botId: string }) {
             // google-setup: it goes straight to Google's sign-in; "Let a Bot click through" opens the Bot panel.
             if (b.action === "reconnect-google") useGoogle.getState().openSheet({ reconnect: true });
             if (b.action === "reconnect-google-bot") useGoogle.getState().openSheet({ mode: "bot" });
+            // 4.4: Fix runs the connector's own reconnect flow. The tray stays until the connector works again.
+            if (b.action === "fix-connector") { if (b.target) void fixConnector(b.target).catch(() => {}); return; }
             // The button's own action has to reach the host, or "Resume routines" just hides the notice.
-            const forward = b.action === "retry" || b.action === "resume-routines" ? { action: b.action } : {};
+            const forward = b.action === "retry" || b.action === "resume-routines" || b.action === "loop-continue" || b.action === "loop-stop" ? { action: b.action } : {};
             void call("dismissTray", { trayId: t.id, ...forward });
           }}>{b.label}</button>)}
-          {t.requestId && <button type="button" className="icon-btn" aria-label={STR.copyRequestId} onClick={() => void copyWithConfirmation(t.requestId as string)}>#</button>}
+          {t.requestId && <button type="button" className="icon-btn" aria-label={STR.copyRequestId} title={STR.copyRequestId} onClick={() => void copyWithConfirmation(t.requestId as string)}><CopyIcon size={14} /></button>}
           <button type="button" className="icon-btn" aria-label="Dismiss" onClick={() => void call("dismissTray", { trayId: t.id })}><CloseIcon /></button>
         </div>
       ))}

@@ -16,7 +16,9 @@ export type WakeSource =
   // Bug 142: the voice fast path — the Bot's voice on a call handed its full self a task.
   | "voice-delegate"
   // 0.1.4: an outside app asked over Synapse's MCP server (host/mcp-server). Never an owner source.
-  | "mcp";
+  | "mcp"
+  // 5.7: the user pressed Continue on "Stopped: <Bot> kept failing at <step>".
+  | "loop-continue";
 
 /** CHAT-09: images ≤ LIMITS.imageBlockMaxBytes go to the model as image content blocks. */
 export interface ImagePart { mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; dataBase64: string }
@@ -68,7 +70,8 @@ export interface TurnResult {
 }
 
 export type TurnEvent =
-  | { kind: "session"; sessionId: string; model: string; tools: string[]; cliVersion: string }
+  /** mcpServers: the CLI's own MCP connection states at init (4.4 connector health), when it reports them. */
+  | { kind: "session"; sessionId: string; model: string; tools: string[]; cliVersion: string; mcpServers?: { name: string; status: string }[] }
   | { kind: "dispatched" }
   | { kind: "thinking"; active: boolean }
   | { kind: "text_delta"; text: string }
@@ -78,6 +81,9 @@ export type TurnEvent =
   | { kind: "retry"; attempt: number; errorStatus: number | null }
   | { kind: "compact_boundary" }
   | { kind: "rate_limit"; status: string; windows: Record<string, { utilization: number | null; resetsAt: number | null }> }
+  /** 5.7: this turn's spend so far, in API dollars at list price, cumulative (any brain may emit it; the header meter
+   *  and the loop guard read it). The turn's recorded cost in usage.db replaces it when the turn settles. */
+  | { kind: "spend"; turnUsd: number }
   | { kind: "context"; tokens: number }; // ORIG-07 §07.1: input + cache read + cache creation of the newest main-thread assistant message
 export type TurnEventSink = (e: TurnEvent) => void;
 

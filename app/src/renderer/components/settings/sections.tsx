@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useUi } from "../../store";
 
-export type SettingsSectionId = "general" | "auto-review" | "account" | "usage" | "voice" | "computer" | "schedules" | "system";
+export type SettingsSectionId = "general" | "auto-review" | "account" | "usage" | "voice" | "computer" | "connections" | "activity" | "schedules" | "system";
 interface SectionDef { id: SettingsSectionId; label: string; Component: ComponentType | null }
 
 const sections: SectionDef[] = [
@@ -13,6 +13,10 @@ const sections: SectionDef[] = [
   { id: "usage", label: "Usage", Component: null },
   { id: "voice", label: "Voice", Component: null },
   { id: "computer", label: "Computer", Component: null },
+  // 4.4: every connector's health, each with Fix.
+  { id: "connections", label: "Connections", Component: null },
+  // 5.6: what Bots did on this Mac.
+  { id: "activity", label: "Activity", Component: null },
   { id: "schedules", label: "Schedules", Component: null },
   { id: "system", label: "System", Component: null },
 ];
@@ -85,6 +89,7 @@ const SECTION_OF_BLOCK: Record<string, SettingsSectionId> = {
   updates: "system",
   backups: "system",
   diagnostics: "system",
+  telegram: "system",
 };
 
 /** "auto-review" (Phase 1) → general; "usage" → account; "updates|backups|diagnostics" → system;
@@ -92,5 +97,5 @@ const SECTION_OF_BLOCK: Record<string, SettingsSectionId> = {
 export function sectionOf(focus: string | null): SettingsSectionId {
   const head = (focus ?? "").split("/")[0]!;
   if (Object.hasOwn(SECTION_OF_BLOCK, head)) return SECTION_OF_BLOCK[head]!;
-  return (["auto-review", "account", "usage", "voice", "computer", "schedules", "system"] as const).find((s) => s === head) ?? "general";
+  return (["auto-review", "account", "usage", "voice", "computer", "connections", "activity", "schedules", "system"] as const).find((s) => s === head) ?? "general";
 }

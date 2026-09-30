@@ -11,9 +11,10 @@ const SKIP = (name) => name.startsWith("._") || name === ".DS_Store" || name ===
 /**
  * Portable install: an ALLOWLIST of box/'s top level — what the installed app runs (first-run setup, box
  * updates, Settings → Update/Recover, verify after an update). The dev spikes, the test runner, the token
- * helper and the per-Bot-account migration scripts stay in the repo.
+ * helper, the per-Bot-account migration scripts and the image build (build-image.sh, image-tool.py) stay in the repo.
+ * 0.1.5: image-prep.sh (adopts a ready-made image) and image.json (its pinned SHA-256, when a release has one) ship.
  */
-export const SHIPPED_BOX = new Set(["check-gateway.sh", "deploy.sh", "desktop.env", "files", "orb.sh", "provision-from-mac.sh", "provision.sh", "route.env", "verify-box.sh"]);
+export const SHIPPED_BOX = new Set(["check-gateway.sh", "deploy.sh", "desktop.env", "files", "image-prep.sh", "image.json", "orb.sh", "provision-from-mac.sh", "provision.sh", "route.env", "verify-box.sh"]);
 
 export function stageBox(repoRoot, destDir) {
   const hostDist = path.join(repoRoot, "host", "dist");

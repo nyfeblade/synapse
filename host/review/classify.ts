@@ -65,12 +65,14 @@ const GOOGLE_READS = new Set(["gmail_search", "gmail_read", "calendar_list", "dr
 /** ORIG-GOOGLE: the built-in Google tools. Reads are low-risk (no card); anything that acts on the user's Google
  *  account is a google_write, which the gate always shows as a card (even with Auto-review off). A draft only to
  *  the user themself stays a quiet side effect. */
-function classifyGoogle(tool: string, input: Record<string, unknown>, googleEmail: string | null | undefined): Classification | null {
+function classifyGoogle(tool: string, input: Record<string, unknown>, googleEmail: string | readonly string[] | null | undefined): Classification | null {
   const s = (v: unknown) => (typeof v === "string" ? v : v === undefined || v === null ? "" : String(v));
   if (GOOGLE_READS.has(tool)) return { surface: null, sideEffect: false, target: null, hardDeny: null, summary: "", command: null };
   const to = input.to === undefined ? [] : parseRecipients(input.to);
   const toText = to?.length ? to.join(", ") : s(input.to);
-  if (tool === "gmail_draft" && googleEmail && !input.reply_to_id && to?.length && to.every((r) => addressOf(r) === googleEmail.toLowerCase())) {
+  // 4.3b: "the user themself" is every address the owner has connected.
+  const own = new Set((typeof googleEmail === "string" ? [googleEmail] : googleEmail ?? []).map((e) => e.toLowerCase()));
+  if (tool === "gmail_draft" && own.size && !input.reply_to_id && to?.length && to.every((r) => own.has(addressOf(r)))) {
     return { surface: null, sideEffect: true, target: null, hardDeny: null, summary: "", command: null };
   }
   const summary =
@@ -145,7 +147,7 @@ export function looksLikeComposioSlug(tool: string): boolean {
   return COMPOSIO_SLUG_RE.test(tool);
 }
 
-export function classifyTool(call: ToolCall, o: { workspace: string; hostPrivate: string; enforce?: boolean; shellCwd?: string; botId?: string; mcpReadOnly?(serverId: string, tool: string): boolean; googleEmail?: string | null;
+export function classifyTool(call: ToolCall, o: { workspace: string; hostPrivate: string; enforce?: boolean; shellCwd?: string; botId?: string; mcpReadOnly?(serverId: string, tool: string): boolean; googleEmail?: string | readonly string[] | null;
   /** Final secfix item 4: true only when this Bot's "google" server is the app's built-in one (identity, not the name). */
   googleBuiltin?: boolean;
   /** Bug 402: true only when this Bot's "composio_apps" server is the app's built-in Composio connector. */

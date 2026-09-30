@@ -8,7 +8,11 @@ import { CallFeelCard, acceleratorFrom, shortcutLabel } from "../../src/renderer
 
 const invoked: [string, Record<string, unknown>][] = [];
 let taken = false;
+let lastMs: number | null = null;
+let regressed = false;
 beforeEach(() => {
+  lastMs = null;
+  regressed = false;
   invoked.length = 0;
   taken = false;
   (window as unknown as { synapse: unknown }).synapse = {
@@ -16,6 +20,7 @@ beforeEach(() => {
       invoke: vi.fn(async (n: string, a: Record<string, unknown>) => {
         invoked.push([n, a]);
         if (n === "calls.sounds.get") return { ok: true, result: { on: true } };
+        if (n === "voice.latency.last") return { ok: true, result: { firstAudioMs: lastMs, measured: lastMs === null ? 0 : 5, regressed } };
         if (n === "calls.shortcut.get") return { ok: true, result: { accelerator: "Alt+CommandOrControl+C" } };
         if (n === "calls.shortcut.set") return taken ? { ok: false, error: { code: "NATIVE_ERROR", message: STRV.callShortcutTaken } } : { ok: true, result: { accelerator: a.accelerator } };
         return { ok: true, result: {} };
@@ -68,5 +73,38 @@ describe("Settings → Voice: call sounds and the call shortcut", () => {
     expect(acceleratorFrom({ key: "ç", code: "KeyC", metaKey: true, altKey: true, ctrlKey: false, shiftKey: false })).toBe("Alt+CommandOrControl+C");
     expect(acceleratorFrom({ key: "Meta", code: "MetaLeft", metaKey: true, altKey: false, ctrlKey: false, shiftKey: false })).toBeNull();
     expect(shortcutLabel("Shift+CommandOrControl+9")).toBe("⇧⌘9");
+  });
+});
+
+describe("5.8 Settings → Voice: the nightly voice check and the last call's reply time", () => {
+  it("the nightly check is on by default and can be turned off", async () => {
+    render(<CallFeelCard />);
+    const sw = await screen.findByRole("switch", { name: STRV.voiceSelfTest });
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(sw);
+    expect(invoked).toContainEqual(["voice.selftest.set", { on: false }]);
+  });
+
+  it("shows the last call's first audio when a call timed one, and nothing before", async () => {
+    render(<CallFeelCard />);
+    await screen.findByRole("switch", { name: STRV.voiceSelfTest });
+    expect(screen.queryByTestId("last-call-first-audio")).toBeNull();
+    cleanup();
+    lastMs = 1_840;
+    render(<CallFeelCard />);
+    const v = await screen.findByTestId("last-call-first-audio");
+    expect(v.textContent).toBe("1.8 s");
+    expect(v.getAttribute("data-regressed")).toBe("false"); // over the 1.2 s goal, but no alarm
+    expect(v.style.color).toBe("var(--ink-muted)");
+    expect(screen.getByText(STRV.lastCallFirstAudio)).toBeTruthy();
+  });
+
+  it("alarm styling only on a regression against the owner's own calls", async () => {
+    lastMs = 2_900;
+    regressed = true;
+    render(<CallFeelCard />);
+    const v = await screen.findByTestId("last-call-first-audio");
+    expect(v.getAttribute("data-regressed")).toBe("true");
+    expect(v.style.color).toBe("var(--danger-ink)");
   });
 });

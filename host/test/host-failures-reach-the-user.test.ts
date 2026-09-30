@@ -134,6 +134,10 @@ const DECLARED: Record<string, Declaration> = {
     contained: "couldn't be read. Ask them to send it again.",
     why: "bug 126: a room post's attachment that can't be read from the host store is told to the answering Bot in its turn prompt, which asks the user to send it again; the post itself still goes.",
   },
+  "host/triggers/email/email-in.ts|email in: message skipped": {
+    user: { test: "host/test/triggers/email-in.test.ts", title: "a message routed to a Bot that can't be read is told to the owner, and labelling it again retries" },
+    why: "4.3: a Gmail error while reading a routed email-in message raises one tray per Bot (\"Email to <Bot> couldn't be read\"); the message is forgotten as seen, so labelling it again tries again.",
+  },
   "host/triggers/email/gmail-history.ts|gmail history poll failed": {
     contained: "this.noteFails(this.fails + 1)",
     why: "schedules-triggers-standup: consecutive failed history polls feed the same health path as IMAP (onFailures), so after N the google-account routine's row says the mailbox cannot be reached.",
@@ -268,6 +272,7 @@ const DECLARED: Record<string, Declaration> = {
   "host/runner/observers.ts|turn observer failed": { contained: "o.on", why: "one observer throwing is isolated from the turn and the other observers; the turn's own state is unaffected." },
   "host/usage/usage-store.ts|spend listener failed": { contained: "fn(ev)", why: "the run is already recorded before any listener runs; one listener throwing (a budget tray, a dashboard total) is isolated from the row and from the other listeners." },
   "host/computer/restart.ts|box maintenance: the Mac stopped renewing its hold; letting held turns run": { contained: "o.runner.holdNewTurns(false)", why: "the lease expired because the Mac stopped renewing it (crash or quit mid-update); the host lifts the hold itself so held turns run and the maintenance banner clears, so nothing is left for the user to act on." },
+  "host/runner/turn-runner.ts|bot stopped on repeated failure": { contained: "STR_COST.loopStopped(name, trip.step)", why: "5.7: the log line sits beside the tray the user sees (\"Stopped: <Bot> kept failing at <step>\", with Continue and Stop), proven in host/test/runner/loop-stop.test.ts." },
   "host/runner/turn-runner.ts|interrupt failed": { contained: ".interrupt(reason)", why: "Stop did not take: the Bot keeps showing as working (true) with Stop still offered, so nothing claims it stopped." },
   "host/runner/turn-runner.ts|maintenance job failed": { contained: "r.maintenance = null", why: "an idle-time maintenance job (compaction and the like); it is cleared so the next one can run, and no surface shows it." },
   "host/runner/turn-runner.ts|run escaped the watchdog": { contained: "onWatchdogInterrupt", why: "the watchdog has already interrupted the run and the lane moved on; this notes a zombie that settled late." },

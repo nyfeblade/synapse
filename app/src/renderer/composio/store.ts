@@ -24,8 +24,12 @@ interface ComposioState {
   acceptAndConnect(): Promise<void>;
   cancelDisclosure(): void;
   reopen(toolkit: string): void;
-  disconnect(toolkit: string): Promise<void>;
-  setGrant(toolkit: string, botId: string, enabled: boolean): Promise<void>;
+  /** 4.3b: with accountId, only that account. */
+  disconnect(toolkit: string, accountId?: string): Promise<void>;
+  /** 4.3b: with accountId, that account; without, every connected account of the app. */
+  setGrant(toolkit: string, botId: string, enabled: boolean, accountId?: string): Promise<void>;
+  /** 4.3b: the account's name, as the Bot and the card use it. */
+  rename(toolkit: string, accountId: string, label: string): Promise<void>;
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -68,9 +72,12 @@ export const useComposio = create<ComposioState>((set, get) => {
     },
     cancelDisclosure: () => set({ disclosureFor: null }),
     reopen: (toolkit) => { const url = get().links[toolkit]; if (url) void nativeCall("openExternal", { url }).catch(() => {}); else void get().connect(toolkit); },
-    disconnect: (toolkit) => run(toolkit, async () => { set({ status: await call("disconnectComposioApp", { toolkit }) }); }),
-    setGrant: async (toolkit, botId, enabled) => {
-      try { set({ status: await call("setComposioGrant", { toolkit, botId, enabled }), error: null }); } catch (e) { set({ error: message(e) }); }
+    disconnect: (toolkit, accountId) => run(toolkit, async () => { set({ status: await call("disconnectComposioApp", { toolkit, ...(accountId ? { accountId } : {}) }) }); }),
+    rename: async (toolkit, accountId, label) => {
+      try { set({ status: await call("renameComposioAccount", { toolkit, accountId, label }), error: null }); } catch (e) { set({ error: message(e) }); }
+    },
+    setGrant: async (toolkit, botId, enabled, accountId) => {
+      try { set({ status: await call("setComposioGrant", { toolkit, botId, enabled, ...(accountId ? { accountId } : {}) }), error: null }); } catch (e) { set({ error: message(e) }); }
     },
   };
 });

@@ -19,6 +19,7 @@ import { askModeFloor, fixedRuleFor, fullAutoAskFor, modeAllowsWithoutCard, with
 import type { WakeSource } from "../brain/types";
 import { roomReviewText } from "../groups/member-prompt";
 import { COMPOSIO_SERVER_ID, type PermMode } from "@synapse/shared";
+import { touchesEmailIn } from "../triggers/email/email-in";
 import { fingerprint } from "../review/fingerprint";
 import { hostCallStatic } from "../review/mac-floor";
 import { isOwnershipAction } from "../review/ownership";
@@ -35,7 +36,8 @@ import type { HostSettingsStore } from "../store/host-settings";
 import type { RehearsalRegistry } from "../teach/rehearsal-registry";
 import { originOf } from "./origin";
 import { PLAN_GRANT_MAX_MS, callScope, coverable, ownerWake, parsePlan, planLines, stepMatches, trustedSendOk, trustedTool, type PlanStep } from "./smarter";
-import { FULL_AUTO_BULK_MAX, carriesOutside, fullAutoIntentEligible, fullAutoIntentFloor, recipientsOf, RESOLVE_SLUGS } from "../review/full-auto-intent";
+import { FULL_AUTO_BULK_MAX, accountFloor, carriesOutside, fullAutoIntentEligible, fullAutoIntentFloor, recipientsOf, RESOLVE_SLUGS, type AccountChoice } from "../review/full-auto-intent";
+import { log } from "../util/log";
 import { outsideLog } from "../review/outside-log";
 
 export interface ReviewerLike { review(req: ReviewRequest): Promise<ReviewOutcome>; clearCache(): void }
@@ -67,6 +69,11 @@ export interface GateDeps {
   mcpReadOnly?(serverId: string, tool: string): boolean;
   /** ORIG-GOOGLE: the connected Google account's address, so a Gmail draft only to the user needs no card. */
   googleEmail?(): string | null;
+  /** 4.3b: every address the owner has connected (each Google account, each Composio Gmail): "yourself". Wins over googleEmail. */
+  ownerEmails?(): string[];
+  /** 4.3b: the account a connector write acts on, resolved on the host against THIS Bot's grants (never guessed).
+   *  `label` is what the card shows; an error denies before any card. null: not a connector with accounts. */
+  accountFor?(botId: string, call: ToolCall, target: RiskTarget): AccountResolution | null;
   /** Final secfix item 4: whether this Bot's "google" server is the built-in one (only then are mcp__google__ calls Google). */
   googleBuiltin?(botId: string): boolean;
   /** Bug 420: whether the owner has sent mail to this address before (their Gmail Sent folder). */
@@ -85,7 +92,7 @@ export interface GateDeps {
   googleClientReplace?(botId: string): { clientId: string; replace: boolean } | null;
   /** ORIG-GOOGLE draft-send card: fetches a Gmail draft's current To/Cc/Bcc/Subject/body/attachments with the
    *  user's token, host-side, before the card is raised — so the card never says just "Send your Gmail draft …". */
-  googleDraftPreview?(draftId: string): Promise<{ preview: DraftPreview } | { error: string }>;
+  googleDraftPreview?(draftId: string, account?: string): Promise<{ preview: DraftPreview } | { error: string }>;
   /** Final secfix item 9: host-side facts for a Google write's card (reply recipient, event title/time, upload folder). */
   googleCardFacts?(tool: string, input: Record<string, unknown>): Promise<GoogleCardFacts | { error: string }>;
   /** Item 9: the Bot's secret redaction, applied to the draft preview text shown on the card. */
@@ -107,6 +114,9 @@ export interface GateDeps {
    *  Bot's 0700 home. Unset: plain fs (tests, a box without per-Bot accounts). */
   homeFs?: FsQuery;
 }
+
+/** 4.3b: the account a connector call uses (`label`), the labels this Bot may use, and every account the owner has. */
+export type AccountResolution = { label: string; granted: string[]; all: string[] } | { error: string };
 
 /** Smarter approvals: one approved plan. `detached`: approved on a card whose turn had already ended. */
 interface PlanGrant { key: string; at: number; steps: (PlanStep & { used: boolean })[]; detached: boolean }
@@ -394,8 +404,8 @@ export class ApprovalGate {
     if (target.action !== "google_write" && target.action !== "composio_write" && target.action !== "mcp") return false;
     const builtin = target.action === "google_write" || (target.action === "composio_write" && call.toolName.startsWith(`mcp__${COMPOSIO_SERVER_ID}__`) && (this.d.composioBuiltin?.(botId) ?? false));
     const trusted = this.d.settings.trusted?.() ?? [];
-    const self = this.d.googleEmail?.() ?? null;
-    const maybeTrusted = builtin && trustedTool(target) && (!!self || trusted.length > 0);
+    const self = this.selfAddrs();
+    const maybeTrusted = builtin && trustedTool(target) && (self.length > 0 || trusted.length > 0);
     if (!maybeTrusted && !this.livePlans(botId, slot).length) return false;
     if (!coverable(target, fullAutoAskFor(call, cls, env))) return false;
     const scope = callScope(target, await this.resolveSend(botId, target));
@@ -403,9 +413,13 @@ export class ApprovalGate {
     const src = slot ? (slot.reviewSource ?? slot.source) : null;
     const origin = slot ? originOf(slot.reviewSource ?? slot.source) : "user";
     const findStep = () => this.livePlans(botId, slot).flatMap((g) => g.steps).find((x) => !x.used && stepMatches(x, call.toolName, scope));
-    if (!findStep() && !trustedSendOk({ target, builtin, scope, self, trusted, origin, source: src })) return false;
-    // Follow-up 2: what the send carries. Everything outside the Bot read in the kept log (2 hours) counts.
+    // 4.3b: a plan or a trusted person never lets the Bot's own pick of account stand when the owner named another,
+    // or named none while this Bot can use several (only a send to the owner themself doesn't care which).
     const request = this.ownerRequest(botId).texts.join("\n");
+    const choice = this.accountChoice(botId, call, target);
+    const accountOk = !choice || (ownerWake(origin, src) && accountFloor(choice, request) === null);
+    if (!(findStep() && accountOk) && !trustedSendOk({ target, builtin, scope, self, trusted, origin, source: src, accountOk })) return false;
+    // Follow-up 2: what the send carries. Everything outside the Bot read in the kept log (2 hours) counts.
     if (carriesOutside(target, request, outsideLog.since(botId, 0), self)) return false;
     // Follow-up 1: the owner's own ask-first rules win. With any written, the reviewer checks this send against them;
     // a matched rule, a suspected injection, a floor block, an error or a degraded reviewer all fall through to a card.
@@ -423,20 +437,21 @@ export class ApprovalGate {
       if (r.kind === "error" || r.kind === "degraded" || (r.kind === "block" && (r.stage !== "model" || !v))) return false;
     }
     // After the awaits: the grants are read again (a new message may have ended them), and a step is used up at once.
-    const step = findStep();
+    const step = accountOk ? findStep() : undefined;
     if (step) { step.used = true; return true; }
-    return trustedSendOk({ target, builtin, scope, self, trusted, origin, source: src });
+    return trustedSendOk({ target, builtin, scope, self, trusted, origin, source: src, accountOk });
   }
 
   /**
    * Bug 420: which of these recipients the owner has sent mail to before (their Sent folder, host-side), each
    * answer cached for 24 hours. Only addresses the owner didn't write out, and at most 5, are looked up.
    */
-  private async knownContacts(botId: string, recipients: string[], request: string, self: string | null): Promise<Set<string>> {
+  private async knownContacts(botId: string, recipients: string[], request: string, self: readonly string[]): Promise<Set<string>> {
     const out = new Set<string>();
     if (!this.d.sentTo) return out;
     const lower = request.toLowerCase();
-    const todo = [...new Set(recipients.map((r) => r.toLowerCase()))].filter((r) => r !== self?.toLowerCase() && !lower.includes(r));
+    const mine = new Set(self.map((e) => e.toLowerCase()));
+    const todo = [...new Set(recipients.map((r) => r.toLowerCase()))].filter((r) => !mine.has(r) && !lower.includes(r));
     if (todo.length > FULL_AUTO_BULK_MAX) return out;
     for (const r of todo) {
       const hit = this.sentCache.get(r);
@@ -455,7 +470,9 @@ export class ApprovalGate {
     const tool = String(target.arguments.tool ?? "");
     if (target.action !== "composio_write" || !RESOLVE_SLUGS.has(tool)) return { recipients: [], channels: [] };
     if (!this.d.composioRecipients) return null;
-    const args = (target.arguments.arguments ?? {}) as Record<string, unknown>;
+    const inner = (target.arguments.arguments ?? {}) as Record<string, unknown>;
+    // 4.3b: the lookups use the account the host resolved for this send.
+    const args = typeof target.arguments.account === "string" ? { ...inner, account: target.arguments.account } : inner;
     const r = await this.d.composioRecipients(botId, tool, args).catch(() => ({ error: "lookup failed" }));
     return "error" in r ? null : r;
   }
@@ -494,12 +511,41 @@ export class ApprovalGate {
     const draftHash = g?.action === "google_write" && g.arguments.tool === "gmail_send" && typeof g.arguments.draft_hash === "string" ? g.arguments.draft_hash : undefined;
     // Final secfix item 9: a reply goes exactly to the recipient the card showed (resolved host-side), not a re-lookup.
     const resolvedTo = g?.action === "google_write" && Array.isArray(g.arguments.resolved_to) ? (g.arguments.resolved_to as string[]) : undefined;
-    if (cwd === undefined && draftHash === undefined && resolvedTo === undefined) return undefined;
-    return { ...call.input, ...(cwd !== undefined ? { working_directory: cwd } : {}), ...(draftHash !== undefined ? { draft_hash: draftHash } : {}), ...(resolvedTo !== undefined ? { to: resolvedTo } : {}) };
+    // 4.3b: the approved call runs as exactly the account the card named.
+    const account = (g?.action === "google_write" || g?.action === "composio_write") && typeof g.arguments.account === "string" ? g.arguments.account : undefined;
+    if (cwd === undefined && draftHash === undefined && resolvedTo === undefined && account === undefined) return undefined;
+    return { ...call.input, ...(cwd !== undefined ? { working_directory: cwd } : {}), ...(draftHash !== undefined ? { draft_hash: draftHash } : {}), ...(resolvedTo !== undefined ? { to: resolvedTo } : {}), ...(account !== undefined ? { account } : {}) };
+  }
+
+  /** 4.3b: the owner's own addresses (every connected account). */
+  private selfAddrs(): string[] {
+    if (this.d.ownerEmails) return this.d.ownerEmails();
+    const g = this.d.googleEmail?.() ?? null;
+    return g ? [g] : [];
+  }
+
+  /** 4.3b: the account choice the intent floor judges (null: nothing to choose). */
+  private accountChoice(botId: string, call: ToolCall, target: RiskTarget): AccountChoice | null {
+    const used = target.arguments.account;
+    if (typeof used !== "string" || !this.d.accountFor) return null;
+    const r = this.d.accountFor(botId, call, target);
+    return r && !("error" in r) ? { used, granted: r.granted, all: r.all } : null;
   }
 
   private cls(botId: string, call: ToolCall): Classification {
-    return classifyTool(call, { workspace: this.d.cfg.workspace, hostPrivate: this.d.cfg.hostPrivate, walls: this.d.cfg, enforce: this.d.settings.get().autoReviewEnabled, shellCwd: this.shellCwd(botId, call), botId, ...(this.d.mcpReadOnly ? { mcpReadOnly: this.d.mcpReadOnly } : {}), googleEmail: this.d.googleEmail?.() ?? null, googleBuiltin: this.d.googleBuiltin?.(botId) ?? false, composioBuiltin: this.d.composioBuiltin?.(botId) ?? false, ...(this.d.mcpServerHost ? { mcpServerHost: this.d.mcpServerHost } : {}), ...(this.d.mcpServerComposio ? { mcpServerComposio: this.d.mcpServerComposio } : {}), googleClientReplace: this.d.googleClientReplace?.(botId) ?? null });
+    const c = this.classify(botId, call);
+    // 4.3b: a connector write names the account it acts on, resolved here against this Bot's grants. The label goes
+    // into the target (so the fingerprint binds it, the card shows it and the approved call is pinned to it); an
+    // account this Bot can't use, or a choice the Bot didn't make among several, is refused before any card.
+    if (!c.target || c.hardDeny || !this.d.accountFor) return c;
+    const r = this.d.accountFor(botId, call, c.target);
+    if (!r) return c;
+    if ("error" in r) return { ...c, hardDeny: r.error };
+    return { ...c, target: { ...c.target, arguments: { ...c.target.arguments, account: r.label } } };
+  }
+
+  private classify(botId: string, call: ToolCall): Classification {
+    return classifyTool(call, { workspace: this.d.cfg.workspace, hostPrivate: this.d.cfg.hostPrivate, walls: this.d.cfg, enforce: this.d.settings.get().autoReviewEnabled, shellCwd: this.shellCwd(botId, call), botId, ...(this.d.mcpReadOnly ? { mcpReadOnly: this.d.mcpReadOnly } : {}), googleEmail: this.selfAddrs(), googleBuiltin: this.d.googleBuiltin?.(botId) ?? false, composioBuiltin: this.d.composioBuiltin?.(botId) ?? false, ...(this.d.mcpServerHost ? { mcpServerHost: this.d.mcpServerHost } : {}), ...(this.d.mcpServerComposio ? { mcpServerComposio: this.d.mcpServerComposio } : {}), googleClientReplace: this.d.googleClientReplace?.(botId) ?? null });
   }
 
   /** ORIG-GOOGLE draft-send card: fetches the draft, builds the card's redacted/truncated detail text and binds
@@ -507,7 +553,8 @@ export class ApprovalGate {
    *  failure both deny with a clear reason — never a card built on nothing. */
   private async enrichDraftSend(botId: string, draftId: string, cls: Classification): Promise<Classification | string> {
     if (!this.d.googleDraftPreview) return STRG.draftFetchFailed("Google isn't connected.");
-    const r = await this.d.googleDraftPreview(draftId);
+    const acct = cls.target!.arguments.account;
+    const r = await this.d.googleDraftPreview(draftId, typeof acct === "string" ? acct : undefined);
     if ("error" in r) return STRG.draftFetchFailed(r.error);
     const hash = hashDraftPreview(r.preview);
     const command = `${formatDraftPreviewCard(r.preview)}\nDraft hash: ${hash.slice(0, 12)}`;
@@ -536,10 +583,11 @@ export class ApprovalGate {
     const tool = String(c.target!.arguments.tool ?? "");
     if (needsCardFacts(tool, call.input)) {
       if (!this.d.googleCardFacts) return STRG.cardFactsFailed("Google isn't connected.");
-      const r = await this.d.googleCardFacts(tool, call.input);
+      const acct = c.target!.arguments.account;
+      const r = await this.d.googleCardFacts(tool, typeof acct === "string" ? { ...call.input, account: acct } : call.input);
       if ("error" in r) return STRG.cardFactsFailed(r.error);
       if (r.resolvedTo) {
-        const re = this.cls(botId, { ...call, input: { ...call.input, to: r.resolvedTo } });
+        const re = this.cls(botId, { ...call, input: { ...call.input, to: r.resolvedTo, ...(typeof acct === "string" ? { account: acct } : {}) } });
         const base = re.target ? re : c;
         c = { ...base, target: { ...base.target!, arguments: { ...base.target!.arguments, to: r.resolvedTo, resolved_to: r.resolvedTo } } };
       }
@@ -991,13 +1039,17 @@ export class ApprovalGate {
     // Bug 258: in Full auto, when the command runs in the Bot's own closed tree (closedAncestor under its 0700 home) and
     // stays there, it runs with no card: the scripts it can reach are the Bot's own. The shared /workspace keeps it.
     const unboundAsk = unbound && !(mode === "full-auto" && closedTree === true);
+    // 4.3 Email in: only the owner can route mail to a Bot. A connector call that names an email-in address or puts on a
+    // Synapse/ label is a card in every mode: no plan, trusted person, intent match, Allow rule or mode skip lifts it.
+    const emailInAsk = (cls.target.action === "google_write" || cls.target.action === "composio_write" || cls.target.action === "mcp")
+      && touchesEmailIn(String(cls.target.arguments.tool ?? call.toolName), call.input, this.selfAddrs());
     const fp = fingerprint(cls.surface, target);
     const rehearsal = this.d.rehearsals?.active(botId, call, slot) ?? false;
     if (rehearsal && (st.tierHint >= 2 || st.floorHits.length > 0)) return finish({ decision: "deny", reason: STR.rehearsalStopped });
     if (this.deferApproved.delete(`${botId}:${fp}`)) return finish({ decision: "allow" });
     // Smarter approvals: a step of a plan the owner approved for this task, or a send to only trusted people, runs
     // with no card. Connector sends only; money, deletion, security, unknown tools and bulk values never do.
-    if (!planCard && !unboundAsk && !rehearsal && (await this.smarterAllows(botId, call, cls, target, slot, env, st, fp))) return finish({ decision: "allow" });
+    if (!planCard && !unboundAsk && !emailInAsk && !rehearsal && (await this.smarterAllows(botId, call, cls, target, slot, env, st, fp))) return finish({ decision: "allow" });
     // ---- LAYER 1 (cont.) + MODES: reviewer skips, now that the static floor (F7/F8/F9) is known. A floor hit or an
     // ALWAYS-ASK always cards; otherwise Full auto runs, Auto-accept-edits runs an in-project edit, and Auto-review
     // OFF runs (the account master switch and the fixed NEVER already had their say above). Rehearsals win over all. ----
@@ -1010,7 +1062,7 @@ export class ApprovalGate {
     // full-auto-quiet: in Full auto the F7/F8/F9 floor no longer holds a call back on its own either — F7
     // (credentials, exfiltration) and F9 (pipe-to-shell) are the classifier's SECURITY category, and F8's
     // git-control half is exactly the `git config --global` false positive this change removes.
-    if (!unboundAsk && !ownership && !fixedAsk && !credAsk && (fa ? !fa.ask : !floorHit && !askFloor) && !rehearsal) {
+    if (!unboundAsk && !emailInAsk && !ownership && !fixedAsk && !credAsk && (fa ? !fa.ask : !floorHit && !askFloor) && !rehearsal) {
       // full-auto-quiet: the classifier said no card. The user's OWN written ask-first rules still win, so when they
       // have written any, the reviewer still runs below and a block that matched one becomes a card; with none
       // written (the usual case) routine work runs silently and costs no reviewer call, exactly as before.
@@ -1038,7 +1090,7 @@ export class ApprovalGate {
     // Bug 275: only the built-in Google and Composio connectors can skip the card this way; the same slug on a
     // generic or custom MCP server (whose real recipients the host can't look up) always cards.
     const builtinSend = cls.target.action === "google_write" || (cls.target.action === "composio_write" && call.toolName.startsWith(`mcp__${COMPOSIO_SERVER_ID}__`) && (this.d.composioBuiltin?.(botId) ?? false));
-    if (fa?.ask && !unboundAsk && builtinSend && fullAutoIntentEligible(target, fa)) {
+    if (fa?.ask && !unboundAsk && !emailInAsk && builtinSend && fullAutoIntentEligible(target, fa)) {
       // Bugs 413–418: the owner's CURRENT request, the real recipients (resolved on the host), everything outside
       // that was read since the request, and how many sends this request already made.
       const req = this.ownerRequest(botId);
@@ -1052,12 +1104,14 @@ export class ApprovalGate {
       this.intentSends.set(botId, { key: req.key, n: sent + 1 });
       const release = () => { const c = this.intentSends.get(botId); if (c && c.key === req.key && c.n > 0) this.intentSends.set(botId, { key: c.key, n: c.n - 1 }); };
       const resolved = await this.resolveSend(botId, target);
-      const self = this.d.googleEmail?.() ?? null;
+      const self = this.selfAddrs();
       const known = resolved ? await this.knownContacts(botId, [...recipientsOf(target), ...resolved.recipients], req.texts.join("\n"), self) : new Set<string>();
+      const account = this.accountChoice(botId, call, target);
       intentReason = fullAutoIntentFloor({
         target, source: slot ? (slot.reviewSource ?? slot.source) : null, origin, userMessages: req.texts,
-        outside, self, resolved, sentForRequest: sent, known,
+        outside, self, resolved, sentForRequest: sent, known, account,
       });
+      if (account) log.info(`accounts: full-auto intent bot=${botId} tool=${call.toolName} account=${account.used} ${intentReason === null ? "matched" : "cards"}`);
       if (intentReason === null && resolved) {
         // Bug 416 (M2): any outside content read since the request reaches the reviewer, matched or not.
         const excerpts = [...ctx0.untrusted_excerpts, ...outside.heads.filter((h) => !ctx0.untrusted_excerpts.includes(h))].slice(0, 3);
@@ -1074,6 +1128,7 @@ export class ApprovalGate {
     // full-auto-quiet: in Full auto the classifier's verdict IS the card (Bug 410: after the intent check above).
     const outcome: ReviewOutcome = planCard ? { kind: "block", stage: "floor", reason: TEXT.planCard, proposedRule: null, verdict: null }
       : unboundAsk ? { kind: "block", stage: "floor", reason: TEXT.unboundCard, proposedRule: null, verdict: null }
+      : emailInAsk ? { kind: "block", stage: "floor", reason: STRG.emailInCard, proposedRule: null, verdict: null }
       : fa?.ask ? { kind: "block", stage: "floor", reason: intentReason || fa.reason, proposedRule: null, verdict: null }
       // Bug 439: a hard Ask floor, or any Ask floor with Auto-review off (nothing else would judge it): the card.
       : askFloor && (askFloor.hard || !this.d.settings.get().autoReviewEnabled) ? { kind: "block", stage: "floor", reason: askFloor.result.reason, proposedRule: null, verdict: null }
@@ -1097,7 +1152,7 @@ export class ApprovalGate {
     // for is not one of the five categories, so in Full auto it runs and is only recorded in the activity log;
     // a block that matched one of the user's OWN ask-first rules is the exception and raises the card.
     // google-setup security fix 1 (Bug 410 check): replacing the Google client is a card in Full auto too, never a deny.
-    if (fa && !fa.ask && !credAsk && !unboundAsk && cls.target.action !== "replace_google_client" && !planCard) {
+    if (fa && !fa.ask && !credAsk && !unboundAsk && !emailInAsk && cls.target.action !== "replace_google_client" && !planCard) {
       const matched = outcome.kind === "block" && (outcome.verdict?.matched_ask_rule_ids.length ?? 0) > 0;
       if (!matched) {
         if (outcome.kind === "block" && outcome.stage === "floor") return finish({ decision: "deny", reason: outcome.reason });
@@ -1236,7 +1291,14 @@ export class ApprovalGate {
   private view(r: ApprovalRecord): ApprovalCardView {
     const google = r.items[0]?.cls.target?.action === "google_write";
     const composioTarget = r.items[0]?.cls.target?.action === "composio_write" ? r.items[0]!.cls.target! : null;
-    const loc = google ? STRG.cardLocation : composioTarget ? STRX.cardLocation(composioTarget.arguments.toolkit ? composioAppName(String(composioTarget.arguments.toolkit)) : "connected app") : r.surface === "host_shell" ? STR.runsOnLocal : r.surface === "box_shell" || r.surface === "computer" || r.surface === "mcp" ? STR.runsOnBox : null;
+    // 4.3b: the card names the account it acts on ("From work@acme.com").
+    const t0 = r.items[0]?.cls.target;
+    const account = typeof t0?.arguments.account === "string" ? t0.arguments.account : null;
+    const app = composioTarget?.arguments.toolkit ? composioAppName(String(composioTarget.arguments.toolkit)) : "connected app";
+    const loc = google ? (account ? STRG.cardFrom(account) : STRG.cardLocation)
+      : composioTarget ? (account ? STRX.cardFromAccount(app, account) : STRX.cardLocation(app))
+      : t0?.action === "mcp" && account ? STRG.cardFrom(account)
+      : r.surface === "host_shell" ? STR.runsOnLocal : r.surface === "box_shell" || r.surface === "computer" || r.surface === "mcp" ? STR.runsOnBox : null;
     return {
       approvalId: r.id, requestId: r.requestId, surface: r.surface, title: r.title, reason: r.reason, summary: r.summary, locationLine: loc,
       details: r.command ? truncateDetails(r.command) : null, command: r.command,

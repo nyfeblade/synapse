@@ -27,7 +27,10 @@ export function flicker(r: Recording): Glitch[] {
       let j = i + 1;
       while (j < seq.length && seq[j]!.f === seq[j - 1]!.f + 1 && seq[j]!.s.op < GONE) j++;
       const gap = j - i - 1;
-      if (gap >= 1 && gap <= 12 && j < seq.length && seq[j]!.f === seq[j - 1]!.f + 1 && seq[j]!.s.op >= VISIBLE * 0.5) {
+      // A viewport resize that crosses a layout breakpoint hides and shows things on purpose (the sidebar below its
+      // minimum width): the viewport changing as it goes, or as it comes back, is a relayout, not a blink.
+      const resized = j < seq.length && (r.frames[seq[i]!.f]!.ch !== r.frames[seq[i + 1]!.f]!.ch || r.frames[seq[j - 1]!.f]!.ch !== r.frames[seq[j]!.f]!.ch);
+      if (gap >= 1 && gap <= 12 && !resized && j < seq.length && seq[j]!.f === seq[j - 1]!.f + 1 && seq[j]!.s.op >= VISIBLE * 0.5) {
         out.push({ kind: "flicker", t: r.frames[seq[i + 1]!.f]!.t, detail: `${seq[i]!.s.key} blinked out for ${gap} frame(s)` });
         i = j - 1;
       }
@@ -156,9 +159,12 @@ export function scrollBack(r: Recording, px = 2): Glitch[] {
     if (!recent.some((f, k) => k > 0 && f.scroll > recent[k - 1]!.scroll + px)) continue;
     // What is ON SCREEN did not move: the rows glide from where they were (a FLIP absorbing the
     // clamp of a shrinking conversation), so the fall is invisible.
+    // Also when rows were REMOVED above the view (bug 449, the long-chat render window): the scroll falls by their
+    // height while what is on screen carries on as it was (a glide's few px), a small fraction of the fall.
     const before = new Map(a.els.filter((s) => s.cls.startsWith("msg")).map((s) => [s.id, s.y] as const));
     const rows = b.els.filter((s) => before.has(s.id));
-    if (rows.length && rows.every((s) => Math.abs(s.y - before.get(s.id)!) <= px)) continue;
+    const still = Math.max(px, (a.scroll - b.scroll) * 0.1);
+    if (rows.length && rows.every((s) => Math.abs(s.y - before.get(s.id)!) <= still)) continue;
     return [{ kind: "scroll-back", t: b.t, detail: `transcript scrolled up ${a.scroll - b.scroll}px with no user scroll (overflow shrank)` }];
   }
   return [];
@@ -311,20 +317,27 @@ export function sendRemount(r: Recording, within = 3): Glitch[] {
  * than `px` in one frame in content coordinates (scroll removed). The bloop rises 6px in total; a reconcile
  * that reorders or re-lays-out the row, or a double send that shoves the first bubble, is a jump. A whole
  * list reflowing together (content arriving in a short, bottom-anchored transcript) is not.
+ *
+ * A jump is a DISCONTINUITY: the frame's move is also more than `px` off the previous frame's (bug 444). A bubble
+ * gliding a long way (a whole reply landing above a send still pending moves it ~260px) passes 12px a frame at the
+ * top of its spring, and that is the glide, not a jump: it gets there by speeding up and slowing down.
  */
 export function sendJump(r: Recording, px = 12): Glitch[] {
   const before = new Set(r.frames[0]?.els.map((s) => s.id) ?? []);
   const out: Glitch[] = [];
   for (const [id, seq] of byId(r.frames)) {
     if (before.has(id) || !isUserBubble(seq[0]!.s)) continue;
+    let prevDy = 0;
     for (let i = 1; i < seq.length; i++) {
       const a = seq[i - 1]!;
       const b = seq[i]!;
       const fa = r.frames[a.f]!;
       const fb = r.frames[b.f]!;
-      if (b.f !== a.f + 1 || fa.vt || fb.vt || fa.ch !== fb.ch || fa.scroll < 0 || fb.scroll < 0) continue;
+      if (b.f !== a.f + 1 || fa.vt || fb.vt || fa.ch !== fb.ch || fa.scroll < 0 || fb.scroll < 0) { prevDy = 0; continue; }
       const dy = (b.s.y + b.s.h + fb.scroll) - (a.s.y + a.s.h + fa.scroll);
-      if (Math.abs(dy) <= px) continue;
+      const was = prevDy;
+      prevDy = dy;
+      if (Math.abs(dy) <= px || Math.abs(dy - was) <= px) continue;
       const vy = b.s.y + b.s.h - (a.s.y + a.s.h);
       const prev = new Map(fa.els.map((s) => [s.id, s.y] as const));
       const along = fb.els.filter((s) => s.id !== id && prev.has(s.id) && Math.abs(s.y - prev.get(s.id)! - vy) <= 2).length;

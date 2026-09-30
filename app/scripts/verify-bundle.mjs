@@ -35,6 +35,8 @@ export const RUNTIME_PATHS = [
   "Contents/Resources/app.asar.unpacked/dist/native/fake-dictation.sh",
   // index.ts registerKokoro() → resolveUnpacked(path.join(__dirname, "native", "kokoro_server.py")) (bug 107)
   "Contents/Resources/app.asar.unpacked/dist/native/kokoro_server.py",
+  // index.ts scheduleVoiceSelfTest() → resolveUnpacked(path.join(__dirname, "native", "voice-selftest.wav")) (5.8)
+  "Contents/Resources/app.asar.unpacked/dist/native/voice-selftest.wav",
   // index.ts registerF5() / registerQwen() → the same resolveUnpacked path (bugs 163, 164). F5's
   // was never copied into dist/native, so every build reported cloned voices as missing.
   "Contents/Resources/app.asar.unpacked/dist/native/f5_server.py",
@@ -71,7 +73,7 @@ export const RUNTIME_PATHS = [
 ];
 
 /** Unpacked helpers are spawn()ed, so they have to be executable as well as present. */
-export const EXECUTABLE_PATHS = RUNTIME_PATHS.filter((p) => (p.includes("app.asar.unpacked/dist/native/") && !p.endsWith(".lock")) || p.endsWith("/bin/python3.12"));
+export const EXECUTABLE_PATHS = RUNTIME_PATHS.filter((p) => (p.includes("app.asar.unpacked/dist/native/") && !p.endsWith(".lock") && !p.endsWith(".wav")) || p.endsWith("/bin/python3.12"));
 
 /** Every voice the app offers by name (kokoro.ts KOKORO_VOICES) must ship in the bundled model. */
 export const BUNDLED_VOICES = ["af_heart", "am_michael", "bf_emma", "bm_george", "af_bella", "am_fenrir", "af_nicole", "am_puck", "bm_fable"];

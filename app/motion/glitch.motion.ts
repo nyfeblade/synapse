@@ -262,3 +262,28 @@ test("a streamed reply arrives, lands and the Bot goes idle", async () => {
     await page.waitForTimeout(600);
   });
 });
+
+/**
+ * THE RENDER WINDOW (bug 442). A long chat renders only its last 60 items and moves that window in steps of 15 as
+ * messages arrive, dropping rows far above the viewport. Dropping them must move nothing on screen: the reader at
+ * the foot keeps following, the rows in view stay put, nothing blinks.
+ */
+test("a long chat: the render window moves as messages arrive", async () => {
+  const id = (await rig.call("createAgent", { name: "Wen" })).id;
+  await page.waitForTimeout(1500);
+  await clickRow("Wen");
+  await composer("Wen").waitFor();
+  await page.waitForTimeout(600);
+  const pair = (n: number) => page.evaluate(({ id, n }) => {
+    const inject = (window as unknown as { __motionInject: (e: unknown) => void }).__motionInject;
+    inject({ channel: "transcript", payload: { botId: id, op: "append", entry: { kind: "message", id: `w${n}u`, role: "user", content: `question ${n}`, createdAt: Date.now() } } });
+    inject({ channel: "transcript", payload: { botId: id, op: "append", entry: { kind: "send-message", id: `w${n}s1`, requestId: `wr${n}`, createdAt: Date.now(), message: { type: "text", content: `Answer ${n}. ` + "A line or two of it. ".repeat(3) } } } });
+  }, { id, n });
+  for (let n = 1; n <= 64; n++) await pair(n);
+  await page.waitForTimeout(1500);
+  await check("window", async () => {
+    // 12 more pairs, one at a time: the window's start crosses two 15-item steps.
+    for (let n = 65; n <= 76; n++) { await pair(n); await page.waitForTimeout(260); }
+    await page.waitForTimeout(900);
+  });
+});

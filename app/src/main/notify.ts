@@ -28,14 +28,16 @@ export function showBotNotification(
   note.show();
 }
 
-/** An app-level notice (bug-log 128: the Mac is almost out of space). A click brings the window forward. No sound. */
-export function showAppNotification(win: BrowserWindow, n: { title: string; body: string }): void {
+/** An app-level notice (bug-log 128: the Mac is almost out of space). A click brings the window forward (and runs
+ *  `onClick`, e.g. 4.4's "open Settings → Connections"). No sound. */
+export function showAppNotification(win: BrowserWindow, n: { title: string; body: string }, onClick?: () => void): void {
   if (!Notification.isSupported()) return;
   const note = new Notification({ title: n.title, body: n.body, silent: true });
   note.on("click", () => {
     if (win.isMinimized()) win.restore();
     win.show();
     win.focus();
+    onClick?.();
   });
   note.show();
 }

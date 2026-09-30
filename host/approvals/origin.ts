@@ -5,7 +5,7 @@ import type { OriginKind } from "../review/types";
 export function originOf(source: WakeSource): OriginKind {
   switch (source) {
     // Bug 142: a voice-delegate task is the user's own spoken request, handed over by the Bot's voice on the call.
-    case "user": case "kickstart": case "reply-nudge": case "closing-nudge": case "ack-redrive": case "widget-answer": case "form-answer": case "broadcast": case "voice-delegate":
+    case "user": case "kickstart": case "reply-nudge": case "closing-nudge": case "ack-redrive": case "widget-answer": case "form-answer": case "broadcast": case "voice-delegate": case "loop-continue":
       return "user";
     case "routine":
       return "routine";

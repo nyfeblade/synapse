@@ -68,6 +68,8 @@ export class BotService {
   private runtimeView: (id: string) => RuntimeView = () => ({ presence: "idle", activity: null, running: false });
   private now: () => number;
   private visibleHooks = new Set<(botId: string, entry: TranscriptEntry) => void>();
+  /** 4.3b: connector modules copy the source's account grants onto a user-made copy. */
+  private duplicateHooks = new Set<(srcId: string, copyId: string, origin: "user" | "bot") => void>();
   /** settings-persist: each Bot's publish sequence, and this run's id (BotSummary.rev / .epoch). */
   private revs = new Map<string, number>();
   readonly epoch = randomUUID();
@@ -294,6 +296,9 @@ export class BotService {
   }
 
   /** BOT-08 copy set: profile, settings (hidden forced off), enabled skills, avatar, routine definitions. Not conversation, memory, projects or attachments. */
+  /** 4.3b: called after a Bot is duplicated (the copy exists, its settings copied). */
+  onDuplicate(fn: (srcId: string, copyId: string, origin: "user" | "bot") => void): void { this.duplicateHooks.add(fn); }
+
   duplicate(id: string, origin: "user" | "bot" = "user"): string {
     const src = this.require(id);
     const srcDir = botDir(this.d.cfg, id);
@@ -327,6 +332,7 @@ export class BotService {
       }
     }
     this.publish(copy);
+    for (const fn of this.duplicateHooks) { try { fn(id, copy, origin); } catch { /* a connector's copy is best effort */ } }
     return copy;
   }
 

@@ -7,12 +7,15 @@ import { ORB_TIMEOUT_TEXT } from "../orb-exec";
  * The progress bar is real: each step owns a weight, and a step reports its own fraction as it goes
  * (provision.sh prints `::step n/N` markers). One run at a time; a second Start joins the first.
  */
-export type BoxStepId = "create" | "start" | "provision" | "deploy" | "connect";
+/** 0.1.5: "image" (a ready-made box, box-image.ts) runs first; when it works, create and provision find their work done. */
+export type BoxStepId = "image" | "create" | "start" | "provision" | "deploy" | "connect";
 
 export interface StepContext {
   line(s: string): void;
   /** This step's own progress, 0..1. */
   progress(f: number): void;
+  /** A short stage key for the bar's label (the image step's download, verify, import, start). */
+  stage?(key: string): void;
   signal: AbortSignal;
 }
 
@@ -21,13 +24,21 @@ export interface BoxStep {
   label: string;
   /** Share of the bar (relative; the steps' weights are normalised). */
   weight: number;
+  /**
+   * Steps whose work this one does when it succeeds (the image step: create, provision). While it runs they are left
+   * out of the bar, so it isn't filled by work that won't happen; a fallback puts them back.
+   */
+  covers?: BoxStepId[];
   done(): Promise<boolean>;
-  run(ctx: StepContext): Promise<void>;
+  /** `{ fallback }`: this step handed over to the steps it covers (they run as usual). */
+  run(ctx: StepContext): Promise<void | { fallback: string }>;
 }
 
 export interface ProvisionState {
   phase: "idle" | "running" | "failed" | "ready" | "cancelled";
   step: BoxStepId | null;
+  /** What the bar says it is doing (one short word on the setup screen): a stage key, or the step's own. */
+  stage: string | null;
   progress: number;
   error: string | null;
   log: string[];
@@ -40,6 +51,7 @@ export interface ProvisionState {
 const LOG_LINES = 400;
 
 const STEP_NAMES: Record<BoxStepId, string> = {
+  image: "downloading the Bots' computer",
   create: "creating the Bots' computer",
   start: "starting the Bots' computer",
   provision: "installing the system software",
@@ -69,7 +81,7 @@ export function plainError(raw: string, step: BoxStepId): string {
 }
 
 export class BoxProvisioner {
-  private s: ProvisionState = { phase: "idle", step: null, progress: 0, error: null, log: [], startedAt: null, finishedAt: null, timings: {} };
+  private s: ProvisionState = { phase: "idle", step: null, stage: null, progress: 0, error: null, log: [], startedAt: null, finishedAt: null, timings: {} };
   private running: Promise<ProvisionState> | null = null;
   private abort: AbortController | null = null;
 
@@ -102,25 +114,36 @@ export class BoxProvisioner {
   private async run(): Promise<ProvisionState> {
     const ac = new AbortController();
     this.abort = ac;
-    const total = this.o.steps.reduce((n, s) => n + s.weight, 0) || 1;
-    let base = 0;
+    const steps = this.o.steps;
     let bar = 0;
     const setBar = (f: number) => { bar = Math.max(bar, Math.min(1, f)); };
     this.set({ phase: "running", error: null, startedAt: this.now(), finishedAt: null, timings: {}, progress: this.s.progress && this.s.phase !== "ready" ? this.s.progress : 0 });
     bar = this.s.progress;
-    for (const step of this.o.steps) {
+    // Steps another step's work covers (the image step's create and provision), while that step is on the way.
+    const covered = new Set<BoxStepId>();
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i]!;
       if (ac.signal.aborted) break;
-      this.set({ step: step.id });
+      this.set({ step: step.id, stage: step.id });
       let already = false;
       try { already = await step.done(); } catch { already = false; }
+      if (already && covered.has(step.id)) continue;
+      if (!already && step.covers) for (const c of step.covers) covered.add(c);
+      // One honest bar that never goes back: this step's share of what is LEFT of the bar is its weight over the
+      // weights of the steps still to run (covered ones left out).
+      const left = steps.slice(i).filter((s) => !covered.has(s.id)).reduce((n, s) => n + s.weight, 0) || 1;
+      const from = bar;
+      const share = ((1 - from) * step.weight) / left;
       if (!already) {
         const t0 = this.now();
         this.line(`— ${STEP_NAMES[step.id]}`);
+        let out: void | { fallback: string };
         try {
-          await step.run({
+          out = await step.run({
             signal: ac.signal,
             line: (l) => { this.line(l); this.o.publish(this.s); },
-            progress: (f) => { setBar((base + step.weight * Math.max(0, Math.min(1, f))) / total); this.set({ progress: bar }); },
+            progress: (f) => { setBar(from + share * Math.max(0, Math.min(1, f))); this.set({ progress: bar }); },
+            stage: (key) => this.set({ stage: key }),
           });
         } catch (e) {
           const raw = e instanceof Error ? e.message : String(e);
@@ -131,9 +154,13 @@ export class BoxProvisioner {
           return this.s;
         }
         this.set({ timings: { ...this.s.timings, [step.id]: this.now() - t0 } });
+        // Handed over: the covered steps run after all, and the rest of the bar is theirs (nothing is filled for it).
+        if (out && "fallback" in out) {
+          for (const c of step.covers ?? []) covered.delete(c);
+          continue;
+        }
       }
-      base += step.weight;
-      setBar(base / total);
+      setBar(from + share);
       this.set({ progress: bar });
     }
     this.abort = null;
@@ -141,7 +168,7 @@ export class BoxProvisioner {
       this.set({ phase: "cancelled", error: "Setup was stopped.", finishedAt: this.now() });
       return this.s;
     }
-    this.set({ phase: "ready", step: null, progress: 1, error: null, finishedAt: this.now() });
+    this.set({ phase: "ready", step: null, stage: null, progress: 1, error: null, finishedAt: this.now() });
     return this.s;
   }
 }

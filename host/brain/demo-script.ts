@@ -18,6 +18,7 @@ const idOf = (systemAppend: string, name: string) => new RegExp(`- ${name.replac
  *   computer: · bg: · task: · secret:           → Phase 3 (demo-phase3.ts, consulted first for user turns)
  *   ask <Name>: <text>                          → SendToAgent kind:"request" to that teammate (B2B-01)
  *   routine: <name> | <schedule> | <prompt>     → update_state target:"routine" action:"create" (RTN-02)
+ *   loop: <cmd>                                 → the same failing Bash, again and again, with rising spend (5.7)
  *   choose: <A> or <B>                          → a widget "Which one?" (CHAT-16)
  *   local: · local-wait: · install: · code:     → Phase 5 ExternalShell / InstallPlugin / CodingAgent (+ a rate_limit usage event)
  *   gmail: · read mail: · mail: · calendar: · drive: → the built-in Google connector (demo-google.ts)
@@ -118,6 +119,16 @@ export function demoScriptFor(workspace: string): FakeScript {
     if (choose) {
       const opts = [choose[1]!, choose[2]!.split("\n")[0]!].map((o) => o.trim());
       return [{ tool: "mcp__bot__SendMessage", input: { type: "widget", widget: { question: "Which one?", options: opts.map((o) => ({ label: o, value: o.toLowerCase() })) } } }];
+    }
+    // 5.7: a Bot stuck on one failing command (the loop guard stops it); spend rises as it goes, for the header meter.
+    const loop = at(/loop:\s*(.+)/i);
+    if (loop) {
+      const fail = (i: number) => /^npm\b/.test(loop) ? `npm ERR! code ENOTFOUND\nnpm ERR! request to https://registry.npmjs.org/ failed (try ${i + 1})` : `${loop.split(" ")[0]}: ${loop.split(" ").at(-1)}: No such file or directory`;
+      const tries = Array.from({ length: 8 }, (_, i): FakeStep[] => [
+        { emit: { kind: "spend", turnUsd: Math.round(0.037 * (i + 1) * 1000) / 1000 } }, { wait: 1200 },
+        { tool: "Bash", input: { command: loop, description: "demo" }, output: fail(i), isError: true },
+      ]);
+      return [...tries.flat(), send("Done.")];
     }
     const r = /run:\s*(.+)/i.exec(text);
     const command = (r?.[1] ?? "ls -la /workspace").split("\n")[0]!.trim();

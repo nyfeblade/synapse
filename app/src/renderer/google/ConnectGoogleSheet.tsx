@@ -9,7 +9,7 @@ const MODES = [{ value: "self", label: STRGS.doItYourself }, { value: "bot", lab
 
 /** ORIG-GOOGLE + google-setup: the app's own Google sign-in, with the user's own "Desktop app" OAuth client. */
 export function ConnectGoogleSheet() {
-  const { open, status, error, busy, mode, close, connect, disconnect, setMode } = useGoogle();
+  const { open, status, error, busy, mode, close, connect, disconnect, setMode, addAccount, removeAccount } = useGoogle();
   useGoogleSync();
   const [clientId, setClientId] = useState("");
   const [secret, setSecret] = useState("");
@@ -54,9 +54,18 @@ export function ConnectGoogleSheet() {
           <>
             <section className="settings-card google-account" aria-label={STRG.google}>
               {state === "needs-reconnect" && <p className="warning" role="note">{status.error ?? STRG.needsReconnect}</p>}
-              {status.email && <div className="settings-row"><span className="grow">{STRG.connectedAs(status.email)}</span></div>}
+              {/* 4.3b: one account reads as before; with several, one row each with Remove. Add account signs in another address. */}
+              {(status.accounts?.length ?? 0) <= 1 && status.email && <div className="settings-row"><span className="grow">{STRG.connectedAs(status.email)}</span></div>}
+              {(status.accounts?.length ?? 0) > 1 && status.accounts!.map((a) => (
+                <div key={a.id} className="settings-row account-row" data-account={a.id}>
+                  <span className="grow account-label">{a.email ?? STRG.accountFallback}</span>
+                  {a.state === "needs-reconnect" && <span className="error">{STRG.accountNeedsSignIn}</span>}
+                  <button type="button" className="link-btn" disabled={busy} aria-label={`${STRG.remove} ${a.email ?? STRG.accountFallback}`} onClick={() => void removeAccount(a.id)}>{STRG.remove}</button>
+                </div>
+              ))}
               {status.services.length > 0 && <div className="settings-row"><span className="muted">{STRG.grantedServices(status.services)}</span></div>}
               <div className="settings-row gap">
+                <button type="button" className="btn-outline" disabled={busy} onClick={() => void addAccount()}>{STRG.addAccount}</button>
                 {state === "needs-reconnect" && <button type="button" className="btn-primary" disabled={busy} onClick={() => void connect()}>{STRG.reconnect}</button>}
                 {state === "needs-reconnect" && mode !== "bot" && <button type="button" className="btn-outline" onClick={() => setMode("bot")}>{STRGS.letABotClick}</button>}
                 <button type="button" className="btn-outline" disabled={busy} onClick={() => void disconnect()}>{STRG.disconnect}</button>

@@ -9,6 +9,7 @@ import zlib from "node:zlib";
 import { canonicalJson, scanShare, shareLinks, validateShare, SHARE_LIMITS } from "../shared/src/bot-share.js";
 import { looksLikeInjection, stripHidden } from "../shared/src/feedback-content.js";
 import { FORM_SPECS, FORM_OF, EYE_INK, formPath, botSvg, botDefs } from "../shared/src/bot-face.js";
+import { versionKey } from "../security/report.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultDist = path.join(here, "dist");
@@ -72,6 +73,14 @@ export const PAGES = {
 export const LINK_PAGES = {
   bot: { file: "bot.html", path: "/bot", title: "A Bot for Synapse", description: "A Bot someone shared with you. Add it to Synapse, the open-source Mac app for a team of AI agents.", noindex: true },
 };
+/**
+ * Draft pages: built so they can be previewed, but noindex, out of the sitemap and linked from nowhere. To publish one,
+ * move it into PAGES and link it from the footer.
+ */
+export const DRAFT_PAGES = {
+  security: { file: "security-tests.html", path: "/security-tests", title: "Synapse security tests: the attacks it stops, per release", description: "Attacks a Bot could face, what Synapse does about each one, and the latest results. Anyone can run the tests: no API key needed.", noindex: true },
+};
+Object.assign(LINK_PAGES, DRAFT_PAGES);
 /** Pages that show someone's Bot load no analytics script (it could record the link's fragment). */
 export const NO_ANALYTICS = new Set(["bot", "bots"]);
 
@@ -279,6 +288,47 @@ export function renderCatalogue(tpl, entries) {
   return tpl.replace("<!--BOTS:CHIPS-->", () => chips).replace("<!--BOTS:CARDS-->", () => cards).replace("<!--BOTS:DATA-->", () => json);
 }
 
+/* ---- /security-tests: the security suite's latest results (security/results/<version>.json, written by
+   `npm run security-suite`) ---- */
+/** The newest results file, or null when there is none yet. */
+export function loadSecurityResults(dir = path.join(here, "..", "security", "results")) {
+  if (!fs.existsSync(dir)) return null;
+  const files = fs.readdirSync(dir).filter((f) => /^[\w.-]+\.json$/.test(f)).sort((a, b) => versionKey(b.slice(0, -5)).localeCompare(versionKey(a.slice(0, -5))));
+  return files.length ? JSON.parse(fs.readFileSync(path.join(dir, files[0]), "utf8")) : null;
+}
+
+const RESULT_WORD = { ask: "Asks you first", deny: "Blocked", refused: "Refused", safe: "Neutralised", allow: "Went through", error: "Error" };
+const catId = (c) => `sec-${String(c).replace(/[^a-z0-9-]/gi, "")}`;
+
+export function renderSecurity(tpl, report) {
+  if (!report) {
+    return tpl.replace("<!--SECURITY:TOC-->", "").replace("<!--SECURITY:SUMMARY-->", "<p>No results yet. Run <code>npm run security-suite</code> to make the first report.</p>").replace("<!--SECURITY:BODY-->", "");
+  }
+  const s = report.summary;
+  const cats = s.byCategory;
+  const toc = cats.map((c) => `      <a href="#${catId(c.category)}">${esc(c.name)}</a>`).join("\n");
+  const when = /^\d{4}-\d{2}-\d{2}$/.test(report.date) ? `<time datetime="${report.date}">${nice(report.date)}</time>` : "";
+  const model = report.model?.status === "passed" ? "The optional model tier passed." : report.model?.status === "failed" ? "The optional model tier failed." : "The optional model tier wasn't run for this report.";
+  const summary = `      <p class="note">Version ${esc(report.version)}${when ? `, ${when}` : ""}: <b>${s.passed} of ${s.total}</b> attacks stopped${s.failed.length ? `; not stopped: ${esc(s.failed.join(", "))}` : ""}. ${model}</p>
+      <div class="scroll-x"><table>
+        <thead><tr><th>Category</th><th>Stopped</th></tr></thead>
+        <tbody>
+${cats.map((c) => `          <tr><td><a href="#${catId(c.category)}">${esc(c.name)}</a></td><td>${c.passed} of ${c.total}</td></tr>`).join("\n")}
+        </tbody>
+      </table></div>`;
+  const body = cats.map((c) => {
+    const rows = report.scenarios.filter((r) => r.category === c.category).map((r) => `          <tr><td><span class="id">${esc(r.id)}</span>${esc(r.attack)}</td><td>${esc(r.expected)}</td><td>${r.pass ? esc(RESULT_WORD[r.outcome] ?? r.outcome) : `<b>Failed: ${esc(RESULT_WORD[r.outcome] ?? r.outcome)}</b>`}</td></tr>`).join("\n");
+    return `      <h3 id="${catId(c.category)}">${esc(c.name)}</h3>
+      <div class="scroll-x"><table>
+        <thead><tr><th>Attack</th><th>Expected</th><th>Result</th></tr></thead>
+        <tbody>
+${rows}
+        </tbody>
+      </table></div>`;
+  }).join("\n");
+  return tpl.replace("<!--SECURITY:TOC-->", () => toc).replace("<!--SECURITY:SUMMARY-->", () => summary).replace("<!--SECURITY:BODY-->", () => body);
+}
+
 /** Shared plain-JS files the pages import: copied into dist/assets, then hashed with the rest (leaf first). */
 const SHARED_MODULES = ["feedback-content.js", "bot-face.js", "bot-share.js"];
 
@@ -315,6 +365,8 @@ export function build(today = new Date().toISOString().slice(0, 10), out = defau
   const catalogue = loadCatalogue();
   for (const w of catalogue.warnings) console.warn(`site: warning: ${w}`);
   fs.writeFileSync(path.join(dist, "bots.html"), withSeo(renderCatalogue(fs.readFileSync(path.join(here, "bots.template.html"), "utf8"), catalogue.entries), "bots"));
+  // /security-tests (a draft, see DRAFT_PAGES): the security suite's newest results.
+  fs.writeFileSync(path.join(dist, "security-tests.html"), withSeo(renderSecurity(fs.readFileSync(path.join(here, "security-tests.template.html"), "utf8"), loadSecurityResults()), "security"));
   const { toc, body } = renderReleases(releases);
   const page = fs.readFileSync(path.join(here, "changelog.template.html"), "utf8").replace("<!--TOC-->", toc).replace("<!--RELEASES-->", body);
   fs.writeFileSync(path.join(dist, "changelog.html"), withSeo(page, "changelog"));

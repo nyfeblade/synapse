@@ -36,6 +36,8 @@ export interface RegistryServer {
    * curated server always goes through net/guarded-fetch.ts. Never set from a tool or a repo.
    */
   ownerPrivateReach?: true;
+  /** 4.3b: the Bots this server (one account of an app) is granted to. Absent: every Bot (as before). */
+  bots?: string[];
   enabled: boolean;
   createdAt: number;
 }
@@ -195,6 +197,8 @@ export class McpRegistry {
     let id = slugify(label ? `${name}-${label}` : name);
     for (let n = 2; this.get(id); n++) id = `${slugify(label ? `${name}-${label}` : name)}-${n}`;
     if (isReservedMcpId(id)) throw new GatewayError("BAD_ARGS", `“${id}” is a reserved server name. Pick another name.`);
+    // 4.3b: a second account of an app (another server with the same name) starts granted to no Bot.
+    const second = this.servers.some((x) => x.name.toLowerCase() === name.toLowerCase());
     const s: RegistryServer = {
       id,
       name,
@@ -203,6 +207,7 @@ export class McpRegistry {
       catalogId: catalogId ?? a.catalogId ?? null,
       source,
       ...(o.ownerPrivateReach === true && a.url ? { ownerPrivateReach: true as const } : {}),
+      ...(second ? { bots: [] } : {}),
       enabled: true,
       createdAt: this.d.now(),
       ...(a.url
@@ -217,6 +222,34 @@ export class McpRegistry {
     this.servers.push(s);
     this.save();
     return s;
+  }
+
+  /** 4.3b: grant or revoke this server (one account) for one Bot. The first change pins today's "every Bot" to a list. */
+  setBot(id: string, botId: string, on: boolean, allBots: readonly string[]): RegistryServer {
+    const s = this.require(id);
+    const set = new Set(s.bots ?? allBots);
+    if (on) set.add(botId); else set.delete(botId);
+    s.bots = [...set].sort();
+    this.save();
+    return s;
+  }
+
+  /** 4.3b: a duplicated Bot gets the source's grants (servers with no list already reach every Bot). */
+  copyGrants(srcId: string, copyId: string): void {
+    let changed = false;
+    for (const s of this.servers) if (s.bots?.includes(srcId) && !s.bots.includes(copyId)) { s.bots = [...s.bots, copyId].sort(); changed = true; }
+    if (changed) this.save();
+  }
+
+  /** 4.3b: this server is granted to this Bot (absent list: every Bot). */
+  grantedTo(s: RegistryServer, botId: string): boolean {
+    return !s.bots || s.bots.includes(botId);
+  }
+
+  /** 4.3b: every account (server) of the same app as this one, this one included. */
+  siblings(id: string): RegistryServer[] {
+    const s = this.get(id);
+    return s ? this.servers.filter((x) => x.name.toLowerCase() === s.name.toLowerCase()) : [];
   }
 
   rename(id: string, label: string): RegistryServer {
@@ -320,10 +353,10 @@ export class McpRegistry {
   }
 
   /** PLG-08: local `command` servers WITHOUT env run as user box under the CLI; the rest go through the host proxy. */
-  commandServerConfigs(): Record<string, McpStdioServerConfig> {
+  commandServerConfigs(botId?: string): Record<string, McpStdioServerConfig> {
     return Object.fromEntries(
       this.servers
-        .filter((s) => s.enabled && s.kind === "command" && !this.hostProxied(s))
+        .filter((s) => s.enabled && s.kind === "command" && !this.hostProxied(s) && (botId === undefined || this.grantedTo(s, botId)))
         .map((s) => [s.id, { type: "stdio" as const, command: s.command!, args: s.args ?? [], env: {} }]),
     );
   }
@@ -342,10 +375,10 @@ export class McpRegistry {
     return this.disabledTools(p.server).includes(p.tool) ? `The user turned off ${p.tool} for ${this.displayName(p.server)}. Don't use it.` : null;
   }
 
-  systemAppendExtra(): string {
+  systemAppendExtra(botId?: string): string {
     // Bug 54: a server the user turned off is left out of the Bot's spawn, so its note would tell the
-    // Bot how to use a connector it cannot reach.
-    const lines = this.servers.filter((s) => s.enabled).map((s) => s.id)
+    // Bot how to use a connector it cannot reach. 4.3b: so is a server not granted to this Bot.
+    const lines = this.servers.filter((s) => s.enabled && (botId === undefined || this.grantedTo(s, botId))).map((s) => s.id)
       .map((id) => [id, this.instructions(id)] as const)
       .filter(([, t]) => t)
       .map(([id, t]) => `- ${this.displayName(id)}: ${t}`);
@@ -385,6 +418,7 @@ export class McpRegistry {
       instructions: this.instructions(id),
       error,
       trusted: this.isTrusted(id),
+      bots: s?.bots ? [...s.bots] : null,
       // Built from the NAMES on disk, never from the sealed store: there is no code path from
       // headersFor() to a view, so a view cannot carry a value even by mistake.
       ...(s?.kind === "remote" ? { headers: (s.headerNames ?? []).map((name) => ({ name, value: MCP_HEADER_REDACTED })) } : {}),

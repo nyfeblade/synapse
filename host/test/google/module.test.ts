@@ -118,13 +118,17 @@ describe("built-in Google connector (gateway level, FUZZ fake Google)", () => {
     await s.api("sendPrompt", { id, text: "gmail: deck", clientNonce: "n1" });
     await until(async () => (await s.texts(id)).some((t) => t.includes("sign-in expired")));
     const { trays } = await s.api<{ trays: Tray[] }>("getTrays");
-    const t = trays.filter((x) => x.dedupeKey === "google-reconnect");
+    // 4.4: connector health owns it: one tray, Fix (the reconnect sheet) and Let a Bot click through.
+    // 4.3b: one health row (and tray) per account.
+    const acc = (await s.api<GoogleStatusView>("getGoogleStatus")).accounts![0]!.id;
+    const t = trays.filter((x) => x.dedupeKey === `health:google:${acc}`);
     expect(t).toHaveLength(1);
-    expect(t[0]!.buttons).toEqual([{ label: "Reconnect Google", action: "reconnect-google" }, { label: "Let a Bot click through", action: "reconnect-google-bot" }]);
+    expect(t[0]!.title).toBe("Google needs you to sign in again");
+    expect(t[0]!.buttons).toEqual([{ label: "Fix", action: "fix-connector", target: `google:${acc}` }, { label: "Let a Bot click through", action: "reconnect-google-bot" }]);
     expect((await s.api<GoogleStatusView>("getGoogleStatus")).state).toBe("needs-reconnect");
     s.fake().state.refreshInvalid = false;
     await s.connect();
-    expect((await s.api<{ trays: Tray[] }>("getTrays")).trays.filter((x) => x.dedupeKey === "google-reconnect")).toHaveLength(0);
+    expect((await s.api<{ trays: Tray[] }>("getTrays")).trays.filter((x) => x.dedupeKey === `health:google:${acc}` || x.dedupeKey === "google-reconnect")).toHaveLength(0);
   });
 
   it("deleting a Bot leaves the app-level account alone; a Bot-made duplicate starts with Google off", async () => {

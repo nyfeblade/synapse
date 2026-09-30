@@ -38,7 +38,8 @@ async function stream(): Promise<void> {
 const inert = async () => ({ ok: false, error: { code: "UNSUPPORTED", message: "not in the motion check" } });
 (window as unknown as { synapse: unknown }).synapse = {
   call: async (cmd: string, args: unknown) => {
-    if (cmd === "getOnboarding") return { ok: true, result: { hasSeenOnboarding: true } };
+    // `tokenConfigured` too: the public build shows the API-key screen until a key is saved (the check never uses one).
+    if (cmd === "getOnboarding") return { ok: true, result: { hasSeenOnboarding: true, tokenConfigured: true } };
     const res = await fetch(`/gw/api/${cmd}`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(args ?? {}) });
     const body: unknown = await res.json();
     return new Promise((r) => later(() => r(body)));

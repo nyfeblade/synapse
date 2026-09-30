@@ -11,15 +11,40 @@ export interface ComposioAppRecord {
   error?: string;
 }
 
+/** 4.3b: one account of an app (an app can have several: two Gmails, two Slacks). */
+export interface ComposioAccountRecord extends ComposioAppRecord {
+  /** What the card and the Bot call it: the Gmail address when Composio could tell, else "Slack", "Slack 2", or the owner's rename. */
+  label?: string;
+  /** A reconnect (Fix): the account this new one takes over once it connects. */
+  replaces?: string;
+}
+
 export interface ComposioData {
   /** The user's own Composio project API key. Sealed here; never returned to the UI, a Bot, a log or a transcript. */
   apiKey?: string;
   /** Composio's user id for this install's accounts: random, never a name or an email. */
   userId?: string;
   disclosureAccepted?: boolean;
+  /** 4.3b: toolkit → its accounts, oldest first. */
+  accounts?: Record<string, ComposioAccountRecord[]>;
+  /** 4.3b: per-Bot grants per account: Composio account id → Bot ids (default: none). */
+  accountGrants?: Record<string, string[]>;
+  /** Before 4.3b: one account per app and a grant per app. read() folds them into accounts/accountGrants. */
   apps?: Record<string, ComposioAppRecord>;
-  /** Per-Bot grants: toolkit → Bot ids allowed to use it (default: none). */
   grants?: Record<string, string[]>;
+}
+
+/** Folds the pre-4.3b one-account-per-app records into accounts and per-account grants (silently). */
+function normalize(d: ComposioData): ComposioData {
+  const { apps, grants, ...rest } = d;
+  if (!apps || rest.accounts) return rest;
+  const accounts: Record<string, ComposioAccountRecord[]> = {};
+  const accountGrants: Record<string, string[]> = { ...(rest.accountGrants ?? {}) };
+  for (const [tk, rec] of Object.entries(apps)) {
+    accounts[tk] = [rec];
+    if (grants?.[tk]?.length) accountGrants[rec.accountId] = [...grants[tk]!];
+  }
+  return { ...rest, accounts, accountGrants };
 }
 
 interface Sealed { v: 1; iv: string; tag: string; ct: string }
@@ -38,7 +63,7 @@ export class ComposioStore {
     try {
       const d = createDecipheriv("aes-256-gcm", this.key, Buffer.from(raw.iv, "base64"));
       d.setAuthTag(Buffer.from(raw.tag, "base64"));
-      return JSON.parse(Buffer.concat([d.update(Buffer.from(raw.ct, "base64")), d.final()]).toString("utf8")) as ComposioData;
+      return normalize(JSON.parse(Buffer.concat([d.update(Buffer.from(raw.ct, "base64")), d.final()]).toString("utf8")) as ComposioData);
     } catch {
       return {}; // another key (a reset vault): treat as not set up
     }

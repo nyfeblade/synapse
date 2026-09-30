@@ -66,6 +66,15 @@ describe("the setup screen", () => {
     expect(within(step("Bots' computer")).getByRole("progressbar", { name: "Bots' computer" })).toBeTruthy();
   });
 
+  it("0.1.5 ready-made box: one bar with a one-word stage label, no second line", async () => {
+    current = status({ orb: { app: true, cli: true, status: "running", version: "2.2.3" }, box: box({ phase: "running", progress: 0.42, step: "image", stage: "download" }) });
+    render(<SetupScreen />);
+    const bar = await within(await screen.findByRole("listitem", { name: "Bots' computer" })).findByRole("progressbar", { name: "Bots' computer" });
+    expect(bar.textContent).toBe("Downloading42%");
+    expect(bar.getAttribute("aria-valuetext")).toBe("Downloading 42%");
+    expect(screen.getAllByRole("progressbar")).toHaveLength(1);
+  });
+
   it("a failed setup shows the plain error and a Retry that resumes", async () => {
     current = status({ orb: { app: true, cli: true, status: "running", version: "2.2.3" }, box: box({ phase: "failed", progress: 0.4, error: "No internet connection reached the Bots' computer. Check your connection and retry." }) });
     render(<SetupScreen />);

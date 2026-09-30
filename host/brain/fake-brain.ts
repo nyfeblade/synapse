@@ -4,7 +4,7 @@ import type {
 } from "./types";
 import { messageText, ZERO_USAGE } from "./types";
 
-export type FakeToolStep = { tool: string; input: Record<string, unknown>; output?: string; /** a slow tool: runs this long (an interrupt cuts it short) */ delayMs?: number };
+export type FakeToolStep = { tool: string; input: Record<string, unknown>; output?: string; /** a slow tool: runs this long (an interrupt cuts it short) */ delayMs?: number; /** the tool fails with `output` */ isError?: boolean };
 export type FakeStep =
   | FakeToolStep
   /** startsAfterHooks: each call's tool_start is emitted after its PreToolUse hook, not up front (event-order tests). */
@@ -176,6 +176,7 @@ export class FakeBrain implements SupervisedBrain {
       } else {
         if (step.delayMs) await new Promise<void>((r) => { const t = setTimeout(r, step.delayMs); signal.addEventListener("abort", () => { clearTimeout(t); r(); }, { once: true }); });
         output = step.output ?? (this.opts.toolRunner ? await this.opts.toolRunner(call.toolName, input) : `(fake) ${call.toolName} ok`);
+        isError = step.isError === true;
       }
     } finally {
       this.toolInFlight = false;

@@ -46,7 +46,8 @@ class CliModelReviewer implements ModelReviewer {
     const args = ["-p", "--model", HELPER_MODEL, "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence",
       "--system-prompt", loadPrompt("orig/reviewer.md"), "--json-schema", JSON.stringify(OUTPUT_SCHEMA), "--output-format", "json"];
     const env: Record<string, string | undefined> = { ...process.env, MAX_THINKING_TOKENS: "0", CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(LIMITS.reviewerMaxOutputTokens), ENABLE_CLAUDEAI_MCP_SERVERS: "false" };
-    delete env.ANTHROPIC_API_KEY;
+    // The security suite's model tier (security/run.mjs) may run the CLI on an API key the developer set on purpose.
+    if (process.env.EVAL_USE_API_KEY !== "1") delete env.ANTHROPIC_API_KEY;
     return new Promise((resolve, reject) => {
       const child = spawn(this.bin, args, { cwd: this.cwd, env: env as NodeJS.ProcessEnv, stdio: ["pipe", "pipe", "pipe"] });
       let out = "";

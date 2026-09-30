@@ -172,7 +172,11 @@ export class UpdateService {
     /** Checks the unpacked build's code signature (default: checkDesignatedRequirement against appPath). */
     verifySignature?(staged: string): Promise<void>;
     /** Where the new build reports it started healthily, and where a rollback is recorded (default: stageDir). */
-    markerDir?: string; appPath: string; stageDir: string; auto?: boolean; token?(): string | null; fetchFn?: typeof fetch;
+    markerDir?: string; appPath: string;
+    /** The 0700 folder a download is staged in. A function makes it lazily, on the first download (bug 443: every
+     *  launch used to leave an empty `synapse-update-*` folder in the temp folder); such a folder is also removed
+     *  after a failed download and on quit, unless a swap is under way. A plain path is the caller's own. */
+    stageDir: string | (() => string); auto?: boolean; token?(): string | null; fetchFn?: typeof fetch;
     run?: (cmd: string, args: string[]) => Promise<void>; emit(s: UpdateState): void; publicKey?: string | null;
     /** Final secfix item 11: reads CFBundleShortVersionString from an unpacked .app (default: its Contents/Info.plist). */
     bundleVersion?: (app: string) => string | null;
@@ -182,6 +186,21 @@ export class UpdateService {
     skipped?(): string | null;
   }) {
     this.st = { version: o.current, track: "stable", auto: !!o.auto, feed: o.feed(), status: "idle", latest: null, error: null };
+  }
+
+  private stagePath: string | null = null;
+  private swapping = false;
+  /** The stage folder, made on first use when it is lazy. */
+  private stage(): string {
+    this.stagePath ??= typeof this.o.stageDir === "string" ? this.o.stageDir : this.o.stageDir();
+    return this.stagePath;
+  }
+  /** Remove a lazily made stage folder (after a failed download, on quit). Never while the swap script uses it. */
+  dispose(): void {
+    if (typeof this.o.stageDir === "string" || !this.stagePath || this.swapping) return;
+    fs.rmSync(this.stagePath, { recursive: true, force: true });
+    this.stagePath = null;
+    this.staged = null;
   }
 
   state(): UpdateState { return { ...this.st, feed: this.o.feed() }; }
@@ -322,8 +341,8 @@ export class UpdateService {
     this.set({ status: "downloading" });
     this.staged = null;
     this.retryMs = null;
-    const zipPath = path.join(this.o.stageDir, `update-${version}.zip`);
-    const out = path.join(this.o.stageDir, `update-${version}`);
+    const zipPath = path.join(this.stage(), `update-${version}.zip`);
+    const out = path.join(this.stage(), `update-${version}`);
     try {
       const f = this.o.fetchFn ?? fetch;
       const get = async (url: string) => {
@@ -356,6 +375,7 @@ export class UpdateService {
       return this.set({ status: "ready", latest: version, error: null });
     } catch (e) {
       fs.rmSync(zipPath, { force: true });
+      this.dispose();
       if (e instanceof TransientError) return this.quiet(e);
       return this.set({ status: "error", error: (e as Error).message });
     }
@@ -380,8 +400,8 @@ export class UpdateService {
     this.staged = null;
     // The release folder is user-writable: copy the zip into the 0700 stage dir FIRST, then hash, verify and
     // unpack that copy, so a file swapped in after the check can't be what ditto unpacks.
-    const zipPath = path.join(this.o.stageDir, `update-${l.version}.zip`);
-    const out = path.join(this.o.stageDir, `update-${l.version}`);
+    const zipPath = path.join(this.stage(), `update-${l.version}.zip`);
+    const out = path.join(this.stage(), `update-${l.version}`);
     try {
       fs.rmSync(zipPath, { force: true });
       fs.rmSync(out, { recursive: true, force: true });
@@ -407,6 +427,7 @@ export class UpdateService {
       return this.set({ status: "ready", latest: l.version, error: null });
     } catch (e) {
       fs.rmSync(zipPath, { force: true });
+      this.dispose();
       return this.set({ status: "error", error: (e as Error).message });
     }
   }
@@ -446,7 +467,7 @@ export class UpdateService {
   }
 
   private markers(): { marker: string; rolled: string } {
-    const dir = this.o.markerDir ?? this.o.stageDir;
+    const dir = this.o.markerDir ?? this.stage();
     return { marker: path.join(dir, `healthy-${this.st.latest ?? "none"}`), rolled: path.join(dir, "rolled-back.json") };
   }
 
@@ -457,8 +478,9 @@ export class UpdateService {
 
   restart(pid: number): void {
     if (this.st.status !== "ready" || !this.staged) return;
-    const file = path.join(this.o.stageDir, "swap.sh");
+    const file = path.join(this.stage(), "swap.sh");
     fs.writeFileSync(file, this.swapScript(), { mode: 0o755 });
+    this.swapping = true;
     spawn("/bin/sh", [file, ...this.swapArgs(pid)], { detached: true, stdio: "ignore" }).unref();
   }
 
@@ -566,9 +588,11 @@ export const defaultReleaseDir = (env: NodeJS.ProcessEnv = process.env) => {
 export function registerUpdater(o: { app: Electron.App; feed(): string | null; folder?(): string | null; setFolder?(dir: string | null): void; chooseFolder?(): Promise<string | null>; auto(): boolean; setAuto(on: boolean): void; token?(): string | null; setFeed?(feed: string): void; setToken?(token: string): void; hasToken?(): boolean }, reg: (name: string, fn: (a: any) => unknown) => void, emit: (ch: string, p: unknown) => void): UpdateService {
   const svc = new UpdateService({
     current: o.app.getVersion(), feed: o.feed, folder: o.folder, packaged: o.app.isPackaged, auto: o.auto(), token: o.token,
-    appPath: path.resolve(o.app.getPath("exe"), "../../.."), stageDir: fs.mkdtempSync(path.join(os.tmpdir(), "synapse-update-")), emit: (s) => emit("updates", s),
+    appPath: path.resolve(o.app.getPath("exe"), "../../.."), stageDir: () => fs.mkdtempSync(path.join(os.tmpdir(), "synapse-update-")), emit: (s) => emit("updates", s),
     markerDir: updateMarkerDir(o.app.getPath("userData")), skipped: () => skippedVersion(o.app.getPath("userData")),
   });
+  // Bug 443: a staged download that was never installed goes with the app.
+  if (typeof o.app.on === "function") o.app.on("will-quit", () => svc.dispose());
   reg("updates.folder", () => ({ folder: o.folder?.() ?? null, defaultFolder: defaultReleaseDir() }));
   reg("updates.chooseFolder", async () => { const d = await o.chooseFolder?.(); if (d) o.setFolder?.(d); return { folder: o.folder?.() ?? null, defaultFolder: defaultReleaseDir() }; });
   reg("updates.resetFolder", () => { o.setFolder?.(null); return { folder: o.folder?.() ?? null, defaultFolder: defaultReleaseDir() }; });

@@ -14,7 +14,7 @@ export function googleDemoSteps(input: TurnInput): FakeStep[] | null {
   const at = (re: RegExp) => re.exec(text)?.[1]?.split("\n")[0]!.trim();
   const call = (tool: string, args: Record<string, unknown>): FakeStep[] => [{ tool: `mcp__google__${tool}`, input: args }, { relayLastToolOutput: true }];
   const mail = /\bmail:\s*([^|\n]+)\|\s*([^|\n]+)\|\s*([^\n]+)/.exec(text);
-  if (mail && !/\bgmail:/.test(text)) return call("gmail_send", { to: mail[1]!.trim(), subject: mail[2]!.trim(), body: mail[3]!.trim() });
+  if (mail && !/\bgmail:/.test(text)) return call("gmail_send", { to: mail[1]!.trim(), subject: mail[2]!.trim(), body: mail[3]!.trim().replace(/\\n/g, "\n") });
   const read = at(/read mail:\s*(\S+)/i);
   if (read) return call("gmail_read", { id: read });
   const q = at(/\bgmail:\s*(.*)$/im);

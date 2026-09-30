@@ -20,7 +20,7 @@ beforeEach(() => {
   (window as unknown as { synapse: unknown }).synapse = {
     call: vi.fn(async (cmd: string, args: Record<string, unknown>) => {
       // FollowupsToggle's, GoogleToggle's, GitHubRow's, BrowserRow's, MacAppRow's and the Composio row's mount-time reads; not under test here
-      if (cmd !== "getModelAccess" && cmd !== "getPhase5Settings" && cmd !== "getGoogleStatus" && cmd !== "getGitHubStatus" && cmd !== "getLocalBrowserAllowed" && cmd !== "getLocalMacAppAllowed" && cmd !== "getComposioStatus") calls.push([cmd, args]);
+      if (cmd !== "getModelAccess" && cmd !== "getPhase5Settings" && cmd !== "getGoogleStatus" && cmd !== "getGitHubStatus" && cmd !== "getLocalBrowserAllowed" && cmd !== "getLocalMacAppAllowed" && cmd !== "getLocalDryRun" && cmd !== "getComposioStatus") calls.push([cmd, args]);
       if (cmd === "setHostSettings") return { ok: true, result: { ...useUi.getState().settings, ...args } };
       return { ok: true, result: { agent: bot } };
     }),

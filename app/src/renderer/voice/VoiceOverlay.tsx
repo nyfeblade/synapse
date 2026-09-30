@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { create } from "zustand";
-import { CALL_FEEL, LIMITS5, STR5, STRV, VOICE_PREFIX, isVoiceMode, callSeats, type ApprovalCardView, type CallGreeting, type CallGreetingsView, type VoiceCallView, type VoiceMode } from "@synapse/shared";
+import { CALL_FEEL, LIMITS5, STR5, STRV, VOICE_PREFIX, isVoiceMode, callSeats, type ApprovalCardView, type CallGreeting, type CallGreetingsView, type VoiceCallView, type VoiceMode, type LatencyVerdict } from "@synapse/shared";
 import { call, callQuiet } from "../bridge";
 import { ApprovalCard } from "../components/ApprovalCard";
 import { useOverlayLayer } from "../components/Dialog";
@@ -378,6 +378,8 @@ export function VoiceOverlay({ botId }: { botId: string }) {
         const fallbackVoice = kokoroFallback(who, voice);
         const r = await nativeCall<{ spoken?: boolean } | null>("dictation.speak", {
           sessionId: session.current, id, text, ...(o?.queue ? { queue: true } : {}),
+          // 5.8: a line of the Bot's reply (its first audio is the reply's, for the latency record).
+          ...(o?.phrase === undefined ? { reply: true } : {}),
           ...(fallbackVoice?.startsWith("kokoro:") ? { fallbackVoice } : {}),
           // The pause after the line is the punctuation it ends on \u2014 a breath after a comma, a beat
           // after a full stop, a little longer after a question \u2014 not one flat number for everything.
@@ -487,6 +489,8 @@ export function VoiceOverlay({ botId }: { botId: string }) {
       void more.reduce<Promise<unknown>>((p, id) => p.then(() => callQuiet("addToCall", { callId: v.callId, botId: id })
         .then((nv) => { if (!ended && nv?.callId) setCallView(nv); }, () => {})), Promise.resolve());
     }).catch(() => { settled = true; if (!ended) void call("noteVoiceCall", { id: botId, phase: "started" }).catch(() => {}); });
+    // 5.8: this call's reply timings (numbers only, kept on this Mac). A phone call's audio is the phone's: not timed.
+    if (!phoneCall) void nativeCall("voice.latency.call", { on: true }).catch(() => {});
     loop.begin();
     // The Bot asked to see the screen (SendMessage call: "look"): once per user turn. Sharing → the
     // still goes now; not sharing → the call screen asks, and turning Share on sends it.
@@ -558,6 +562,12 @@ export function VoiceOverlay({ botId }: { botId: string }) {
     const t = setInterval(() => { loop.tick(); setState(loop.state); setNow(Date.now()); }, 200);
     return () => {
       off(); offLook(); offRoster(); offQuiet(); clearInterval(t); loop.end();
+      // 5.8: the call's timings are saved; only a regression against the owner's own calls raises the notice.
+      if (!phoneCall) void nativeCall<{ verdict?: LatencyVerdict }>("voice.latency.call", { on: false }).then((r) => {
+        const v = r?.verdict;
+        if (v?.action === "raise") void callQuiet("voiceLatencyNotice", { on: true, kind: "calls", p50Ms: v.p50Ms, baselineMs: v.baselineMs, calls: v.calls }).catch(() => {});
+        else if (v?.action === "clear") void callQuiet("voiceLatencyNotice", { on: false, kind: "calls" }).catch(() => {});
+      }, () => {});
       sharingRef.current = false; // hanging up always stops sharing
       // Hanging up leaves anything the Bot is doing running; only the call ends.
       ended = true;

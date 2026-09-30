@@ -114,6 +114,10 @@ export interface BotSettings {
   computerPerception?: ComputerPerception;
   /** Voice wave 3: this Bot may call the user (a ring). Absent/null = never asked: its first call asks. */
   mayCall?: boolean | null;
+  /** 4.3 Email in: the owner can forward mail to this Bot (default off). */
+  emailIn?: boolean;
+  /** 4.3: the plus-address tag (`<owner>+<tag>@…`), set when Email in is first turned on and kept on rename. */
+  emailInTag?: string;
 }
 
 /**

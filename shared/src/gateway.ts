@@ -15,6 +15,7 @@ import type { Phase5SseEvent } from "./phase5";
 import type { GoogleSseEvent } from "./google";
 import type { ComposioSseEvent } from "./composio";
 import type { GitHubSseEvent } from "./github";
+import type { HealthSseEvent, WorkNotify } from "./health";
 import type { VoiceCallsSseEvent } from "./voice-calls";
 import type { ApprovalStatus, Reaction, TranscriptEntry, WidgetStatus } from "./transcript";
 
@@ -75,13 +76,16 @@ export interface HostSettingsView {
   callReplies?: CallReplies;                           // saving-settings "Call replies": default | fast | match
   longContext?: LongContextMode;                       // saving-settings "Long-context model": on (default) | when-needed
   trustedRecipients?: string[];                        // smarter approvals: sends to only these (and the owner) skip the card
+  workNotify?: WorkNotify;                             // 4.4 "Work finished": on (default) | long (> 1 min) | off
+  workNotifyTelegram?: boolean;                        // 4.4: also send it through Telegram (paired only), default off
   /** settings-persist: bumped on every saved change, so the app can tell a stale answer from a newer one. */
   rev?: number;
   /** settings-persist: this settings store's load id; changes on every host start (and so on a quarantined, reset file). */
   epoch?: string;
 }
 
-export interface TrayButton { label: string; action: "retry" | "dismiss" | "resume-routines" | "reconnect-google" | "reconnect-google-bot" }
+/** `target`: the connector id a "fix-connector" button fixes (4.4). */
+export interface TrayButton { label: string; action: "retry" | "dismiss" | "resume-routines" | "reconnect-google" | "reconnect-google-bot" | "loop-continue" | "loop-stop" | "fix-connector"; target?: string }
 export interface Tray {
   id: string;
   botId: string | null;
@@ -123,7 +127,7 @@ export interface GatewayCommands {
   /** 0.1.4: the app found the box's Local network state differs from the owner's choice: no Bot turn runs until it matches. */
   setNetworkPause: { args: { on: boolean }; result: { on: boolean } };
   getTrays: { args: NoArgs; result: { trays: Tray[] } };
-  dismissTray: { args: { trayId: string; action?: "retry" | "resume-routines" }; result: NoArgs };
+  dismissTray: { args: { trayId: string; action?: "retry" | "resume-routines" | "loop-continue" | "loop-stop" }; result: NoArgs };
   clearTrays: { args: { botId?: string }; result: NoArgs };
   // Phase 3 · computer (CMP-*, §4.5 Box/computer)
   getForeverBoxStatus: { args: NoArgs; result: ForeverBoxStatus };
@@ -237,6 +241,8 @@ export type SseEvent =
   | { channel: "model-access"; payload: import("./auth").ModelAccessView }
   // Bug 281: the API-key check (checkApiKey).
   | { channel: "key-check"; payload: import("./auth").KeyCheckView }
+  // 5.7: the header's spend meter (at most a few updates a second, only when a shown cent changes).
+  | { channel: "spend-meter"; payload: import("./cost").SpendMeterView }
   // Phase 5 owns "usage" (UsageView, which carries Phase 4's efficiency tiles).
   | Phase5SseEvent
   // Built-in Google connector status (Connect Google sheet, Settings → Connected accounts).
@@ -246,7 +252,9 @@ export type SseEvent =
   // Per-Bot GitHub sign-in (Bot settings → GitHub).
   | GitHubSseEvent
   // Voice wave 3: Bots calling the user, and a Bot asking to see a shared screen.
-  | VoiceCallsSseEvent;
+  | VoiceCallsSseEvent
+  // 4.4: connector health and work-finished notifications.
+  | HealthSseEvent;
 
 export interface GatewayErrorBody { code: string; message: string }
 export type GatewayResponse<T> = { ok: true; result: T } | { ok: false; error: GatewayErrorBody };

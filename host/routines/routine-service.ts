@@ -392,8 +392,8 @@ export function triggerShapeError(t: unknown): string | null {
     case "linear": return ["issueCreated", "statusChanged", "endOfCycle"].includes(String(v.event)) ? null : "a Linear trigger's event is issueCreated, statusChanged or endOfCycle.";
     case "sentry": case "pagerduty": return typeof v.event === "string" && v.event ? null : `a ${kind} trigger needs an event.`;
     case "file": return strs(v.paths) && strs(v.events) && (v.events as string[]).every((e) => ["created", "modified", "deleted"].includes(e)) ? null : "a file trigger needs paths and events (created, modified, deleted).";
-    case "email": return typeof v.account === "string" && typeof v.query === "string" ? null : "an email trigger needs a mailbox and a query.";
-    case "calendar": return typeof v.minutesBefore === "number" && (v.calendarId === undefined || typeof v.calendarId === "string") && (v.match === undefined || typeof v.match === "string") ? null : "a calendar trigger needs minutesBefore (a number of minutes).";
+    case "email": return typeof v.account === "string" && typeof v.query === "string" && (v.googleAccount === undefined || typeof v.googleAccount === "string") ? null : "an email trigger needs a mailbox and a query (googleAccount, when given, is one Google account's address).";
+    case "calendar": return typeof v.minutesBefore === "number" && (v.calendarId === undefined || typeof v.calendarId === "string") && (v.match === undefined || typeof v.match === "string") && (v.account === undefined || typeof v.account === "string") ? null : "a calendar trigger needs minutesBefore (a number of minutes); account, when given, is one Google account's address.";
     case "group": {
       if (!Array.isArray(v.listeners)) return "a group trigger needs listeners.";
       for (const l of v.listeners) { const e = triggerShapeError(l); if (e) return e; }

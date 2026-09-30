@@ -4,7 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { MAC_CLAUDE_API_KEY_MSG, STR5, type MacClaudeAuth } from "@synapse/shared";
 import { LocalExecDaemon, type BrowserCall, type BrowserResult, type MacAppCallMsg, type MacAppResultMsg } from "./daemon";
+import { ActionLog } from "./action-log";
 import { LocalExecutor } from "./executor";
+import { undoScope } from "./snapshots";
 import { LocalPolicyStore } from "./policy";
 import { inspectPolicyKey, loadPolicyKey, resetPolicyKey, type PolicyKeyResult } from "./policy-key";
 import { retireMacClaudeLogin } from "./login-scrub";
@@ -85,7 +87,9 @@ export function createLocalDaemon(o: {
   if (!k.ok) log(`local-exec: the permission key file can't be trusted (${k.reason}); permissions are not saved until they are reset in Settings.`);
   const policyDir = durable ? userData : scratchDir(o.tmpRoot ?? os.tmpdir());
   // Ruling A: the app's own data is never an auto-run place.
-  const policy = new LocalPolicyStore(policyDir, Date.now, k.ok ? k.key : randomBytes(32), { userData: () => userData });
+  // 5.6: a run that can't trust the key file can't read the real dry-run record either: dry run is then unknown (every
+  // change refused) until the owner sets it again, rather than silently off.
+  const policy = new LocalPolicyStore(policyDir, Date.now, k.ok ? k.key : randomBytes(32), { userData: () => userData, ...(durable ? {} : { dryRunShadow: path.join(userData, "local-bot-dryrun.json") }) });
   const resetPolicy = async (): Promise<{ ok: boolean }> => {
     const r = resetPolicyKey(userData);
     if (!r.ok && r.reason === "sound") throw new Error(STR5.localPolicyResetRefused);
@@ -126,8 +130,11 @@ export function createLocalDaemon(o: {
   };
   // feat-mac-access-parity: full access (CLI parity) — commands and file ops run anywhere the user can, bounded
   // by the protected NEVER guard; the layered permissions (fixed rules → reviewer → cards) gate the rest.
+  // 5.6: the action log and its snapshots live in the profile (a Bot never reaches it: the app's data is walled off).
+  const actionLog = new ActionLog(path.join(userData, "action-log"));
+  const actions = { log: actionLog, scope: (abs: string) => undoScope(abs, { home: os.homedir(), roots: policy.current().autoRunRoots ?? [], userData }) };
   const daemon = new LocalExecDaemon({
-    call: o.call, policy, executor: new LocalExecutor({ root: () => policy.current().localRoot, userData: () => userData, fullAccess: () => true, claudeAuth: claudeAuthFor, keyProxy }),
+    call: o.call, policy, actions, executor: new LocalExecutor({ root: () => policy.current().localRoot, userData: () => userData, fullAccess: () => true, claudeAuth: claudeAuthFor, keyProxy }),
     browser: o.browser, browserOrigin: o.browserOrigin, macapp: o.macapp, verifyNoLimits: o.verifyNoLimits, durable, resetPolicy, ...(o.heartbeatMs ? { heartbeatMs: o.heartbeatMs } : {}),
   });
   return { daemon, policy, durable, policyDir, keyProxy, macKey };

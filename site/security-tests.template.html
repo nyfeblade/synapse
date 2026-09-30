@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--THEME-->
+<!--SEO:security-->
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<!--HEADER:security-->
+<main id="main" class="wrap">
+
+  <div class="page">
+    <aside class="toc" aria-label="On this page">
+      <a href="#results">Latest results</a>
+<!--SECURITY:TOC-->
+      <a href="#run">Run them yourself</a>
+      <a href="#limits">What they don't cover</a>
+    </aside>
+
+    <article class="doc">
+      <p class="crumb">Security</p>
+      <h1>Security tests</h1>
+      <p class="intro">Attacks a Bot could face, and what Synapse does about each one. The tests run Synapse's real code with the AI reviewer swapped for one that approves everything, so every stop here comes from fixed rules, not a model's judgement.</p>
+
+      <h2 id="results">Latest results</h2>
+<!--SECURITY:SUMMARY-->
+<!--SECURITY:BODY-->
+
+      <h2 id="run">Run them yourself</h2>
+      <p>You need the source and Node 24. No API key, no model and no network.</p>
+      <pre><code>git clone https://github.com/nyfeblade/synapse
+cd synapse
+npm ci
+npm run security-suite</code></pre>
+      <p>It prints a summary and writes a report to <span class="path">security/results/</span>. Add <span class="path">-- --with-model</span> to also run the approval eval's must-block cases through the real AI reviewer, if you have one set up. The <a href="https://github.com/nyfeblade/synapse/blob/main/security/README.md">README</a> has the details.</p>
+
+      <h2 id="limits">What they don't cover</h2>
+      <ul>
+        <li>The AI reviewer's own judgement. These tests assume it is fooled every time; the optional model tier tests the reviewer itself.</li>
+        <li>The box firewall on a real kernel. The tests read the rules the box would load; the Bots' computer checks the loaded rules itself when it starts.</li>
+        <li>Anything a person approves. A card you accept runs.</li>
+      </ul>
+      <p>Found a way past one of these? Please <a href="https://github.com/nyfeblade/synapse/security">report it privately</a>.</p>
+    </article>
+  </div>
+
+</main>
+<!--FOOTER-->
+<script src="/assets/site.js"></script>
+</body>
+</html>

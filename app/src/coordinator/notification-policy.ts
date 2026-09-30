@@ -1,9 +1,10 @@
 import { LIMITS, STR, type BotSummary } from "@synapse/shared";
 
-type Kind = "needs-you" | "finished";
+type Kind = "needs-you";
 const cap = (s: string) => (s.length > LIMITS.notifyBodyMax ? `${s.slice(0, LIMITS.notifyBodyMax - 1)}…` : s);
 
-/** NTF-01 / BOT-23, decided in the coordinator (Decision 6). Only user-facing outcomes notify; bot-to-bot traffic has no path here. */
+/** NTF-01 / BOT-23, decided in the coordinator (Decision 6): needs-you and the dock badge. Only user-facing outcomes
+ *  notify; bot-to-bot traffic has no path here. Work finished is work-notifier.ts. */
 export class NotificationPolicy {
   private prev = new Map<string, BotSummary>();
   private last = new Map<string, number>();
@@ -31,7 +32,9 @@ export class NotificationPolicy {
       // Smarter approvals: a card's notification carries its id, so it can be answered from the notification.
       const approvalId = b.awaiting?.tabId === "auto-review" ? b.awaiting.approvalId : undefined;
       if (reasonChanged) this.fire(b, "needs-you", STR.needsYou(b.profile.name), b.awaiting!.reason || STR.waitingForInput, approvalId);
-      else if (p?.running && !b.running && b.lastBotMessageAt > p.lastBotMessageAt && !b.lastBotMessageQuiet) this.fire(b, "finished", b.profile.name, b.statusLine || STR.openToSee);
+      // 4.4: "finished" is the host's work-finished event (owner tasks only, Settings → Work finished), coalesced by
+      // the coordinator's WorkNotifier. A turn ending is no longer a notification by itself: heartbeats, other Bots'
+      // messages and silent wakes end turns too.
     }
     this.updateBadge();
   }

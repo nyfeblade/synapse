@@ -7,8 +7,10 @@ import { createLocalDaemon } from "./local-exec/wiring";
 import type { MacKeyProxy } from "./local-exec/mac-key-proxy";
 import type { MacKeyStore } from "./local-exec/wiring";
 import { NotificationPolicy } from "./notification-policy";
+import { WorkNotifier } from "./work-notifier";
 import { startOAuthLoopback } from "./oauth-loopback";
 import { installProcessGuards } from "./guards";
+import { forTelegram } from "../main/telegram/events";
 
 installProcessGuards(process);
 
@@ -20,6 +22,8 @@ let rport: MessagePortMain | null = null;
 let lastState: ConnectionState = { kind: "starting" };
 const outbox: unknown[] = [];
 let loopback: Promise<{ port: number; close(): void }> | null = null;
+/** Wave 4.1: main's Telegram bridge is on and wants the Bots' send-message events. */
+let telegramWatch = false;
 
 let upstream: { baseUrl: string; token: string } | null = null;
 // The VNC proxy dials the gateway with the token only once this connection's host is proven (gateway-client.ts).
@@ -31,6 +35,15 @@ const policy = new NotificationPolicy({
   notify: (n) => process.parentPort.postMessage({ type: "notify", botId: n.botId, title: n.title, body: n.body, ...(n.approvalId ? { approvalId: n.approvalId } : {}) }),
   badge: (count) => process.parentPort.postMessage({ type: "badge", count }),
 });
+
+// 4.4: "<Bot> finished" (the host's work-finished event), not for the chat the owner is looking at, bursts as one.
+const work = new WorkNotifier({
+  now: Date.now,
+  setTimer: (fn, ms) => setTimeout(fn, ms),
+  clearTimer: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
+  notify: (n) => process.parentPort.postMessage({ type: "notify", botId: n.botId, title: n.title, body: n.body, ...(n.telegram ? { telegram: n.telegram } : {}) }),
+});
+let focused = true;
 
 // mac-browser: the browser controller lives in the main process (it owns the Chrome process and the fallback window).
 // Requests go up the parent port and come back as "browser-result"; a main that never answers can't wedge a Bot.
@@ -62,12 +75,19 @@ const setState = (s: ConnectionState) => {
   process.parentPort.postMessage({ type: "conn-state", kind: s.kind });
 };
 
+/** A renderer command: this Mac's gate first (LOC-05), then the host. Telegram's Mac-card answers come through here too. */
+async function dispatch(cmd: string, args: unknown): Promise<unknown> {
+  // 4.4: the chat the owner has open (the renderer opens one with openAgent), for the work-finished focus rule.
+  if (cmd === "openAgent" && typeof (args as { id?: unknown })?.id === "string") work.setActiveBot((args as { id: string }).id);
+  const local = daemon ? await daemon.intercept(cmd, args) : { handled: false as const };
+  if (local.handled) return local.result;
+  return client!.call(cmd as never, args as never);
+}
+
 async function onRendererMessage(data: { id: number; cmd: string; args: unknown }): Promise<void> {
   if (!client) return post({ id: data.id, response: { ok: false, error: { code: "NOT_CONNECTED", message: notConnectedMessage(lastState) } } });
   try {
-    const local = daemon ? await daemon.intercept(data.cmd, data.args) : { handled: false as const };
-    if (local.handled) return post({ id: data.id, response: { ok: true, result: local.result } });
-    const result = await client.call(data.cmd as never, data.args as never);
+    const result = await dispatch(data.cmd, data.args);
     post({ id: data.id, response: { ok: true, result } });
   } catch (e) {
     const err = e as { code?: string; message?: string };
@@ -118,8 +138,15 @@ process.parentPort.on("message", (e) => {
       onRefused: () => process.parentPort.postMessage({ type: "gateway-refused" }),
       onEvent: (ev) => {
         if (ev.channel === "agent-upserted") policy.update(ev.payload.agent);
-        else if (ev.channel === "agents") policy.remove(ev.payload.removedId);
+        else if (ev.channel === "agents") { policy.remove(ev.payload.removedId); work.remove(ev.payload.removedId); }
+        else if (ev.channel === "work-finished") work.onFinished(ev.payload);
+        // 4.4: one macOS notification per connector break (the host decided "once"); the tray shows it in the app.
+        else if (ev.channel === "connector-alert" && !focused) process.parentPort.postMessage({ type: "notify-app", title: ev.payload.title, body: ev.payload.body, section: "connections" });
         daemon?.onEvent(ev);
+        // Wave 4.1: only while Telegram is on, and only the Bots' send-message entries (replies and approval cards).
+        if (telegramWatch && forTelegram(ev)) {
+          process.parentPort.postMessage({ type: "telegram-event", ev });
+        }
         post({ event: ev });
       },
       onState: setState,
@@ -128,7 +155,7 @@ process.parentPort.on("message", (e) => {
     void vncReady.then((v) => post({ vnc: v }));
     void client
       .call("listAgents", {} as never)
-      .then((r) => policy.baseline((r as { agents: BotSummary[] }).agents))
+      .then((r) => { policy.baseline((r as { agents: BotSummary[] }).agents); work.setActiveBot((r as { activeAgentId?: string | null }).activeAgentId ?? null); })
       .catch(() => {});
     if (msg.userData) {
       // Bug 225: the policy files are HMAC'd with the profile's own local-policy.key (local-exec/policy-key.ts), never
@@ -155,7 +182,21 @@ process.parentPort.on("message", (e) => {
     loopback ??= startOAuthLoopback({ ports: [47823, 47824, 47825], complete: (a) => client!.call("completeMcpOAuth", a) })
       .then((lb) => { void client!.call("setOAuthLoopbackPort", { port: lb.port }).catch(() => {}); return lb; })
       .catch((e) => { console.error("oauth loopback unavailable", e); loopback = null; return { port: 0, close: () => {} }; });
+  } else if (msg.type === "telegram-local-answer" && typeof msg.id === "number") {
+    // Wave 4.1: a Mac card answered from Telegram takes exactly the in-app card's path (the Mac's own gate records the
+    // once-approval bound to the card's action and target, then tells the host). Only once / deny, never Always/Never.
+    const id = msg.id;
+    const a = (msg as unknown as { args?: { id?: unknown; askId?: unknown; choice?: unknown; action?: unknown; target?: unknown } }).args;
+    const reply = (m: Record<string, unknown>) => process.parentPort.postMessage({ type: "telegram-local-answer-result", id, ...m });
+    if (!client || !daemon) reply({ ok: false, error: notConnectedMessage(lastState) });
+    else if (!a || typeof a.id !== "string" || typeof a.askId !== "string" || (a.choice !== "once" && a.choice !== "deny") || typeof a.action !== "string" || typeof a.target !== "string") reply({ ok: false, error: "bad answer" });
+    else void dispatch("resolveLocalToolPermission", { id: a.id, askId: a.askId, choice: a.choice, action: a.action, target: a.target })
+      .then((result) => reply({ ok: true, result }), (e: Error) => reply({ ok: false, error: e.message }));
+  } else if (msg.type === "telegram-watch") {
+    telegramWatch = (msg as { on?: unknown }).on === true;
   } else if (msg.type === "focus") {
-    policy.setFocused(Boolean((msg as { focused?: boolean }).focused));
+    focused = Boolean((msg as { focused?: boolean }).focused);
+    policy.setFocused(focused);
+    work.setFocused(focused);
   }
 });

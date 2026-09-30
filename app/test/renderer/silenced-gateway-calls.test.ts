@@ -78,6 +78,8 @@ export function silencedCalls(src: string): { cmd: string; line: number }[] {
  * "and what does the user see instead?".
  */
 const SILENT_BY_DESIGN: Record<string, string> = {
+  getSpendMeter:
+    "5.7: the header spend meter's first read on connect. Without it the meter is simply absent (as with an older host), and the host's own spend-meter channel fills it on the next spend; Settings → Usage shows the same figures with its own error handling.",
   listStarterTemplates:
     "new-user walk finding 16: New chat's few template suggestions under Create new Bot. Without them the screen is exactly what it was before (Create, groups and your Bots); the Marketplace, one click away in the sidebar, reports its own failures.",
   checkApiKey:
@@ -96,6 +98,8 @@ const SILENT_BY_DESIGN: Record<string, string> = {
     "same shape: the disk banner is absent unless the disk is low, and the `box-disk-pressure` channel republishes on every poll, so a missed probe self-heals within one interval.",
   voiceSpeculateCancel:
     "bug 142: tells the host to drop a reply it began early because the user kept talking. Nothing is on screen for it (the early reply was never shown), and a lost cancel costs only the tokens of that one dropped reply, which the host counts and logs; the real turn that follows supersedes it either way.",
+  voiceLatencyNotice:
+    "5.8: raises or clears the slow-voice notice after a call ends. Nothing on screen waits for it; the numbers are already saved on this Mac, and a lost raise comes back after the weekly wait, and a lost clear with the next call that meets the budget.",
   getOnboarding:
     "both sites choose between two whole surfaces rather than filling one in: App picks onboarding vs the normal app, Onboarding picks the Sign in button's destination. A failure falls back to the normal path and is re-asked on the next connect; neither leaves a hole on screen.",
 };

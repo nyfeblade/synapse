@@ -1,4 +1,4 @@
-import { STR, STR5, STRB, STRG, STRMA, STRO, STRS, STRV, STR_AUTH, STR_COST, STR_MCP, STR_PHONE } from "@synapse/shared";
+import { STR, STR5, STR_HEALTH, STRAL, STRB, STRG, STRMA, STRO, STRS, STRV, STR_AUTH, STR_COST, STR_MCP, STR_PHONE, STR_TELEGRAM } from "@synapse/shared";
 import { slugRow } from "../../deep-links";
 import type { SettingsSectionId } from "./sections";
 
@@ -23,6 +23,8 @@ export function settingEntries(): SettingEntry[] {
     e("general", STR.theme, ["appearance", "dark", "light", "mode"]),
     e("general", STRG.connectedAccounts, ["google", "gmail", "calendar", "drive"]),
     e("general", STR5.memory, ["remember", "recall"]),
+    e("general", STR_HEALTH.workNotify, ["notifications", "finished", "done", "telegram", "long tasks"]),
+    e("connections", STR_HEALTH.section, ["connectors", "health", "broken", "sign in", "reconnect", "mcp", "google", "composio", "github", "telegram"]),
     // Account
     e("account", STR_AUTH.keyLabel, ["api", "key", "anthropic", "sign in", "login"]),
     e("usage", STR_COST.apiSpend, ["usage", "spend", "billing", "cost"]),
@@ -52,6 +54,8 @@ export function settingEntries(): SettingEntry[] {
     e("computer", STRMA.appsSection, ["mac apps", "permissions", "accessibility", "screen recording"]),
     e("computer", STR5.routeTraffic, ["network", "proxy", "vpn"]),
     e("computer", STR5.localNetwork, ["lan", "local network", "home network", "firewall"]),
+    // 5.6: what Bots did on this Mac.
+    e("activity", STRAL.section, ["action log", "history", "audit", "undo", "dry run", "touched", "export"], "activity"),
     // Schedules
     e("schedules", STRS.standup, ["briefing", "daily", "morning"]),
     e("schedules", STRS.standupTime, ["time", "briefing"]),
@@ -63,6 +67,7 @@ export function settingEntries(): SettingEntry[] {
     e("system", STRO.diagnostics, ["logs", "crash", "report", "problems"]),
     e("system", STRO.storage, ["disk", "space"]),
     e("system", STR_MCP.access, ["mcp", "claude desktop", "claude code", "cursor", "other apps", "connect"]),
+    e("system", STR_TELEGRAM.access, ["telegram", "phone", "chat", "approvals", "botfather", "messages"]),
   ];
 }
 

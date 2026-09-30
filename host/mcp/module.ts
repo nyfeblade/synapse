@@ -10,6 +10,7 @@ import { McpProxyPool, type CommandConnector, type Connector } from "./proxy";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { hostGuardedFetch } from "../net/guarded-fetch";
 import { McpRegistry } from "./registry";
+import { GatewayError } from "../gateway/errors";
 
 /**
  * Bug 363: the fetch a remote server's requests (and its OAuth) use. The guarded fetch for every server, except one the
@@ -58,9 +59,9 @@ export function createMcpModule(ctx: ModuleContext, s: McpServices): HostModule 
   return {
     name: "mcp",
     observers: [{ onEvent: (_botId, e) => { if (e.kind === "session") s.registry.noteSessionTools(e.tools); } }],
-    mcpServers: (botId): Record<string, McpServerConfig> => ({ ...s.registry.commandServerConfigs(), ...s.pool.sdkServers(botId) }),
+    mcpServers: (botId): Record<string, McpServerConfig> => ({ ...s.registry.commandServerConfigs(botId), ...s.pool.sdkServers(botId) }),
     disallowedTools: () => s.registry.disallowedToolNames(),
-    systemAppendExtra: () => s.registry.systemAppendExtra(),
+    systemAppendExtra: (botId) => s.registry.systemAppendExtra(botId),
     stop: () => s.pool.closeAll(),
     handlers: {
       listMcpServers: () => ({ servers: mcpServerViews(s) }),
@@ -77,6 +78,12 @@ export function createMcpModule(ctx: ModuleContext, s: McpServices): HostModule 
         return {};
       },
       renameMcpAccount: (a) => { s.registry.rename(a.serverId, a.label); return { server: view(a.serverId) }; },
+      setMcpServerBots: (a) => {
+        const botId = String(a?.botId ?? "");
+        if (!ctx.bots.has(botId)) throw new GatewayError("NOT_FOUND", "No such Bot.", 404);
+        s.registry.setBot(String(a?.serverId ?? ""), botId, a?.enabled === true, ctx.bots.ids());
+        return { server: view(String(a.serverId)) };
+      },
       setMcpToolEnabled: (a) => { s.registry.setToolEnabled(a.serverId, a.tool, a.enabled); return { server: view(a.serverId) }; },
       setMcpServerEnabled: async (a) => {
         s.registry.setEnabled(a.serverId, a.enabled);

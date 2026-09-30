@@ -31,7 +31,8 @@ function walk(v: unknown, visit: (key: string | null, v: unknown) => void, key: 
 /** Every address in the arguments outside the message text itself (recipient_email, cc, bcc, extra_recipients …). */
 export function argRecipients(args: Record<string, unknown>): string[] {
   const out: string[] = [];
-  walk(args, (k, v) => { if (typeof v === "string" && !(k && BODY_KEY.test(k))) out.push(...emails(v)); });
+  // 4.3b: `account` is the owner's own account the send goes FROM, never a recipient.
+  walk(args, (k, v) => { if (typeof v === "string" && !(k && (BODY_KEY.test(k) || k === "account"))) out.push(...emails(v)); });
   return out;
 }
 

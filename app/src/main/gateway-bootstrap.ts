@@ -70,6 +70,9 @@ export async function resolveGateway(d: BootstrapDeps): Promise<GatewayHandle> {
       dataDir: path.join(d.userData, "local-host"),
       disposable: d.env.FUZZ === "1",
       ...(d.env.FUZZ === "1" && d.reuseRoot ? { root: d.reuseRoot } : {}),
+      // Journeys (scripts/journeys, 5.9): a FUZZ host store that outlives the app, so a cold start can be timed on a
+      // profile that has Bots and has finished onboarding. FUZZ-only; the folder is the caller's to remove.
+      ...(d.env.FUZZ === "1" && !d.reuseRoot && d.env.SYNAPSE_FUZZ_HOST_ROOT ? { root: d.env.SYNAPSE_FUZZ_HOST_ROOT, keepRoot: true } : {}),
     });
     return { baseUrl: local.baseUrl, token: local.token, mode: "local", root: local.root, dispose: (o) => local.stop(o) };
   }

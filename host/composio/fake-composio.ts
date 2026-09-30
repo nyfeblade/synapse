@@ -12,7 +12,8 @@ export interface FakeComposio {
   fail(accountId: string): void;
 }
 
-export function fakeComposio(o: { activateAfter?: number } = {}): FakeComposio {
+/** 4.3b: `profileEmail` answers GMAIL_GET_PROFILE per connected account (the host labels a Gmail account by it). */
+export function fakeComposio(o: { activateAfter?: number; profileEmail?: (accountId: string) => string | null } = {}): FakeComposio {
   const requests: FakeComposio["requests"] = [];
   const accounts = new Map<string, { status: string; reads: number }>();
   const configs = new Map<string, string>();
@@ -59,6 +60,10 @@ export function fakeComposio(o: { activateAfter?: number } = {}): FakeComposio {
       return json(200, { items: tk === "GMAIL" ? [tool("FETCH_EMAILS", "Fetch emails"), tool("SEND_EMAIL", "Send an email")] : [tool("LIST_ITEMS", "List items"), tool("CREATE_ITEM", "Create an item")] });
     }
     const ex = /^\/tools\/execute\/([^/]+)$/.exec(p);
+    if (method === "POST" && ex && ex[1] === "GMAIL_GET_PROFILE" && o.profileEmail) {
+      const email = o.profileEmail(String(body?.connected_account_id ?? ""));
+      return json(200, { successful: !!email, data: email ? { emailAddress: email } : null, error: email ? null : "no profile" });
+    }
     if (method === "POST" && ex) return json(200, { successful: true, data: { ok: true, tool: ex[1], echo: body?.arguments ?? null }, error: null, log_id: "log_1" });
     return json(404, { message: "Not found" });
   };

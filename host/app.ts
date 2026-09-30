@@ -5,7 +5,7 @@ import fs from "node:fs";
 import type http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
-import { DEFAULT_BOT_MODEL, DEFAULT_EFFORT, DEFAULT_HISTORY_KEEP, LONG_CONTEXT_ESCALATE_TOKENS, isModelId, modelLabel, spawnModelId, STR, STR5, STRG, STRV, STR_AUTH, type HealthInfo } from "@synapse/shared";
+import { DEFAULT_BOT_MODEL, DEFAULT_EFFORT, DEFAULT_HISTORY_KEEP, LONG_CONTEXT_ESCALATE_TOKENS, isModelId, LIMITS, modelLabel, spawnModelId, STR, STR5, STRG, STRV, STR_AUTH, latencyLabel, type HealthInfo } from "@synapse/shared";
 import { ApprovalGate } from "./approvals/approval-gate";
 import { BotService } from "./bots/bot-service";
 import { ClaudeBrain } from "./brain/claude-brain";
@@ -120,6 +120,7 @@ import { hostBuildId, recordRunEnd, recordRunStart } from "./backup/run-state";
 import { wirePhase5, type Phase5 } from "./phase5/wire";
 import type { ReviewerLike } from "./approvals/approval-gate";
 import { sudoFsQuery } from "./walls/home-fs";
+import { EmailIn } from "./triggers/email/email-in";
 import { execBuf } from "./computer/x-exec";
 import { BoxFirewallCheck, sudoFirewallCheck } from "./net/firewall-check";
 
@@ -479,17 +480,29 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     sentTo: async (botId, address) => {
       const g = phase5 ? await phase5.google.sentTo(address) : null;
       if (g !== null) return g;
-      return phase5 ? (await composioSentTo((s, a) => phase5!.composio.hostLookup(botId, s, a), address)) === true : false;
+      if (!phase5) return false;
+      // 4.3b: mailed from any of the owner's Gmail accounts through Composio (each one this Bot may use).
+      for (const acc of phase5.composio.grantedAccounts(botId, "gmail")) {
+        if ((await composioSentTo((s, a) => phase5!.composio.hostLookup(botId, s, { ...a, account: acc.id }), address)) === true) return true;
+      }
+      return false;
     },
-    composioRecipients: (botId, slug, args) => (phase5 ? resolveComposioSend((s, a) => phase5!.composio.hostLookup(botId, s, a), slug, args) : Promise.resolve({ error: "Composio isn't set up." })),
+    // 4.3b: the lookups read through the same account the send uses.
+    composioRecipients: (botId, slug, args) => {
+      if (!phase5) return Promise.resolve({ error: "Composio isn't set up." });
+      const acct = typeof args.account === "string" ? args.account : undefined;
+      return resolveComposioSend((s, a) => phase5!.composio.hostLookup(botId, s, acct ? { ...a, account: acct } : a), slug, args);
+    },
     // feat-mac-access-parity: the per-Bot permission mode and the connected Mac, for the fixed-rules layer.
     permMode: (botId) => (bots.has(botId) ? bots.summary(botId).settings.permMode ?? "ask" : "ask"),
     noLimits: (botId) => bots.has(botId) && bots.summary(botId).settings.noLimits === true,
     macEnv: () => phase5?.macEnv() ?? null,
     googleEmail: () => phase5?.googleEmail() ?? null,
+    ownerEmails: () => phase5?.ownerEmails() ?? [],
+    accountFor: (botId, call, target) => phase5?.accountFor(botId, call, target) ?? null,
     googleBuiltin: (botId) => phase5?.googleBuiltin(botId) ?? false,
     googleClientReplace: (botId) => (phase5 ? phase5.google.setup.cardFor(botId, phase5.google.status().state === "connected") : null),
-    googleDraftPreview: (draftId) => (phase5 ? phase5.googleDraftPreview(draftId) : Promise.resolve({ error: STRG.toolNotConnected })),
+    googleDraftPreview: (draftId, account) => (phase5 ? phase5.googleDraftPreview(draftId, account) : Promise.resolve({ error: STRG.toolNotConnected })),
     googleCardFacts: (tool, input) => (phase5 ? phase5.googleCardFacts(tool, input) : Promise.resolve({ error: STRG.toolNotConnected })),
     // Item 9: the Bot's secrets never reach the approval card the user sees (the draft-send preview included).
     redact: (bid, text) => (phase3 ? phase3.scanners.redact(bid, text) : text),
@@ -619,6 +632,9 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     // Bug 44(b): the caller decides what to do about a fact that did not land — it used to be told nothing.
     remember: (bid, fact) => { try { memory.add({ kind: "agent", botId: bid }, { content: fact, tier: "profile", kind: "fact" }); return true; } catch (e) { log.warn("template fact not saved", { error: String(e) }); return false; } } });
   phase5 = p5;
+  // 4.4: a Bot that uses a connector that broke is told in its next turn (once per break), and again when it's back.
+  runner.addPromptDecorator((b) => { const t = p5.health.noteFor(b); return t ? { text: t } : null; });
+  p5.health.keyCheck(keyCheck.view());
   // Phase 5's gate decorator (disabled MCP tools, local asks expiry) wraps the one ApprovalGate; the ctx (cwd binding) passes through.
   runner.attach(supervisor, p5.wrapGate(gate));
   phase3 = await createPhase3Services({
@@ -682,12 +698,15 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
     // Phase 5: the usage ladder, then the routine's Bot's budgets (cost-dashboard). Scheduled and triggered runs alike.
     routinePausedUntil: (routineId) => p5.routinePausedUntil(routineId, (id) => { const r = p4Ref?.services.store.all().find((x) => x.id === id); return r ? { botId: r.botId, name: r.def.name } : null; }),
     // Mail and calendar triggers read through the built-in Google connector, host-side (no model call to poll).
-    googleGet: (api) => {
+    googleGet: (api, accountId) => {
       const g = p5.google;
-      if (!g.auth.isConnected()) return null;
-      return <T>(p: string, query?: Record<string, string | number | undefined>) => g.api.call<T>(`${api === "gmail" ? g.api.endpoints.gmail : g.api.endpoints.calendar}${p}`, { query });
+      if (!g.auth.isConnected(accountId)) return null;
+      const a = accountId ? g.api.as(accountId) : g.api;
+      return <T>(p: string, query?: Record<string, string | number | undefined>) => a.call<T>(`${api === "gmail" ? a.endpoints.gmail : a.endpoints.calendar}${p}`, { query });
     },
-    googleAllowed: (botId) => p5.google.enabledFor(botId) && p5.google.auth.isConnected(),
+    // 4.3b: mail and calendar triggers poll every connected account once, and deliver only to Bots it is granted to.
+    googleAccounts: () => p5.google.auth.accounts().map((a) => ({ id: a.id, email: a.email })),
+    googleAllowed: (botId, accountId) => p5.google.enabledFor(botId) && p5.google.grantedAccounts(botId).some((a) => accountId === undefined || a.id === accountId),
     macList: (folder, botId) => p5.macList(folder, botId),
     // Bug 134: the pick-up greetings use the user's first name from their memory profile, when it holds one.
     userName: () => userNameFromFacts(memory.userShardOwners().flatMap((o) => memory.profile({ kind: "user", botId: o }).map((f) => f.content))),
@@ -702,6 +721,27 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
   });
   const rescan = () => { for (const id of bots.ids()) p3.scanners.invalidate(id); };
   p5.google.onChange(rescan);
+  // 4.3b: an account added or removed (or a grant changed) re-plans the per-account mail and calendar polls.
+  p5.google.onChange(() => { p4.services.email.sync(); p4.services.calendar.sync(); });
+  // 4.3 Email in: the owner forwards mail to <address>+<tag>@ (or labels it Synapse/<Bot>); it rides the same polls.
+  p4.services.email.emailIn = new EmailIn({
+    now,
+    accounts: () => p5.google.auth.accounts().map((a) => ({ id: a.id, email: a.email })),
+    get: (accountId) => {
+      if (!p5.google.auth.isConnected(accountId)) return null;
+      const a = p5.google.api.as(accountId);
+      return <T>(p: string, query?: Record<string, string | number | undefined>) => a.call<T>(`${a.endpoints.gmail}${p}`, { query });
+    },
+    bots: () => bots.ids().flatMap((id) => { const s = bots.summary(id); return s.settings.emailIn && s.settings.emailInTag && !s.settings.archived ? [{ id, name: s.profile.name, tag: s.settings.emailInTag }] : []; }),
+    allowed: (botId, accountId) => p5.google.enabledFor(botId) && p5.google.grantedAccounts(botId).some((a) => a.id === accountId),
+    deliver: (botId, t) => {
+      const files = t.files.map((f) => attachments.ingest(botId, f.name, f.bytes)).filter((x): x is NonNullable<typeof x> => x !== null).slice(0, LIMITS.attachmentsPerMessage);
+      runner.sendPrompt(botId, t.text, `email:${t.key}`, { email: t.email, ...(files.length ? { attachmentEntries: files } : {}) });
+    },
+    notice: (botId, from) => trays.add({ botId, title: STRG.emailInRefused(bots.summary(botId).profile.name), detail: from, dedupeKey: `${botId}:email-in-refused` }),
+    failed: (botId) => trays.add({ botId, title: STRG.emailInFailed(bots.summary(botId).profile.name), dedupeKey: `${botId}:email-in-failed` }),
+  });
+  p4.services.email.sync();
   p5.google.setup.onSecrets(rescan);
   const { sendPrompt: p4Send, ...p4Rest } = p4.handlers as Required<Pick<CommandHandlers, "sendPrompt">> & CommandHandlers;
 
@@ -747,6 +787,22 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
       return fronts.speculate(a.id, a.specId.slice(0, 80), a.text.slice(0, 4_000));
     },
     voiceSpeculateCancel: (a) => { if (typeof a?.id === "string" && typeof a.specId === "string") fronts.cancelSpeculation(a.id, a.specId); return {}; },
+    // 5.8: a voice latency REGRESSION against the owner's own baseline (the last calls, or the nightly check), or back
+    // to normal. Never the 1.2 s goal by itself: that is shown in Settings, not nagged about.
+    voiceLatencyNotice: (a) => {
+      if (typeof a?.on !== "boolean") throw new GatewayError("BAD_ARGS", "on is required.");
+      const kind = a.kind === "selftest" ? "selftest" : "calls";
+      const dedupeKey = `voice-latency:${kind}`;
+      if (!a.on) { for (const t of trays.list().filter((x) => x.dedupeKey === dedupeKey)) trays.dismiss(t.id); return {}; }
+      const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null);
+      const ms = num(a.p50Ms), base = num(a.baselineMs);
+      if (ms === null || base === null) return {};
+      const calls = typeof a.calls === "number" && Number.isInteger(a.calls) && a.calls > 0 ? Math.min(a.calls, 50) : 3;
+      trays.add(kind === "selftest"
+        ? { botId: null, title: STRV.selfTestNoticeTitle, detail: STRV.selfTestNoticeDetail(latencyLabel(ms), latencyLabel(base)), dedupeKey }
+        : { botId: null, title: STRV.latencyNoticeTitle, detail: STRV.latencyNoticeDetail(latencyLabel(ms), latencyLabel(base), calls), dedupeKey });
+      return {};
+    },
   };
   const compile = () => {
     if (cfg.reviewer === "stub") return;
@@ -806,6 +862,9 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
         if (!(await startAuthProxy())) proxyTray();
         return {};
       }
+      // 5.7: stop on repeated failure. Continue or Stop; a plain dismiss of "Stopped: …" leaves it stopped.
+      if (a.action === "loop-continue" || a.action === "loop-stop") { await runner.loopAction(a.trayId, a.action); return {}; }
+      if (!a.action && runner.ownsLoopTray(a.trayId)) { await runner.loopAction(a.trayId, "loop-stop"); return {}; }
       if (a.action === "retry") runner.retryTray(a.trayId);
       else if (!p4.onTrayAction(a.trayId, a.action ?? "dismiss")) trays.dismiss(a.trayId);
       return {};
@@ -853,7 +912,11 @@ export async function createHostApp(cfg: HostConfig, opts: HostAppOptions = {}):
       return { on: networkPaused };
     },
     getTrays: () => ({ trays: trays.list() }),
-    clearTrays: (a) => { trays.clear(a.botId); return {}; },
+    clearTrays: async (a) => {
+      for (const t of trays.list()) if ((!a.botId || t.botId === a.botId) && runner.ownsLoopTray(t.id)) await runner.loopAction(t.id, "loop-stop");
+      trays.clear(a.botId);
+      return {};
+    },
   };
 
   // Phase 5 modules add their own commands (a name clash with the base set is a wiring bug) and wrap base ones.

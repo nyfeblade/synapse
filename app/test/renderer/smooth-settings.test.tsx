@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { sectionOf, settingsSections } from "../../src/renderer/components/settings/sections";
 describe("six settings sections", () => {
-  it("lists General, Auto-review, Account, Usage, Voice, Computer, Schedules, System (new-user walk findings 15, 22)", () => {
-    expect(settingsSections().map((s) => s.label)).toEqual(["General", "Auto-review", "Account", "Usage", "Voice", "Computer", "Schedules", "System"]);
+  it("lists General, Auto-review, Account, Usage, Voice, Computer, Connections, Activity, Schedules, System (new-user walk findings 15, 22; 5.6; 4.4)", () => {
+    expect(settingsSections().map((s) => s.label)).toEqual(["General", "Auto-review", "Account", "Usage", "Voice", "Computer", "Connections", "Activity", "Schedules", "System"]);
   });
   it("keeps old deep links working", () => {
     expect(sectionOf("usage")).toBe("usage");

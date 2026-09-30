@@ -83,9 +83,29 @@ export interface UsageDashboardView {
   budgets: BudgetsView;
 }
 
+/** 5.7: the header's spend meter. "off" hides it (Settings → Usage). */
+export type SpendMeterMode = "today" | "month" | "off";
+/**
+ * The header's spend meter, from usage.db (the same totals Usage shows) plus each running turn's spend so far.
+ * `turns`: the running turns' spend so far by Bot, which leaves once the turn's recorded cost is in the totals.
+ */
+export interface SpendMeterView {
+  mode: SpendMeterMode;
+  todayUsd: number;
+  monthUsd: number;
+  /** The account's monthly $ budget and the share of it spent, or null with none set. */
+  budgetUsd: number | null;
+  budgetPct: number | null;
+  /** Near the budget (its warning threshold, 80% by default) or past it: the meter takes the warning colour. */
+  warn: boolean;
+  turns: Record<string, number>;
+}
+
 type None = Record<string, never>;
 declare module "./gateway" {
   interface GatewayCommands {
+    getSpendMeter: { args: None; result: SpendMeterView };
+    setSpendMeter: { args: { mode: SpendMeterMode }; result: SpendMeterView };
     getUsageDashboard: { args: { range: UsageRange; botId?: string | null }; result: UsageDashboardView };
     getBudgets: { args: None; result: BudgetsView };
     /** `botId` null = the account-wide budget; `policy` null removes it. */
@@ -147,4 +167,15 @@ export const STR_COST = {
   pausedLine: (h: BudgetHit, name: string) => `${STR_COST.hitLine(h, name)} Paused until the budget resets; raise it in Settings → Usage to continue now.`,
   warnTitle: (h: BudgetHit, name: string) => `${STR_COST.whose(h, name)} has used ${Math.round(h.pct)}% of ${h.scope === "account" ? "the account's" : "its"} ${STR_COST.periodWord(h.period)} budget`,
   routineHeld: (routine: string) => `The scheduled run “${routine}” was held.`,
+  // 5.7: stop on repeated failure (a tray with Continue / Stop), and the header's spend meter.
+  loopStopped: (name: string, step: string) => `Stopped: ${name} kept failing at ${step}`,
+  /** Data only: how many tries, and what the loop cost. */
+  loopDetail: (tries: number, usd: number) => [`${tries} tries`, usd > 0 ? `${STR_COST.money(usd)} spent` : ""].filter(Boolean).join(" · "),
+  loopContinue: "Continue",
+  loopStop: "Stop",
+  meterToday: "Today",
+  meterMonth: "Month",
+  meterTurn: "This turn",
+  meterSetting: "Spend in header",
+  meterOff: "Off",
 } as const;

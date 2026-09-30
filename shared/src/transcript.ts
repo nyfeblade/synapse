@@ -44,6 +44,24 @@ export interface UserMessageEntry {
   hints?: string[];                // PLG-05: mention hints (STR5.mentionHint) folded into the prompt
   /** Bug 198: sent while the Bot was working — waiting for its next safe point ("queued"), then shown to it ("delivered"). */
   steer?: "queued" | "delivered";
+  /** 4.3 Email in: the owner sent this task by email. `content` is only the text they added; the rest is outside content. */
+  email?: EmailInMeta;
+}
+
+/** 4.3: an emailed task. `quoted` (the forwarded or quoted part) is outside content, never the owner's words. */
+export interface EmailInMeta {
+  /** The owner's account it arrived on, and the address or label that routed it. */
+  account: string;
+  via: string;
+  subject: string;
+  gmailId: string;
+  threadId: string;
+  /** The owner's own address it came from (the reply goes here). */
+  from: string;
+  quoted: string;
+  attachments: string[];
+  /** The email carried someone else's content and no marker showed where the owner's words end: none are taken as theirs. */
+  withheld?: boolean;
 }
 
 /** CHAT-09 / FILE-02: one attachment sent with a user message (entry id t<n>ua<k>). */

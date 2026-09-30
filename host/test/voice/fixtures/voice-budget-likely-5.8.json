@@ -1,0 +1,139 @@
+{
+ "source": "test-reports/voice-call-feel/turn-taking.mjs, the 5.8 helper (a likely end per stretch of new words), 2026-09-30: ms after the end of speech",
+ "likely": {
+  "l1-Ava_Premium_": [
+   -2375,
+   322
+  ],
+  "l1-Samantha": [
+   -2218,
+   384
+  ],
+  "l10-Ava_Premium_": [
+   386
+  ],
+  "l10-Samantha": [
+   384
+  ],
+  "l2-Ava_Premium_": [
+   -4054,
+   -1154,
+   247
+  ],
+  "l2-Samantha": [
+   -3776,
+   -1173,
+   324
+  ],
+  "l3-Ava_Premium_": [
+   -3494,
+   504
+  ],
+  "l3-Samantha": [
+   -3337,
+   366,
+   665
+  ],
+  "l4-Ava_Premium_": [
+   -3052,
+   444
+  ],
+  "l4-Samantha": [
+   -2754,
+   345,
+   647
+  ],
+  "l5-Ava_Premium_": [
+   -2391,
+   -2192,
+   506
+  ],
+  "l5-Samantha": [
+   -2295,
+   605
+  ],
+  "l6-Ava_Premium_": [
+   -1976,
+   321
+  ],
+  "l6-Samantha": [
+   -1874,
+   425
+  ],
+  "l7-Ava_Premium_": [
+   287,
+   886
+  ],
+  "l7-Samantha": [
+   585
+  ],
+  "l8-Ava_Premium_": [
+   -3054,
+   -1355,
+   -1154
+  ],
+  "l8-Samantha": [
+   -2994,
+   -1294,
+   -1094
+  ],
+  "l9-Ava_Premium_": [
+   -2994,
+   -2698
+  ],
+  "l9-Samantha": [
+   -3055,
+   -2855
+  ],
+  "q1-Ava_Premium_": [
+   483
+  ],
+  "q1-Samantha": [
+   287
+  ],
+  "q2-Ava_Premium_": [
+   284
+  ],
+  "q2-Samantha": [
+   309,
+   607
+  ],
+  "q3-Ava_Premium_": [
+   385
+  ],
+  "q3-Samantha": [
+   545
+  ],
+  "q4-Ava_Premium_": [
+   483
+  ],
+  "q4-Samantha": [
+   485
+  ],
+  "q5-Ava_Premium_": [
+   266
+  ],
+  "q5-Samantha": [
+   205,
+   503
+  ],
+  "q6-Ava_Premium_": [
+   286
+  ],
+  "q6-Samantha": [],
+  "q7-Ava_Premium_": [
+   284,
+   486
+  ],
+  "q7-Samantha": [
+   404,
+   605
+  ],
+  "q8-Ava_Premium_": [
+   586
+  ],
+  "q8-Samantha": [
+   506
+  ]
+ }
+}

@@ -45,7 +45,8 @@ describe("GoogleStore (sealed host-private storage)", () => {
     expect(raw).not.toContain("access-token-xyz");
     expect(raw).not.toContain("refresh-token-xyz");
     expect(fs.statSync(file()).mode & 0o777).toBe(0o600);
-    expect(new GoogleStore(file(), key).read().tokens?.refreshToken).toBe("1//refresh-token-xyz");
+    // 4.3b: a file from before per-account tokens reads back as the one account it was.
+    expect(new GoogleStore(file(), key).read().accounts?.[0]?.tokens.refreshToken).toBe("1//refresh-token-xyz");
     expect(new GoogleStore(file(), new Uint8Array(randomBytes(32))).read()).toEqual({});
   });
 });
@@ -184,12 +185,12 @@ describe("final secfix 6: the Google store is sealed with the HKDF subkey bots/g
   it("opens a legacy file sealed with the raw vault key, and re-seals it with the subkey on the next write", async () => {
     const { subkey } = await import("../../secrets/crypto");
     const sub = subkey(key, "bots/google/v1");
-    new GoogleStore(file(), key).write({ client: CLIENT, email: "me@example.com" });
+    new GoogleStore(file(), key).write({ client: CLIENT, publishing: "testing" });
     const s = new GoogleStore(file(), sub, key);
-    expect(s.read()).toMatchObject({ client: CLIENT, email: "me@example.com" });
-    s.write({ needsReconnect: true });
+    expect(s.read()).toMatchObject({ client: CLIENT, publishing: "testing" });
+    s.write({ publishing: "production" });
     expect(new GoogleStore(file(), key).read()).toEqual({});
-    expect(new GoogleStore(file(), sub).read()).toMatchObject({ client: CLIENT, needsReconnect: true });
+    expect(new GoogleStore(file(), sub).read()).toMatchObject({ client: CLIENT, publishing: "production" });
   });
 
   it("the host app's Google store uses the subkey, not the raw vault key", async () => {

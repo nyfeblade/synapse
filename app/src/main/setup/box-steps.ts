@@ -5,6 +5,7 @@ import { macNetsEnv } from "../mac-nets";
 import type { Exec } from "../box-provider";
 import { ORB_LIMITS, SCRIPT_LIMITS, orbCall } from "../orb-exec";
 import type { BoxStep, StepContext } from "./provisioner";
+import { imageStep, type ImageStepDeps } from "./box-image";
 import { adoptable, CREATED_MARKER, listMachines, machineMarks, machineSize, type MachineInfo, type MachineMarks } from "./orb";
 
 /** Runs a box script with its output streamed line by line; `::step n/N label` lines move the bar. */
@@ -64,9 +65,11 @@ export interface BoxStepDeps {
   /** This Mac, for sizing the machine. */
   mac: { cpus: number; totalMemBytes: number };
   run?: RunStreamed;
+  /** 0.1.5 ready-made box (box-image.ts): where the download goes, free disk, a URL override. Absent: no image step. */
+  image?: Pick<ImageStepDeps, "cacheDir" | "freeBytes" | "urlOverride" | "arch" | "fetchFn" | "manifest" | "runPrep" | "now">;
 }
 
-/** The five steps of "Set up the Bots' computer", each idempotent. */
+/** The steps of "Set up the Bots' computer" (the ready-made image first, when there is one), each idempotent. */
 export function boxSteps(d: BoxStepDeps): BoxStep[] {
   const run = d.run ?? runStreamed;
   const uid = d.uid ?? process.getuid?.() ?? 501;
@@ -86,6 +89,7 @@ export function boxSteps(d: BoxStepDeps): BoxStep[] {
   };
 
   return [
+    ...(d.image ? [imageStep({ ...d.image, exec: d.exec, orb: d.orb, machine: d.machine, boxDir: d.boxDir, imageVersion: d.imageVersion, forgetPin: d.forgetPin, mac: d.mac })] : []),
     {
       id: "create", label: "Creating the Bots' computer", weight: 6,
       // Exists at all: whether it is OURS is checked before anything changes inside it (provision).

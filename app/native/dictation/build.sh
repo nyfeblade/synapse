@@ -24,6 +24,9 @@ if ! have_whisper && [ "${PACKAGE_BUILD:-}" = "1" ]; then
   bash "$HERE/../whisper/install.sh" --libs-only --root "$WHISPER_ROOT"
   have_whisper || { echo "whisper.cpp could not be built into $WHISPER_ROOT; a package build refuses to ship a helper without it" >&2; exit 1; }
 fi
+# Bug 438: macOS's bash 3.2 treats "${ARR[@]}" of an EMPTY array as unbound under `set -u`, so a dev build
+# with no whisper failed here instead of building the Apple-speech-only helper; the swiftc line below expands
+# it with the ${ARR[@]+...} guard, which is empty-safe on every bash.
 WHISPER_FLAGS=()
 if have_whisper; then
   echo "linking whisper.cpp from $WHISPER_ROOT"
@@ -41,10 +44,12 @@ fi
 
 swiftc -O -target "arm64-apple-macos$MACOS_MIN" "$HERE/Dictation.swift" -o "$OUT/bots-dictation" \
   -framework Speech -framework AVFoundation \
-  "${WHISPER_FLAGS[@]}" \
+  ${WHISPER_FLAGS[@]+"${WHISPER_FLAGS[@]}"} \
   -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$HERE/Info.plist"
 codesign --force -s - "$OUT/bots-dictation"
 cp "$HERE/fake-dictation.sh" "$OUT/fake-dictation.sh"
+# 5.8: the nightly voice self-test's fixture clip (synthetic speech: Kokoro's af_heart voice), heard by the helper via --file.
+cp "$HERE/selftest-clip.wav" "$OUT/voice-selftest.wav"
 # Every voice sidecar ships as a script (portable install: Kokoro's runtime is bundled beside it in
 # Contents/Resources/kokoro; the optional Qwen/F5 packs are downloaded by the app).
 #   kokoro_server.py  bug 107, the default engine

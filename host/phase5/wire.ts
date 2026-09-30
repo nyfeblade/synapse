@@ -2,6 +2,10 @@ import path from "node:path";
 import { credentialsReady } from "../auth/auth-env";
 import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
 import type { CommandName } from "@synapse/shared";
+import { COMPOSIO_SERVER_ID } from "@synapse/shared";
+import type { ToolCall } from "../brain/types";
+import type { RiskTarget } from "../review/types";
+import type { AccountResolution } from "../approvals/approval-gate";
 import type { ApprovalGateLike } from "../runner/bot-wiring";
 import type { ReviewerLike } from "../approvals/approval-gate";
 import { createAvatarModule } from "../avatar/module";
@@ -39,6 +43,8 @@ import { createPlanTool } from "../tools/plan-tool";
 import { mergeMcpServers } from "../mcp/reserved";
 import { createGoogleModule, createGoogleServices, runGoogleToolForFake, type GoogleDraftFetchResult, type GoogleServices } from "../google/module";
 import { createComposioModule, createComposioServices, runComposioToolForFake, type ComposioServices } from "../composio/module";
+import { createHealthModule, createHealthServices, type HealthServices } from "../health/module";
+import { createWorkFinishedModule } from "../health/work-finished";
 import { Dreamer } from "../memory/dreaming/dreamer";
 import { DreamMemoryPort } from "../memory/dreaming/port";
 import { SdkDreamLlm } from "../memory/dreaming/sdk-llm";
@@ -60,6 +66,8 @@ import { UsageStore } from "../usage/usage-store";
 import { createBudgetModule } from "../usage/budget-module";
 import { Budgets } from "../usage/budgets";
 import { UsageDashboard } from "../usage/dashboard";
+import { SpendMeter } from "../usage/spend-meter";
+import { GatewayError } from "../gateway/errors";
 import type { HostWidgets } from "../chat/widgets";
 import type { WidgetSpec } from "@synapse/shared";
 import { createVoiceModule } from "../voice/module";
@@ -93,6 +101,10 @@ export interface Phase5 {
   mcpToolInfo(serverId: string, tool: string): { known: boolean; description: string | null };
   /** Bug 402: this Bot's composio_apps server is the built-in one. */
   composioBuiltin(botId: string): boolean;
+  /** 4.3b: every address the owner has connected (each Google account, each Composio Gmail labelled by its address). */
+  ownerEmails(): string[];
+  /** 4.3b: the account a connector write acts on, resolved against this Bot's grants (see ApprovalGate's cls()). */
+  accountFor(botId: string, call: ToolCall, target: RiskTarget): AccountResolution | null;
   /** feat-mac-access-parity: the connected Mac's home and project dirs (auto-run roots) for the fixed-rules engine. */
   macEnv(): { home: string; projectDirs: readonly string[] } | null;
   /** I12: Phase 5's step in the canonical delete order. */
@@ -108,12 +120,14 @@ export interface Phase5 {
   google: GoogleServices;
   /** Apps through Composio (the user's own key; per-Bot grants). */
   composio: ComposioServices;
+  /** 4.4: connector health (the Bot's next-turn note, the key check's answer). */
+  health: HealthServices;
   /** The connected Google address (the gate lets a Gmail draft only to the user through without a card). */
   googleEmail(): string | null;
   /** Final secfix item 4: the built-in Google server is mounted for this Bot (the merge never mounts another under "google"). */
   googleBuiltin(botId: string): boolean;
   /** ORIG-GOOGLE draft-send card: the gate's route to the draft's current contents, host-side. */
-  googleDraftPreview(draftId: string): Promise<GoogleDraftFetchResult>;
+  googleDraftPreview(draftId: string, account?: string): Promise<GoogleDraftFetchResult>;
   /** Final secfix item 9: host-side facts for a Google write's card. */
   googleCardFacts(tool: string, input: Record<string, unknown>): ReturnType<GoogleServices["cardFacts"]>;
   /** FUZZ/E2E: the FakeBrain runs mcp__google__ calls through the real per-Bot tools; null = not handled here. */
@@ -163,19 +177,38 @@ export function wirePhase5(ctx: ModuleContext, o: {
   // Cost dashboard + budgets: per Bot / account, daily / monthly, $ or tokens (usage/budgets.ts).
   const tz = () => ctx.settings.timeZone();
   const dashboard = new UsageDashboard({ usage, bots: ctx.bots, tz, now: ctx.now });
+  let meter: SpendMeter | null = null;
   const budgets = new Budgets({
-    usage, query: dashboard, settings: ctx.settings, bots: ctx.bots, trays: ctx.trays, now: ctx.now, tz,
+    usage, query: dashboard, settings: ctx.settings, bots: ctx.bots, trays: ctx.trays, now: ctx.now, tz, onChange: () => meter?.schedule(),
     ...(o.widgets ? { post: (botId: string, spec: WidgetSpec, onAnswer: (v: string) => void) => { o.widgets!.hostPost(botId, spec, onAnswer); } } : {}),
   });
   o.widgets?.registerHostKind("budget-ask", (botId, _entryId, value) => budgets.answer(botId, value));
+  // 5.7: the header's live spend meter (usage.db totals plus each running turn's spend so far).
+  meter = new SpendMeter({
+    spent: (b, since, unit) => dashboard.spent(b, since, unit), budgets: () => budgets.config(), onSpend: (fn) => usage.onSpend(fn),
+    settings: ctx.settings, publish: (v) => ctx.hub.publish({ channel: "spend-meter", payload: v }), now: ctx.now, tz,
+  });
+  const spendMeter = meter;
 
   // Connectors and Marketplace (Tasks 7–12)
   const mcp = createMcpServices(fullCtx, o.fake ? { connect: fakeConnector, authFn: fakeAuth as never } : {});
   // Final secfix item 5: the Google redirect follows the loopback port the Mac actually bound (like OAUTH_REDIRECT).
-  const google = createGoogleServices(fullCtx, { fake: o.fake, redirectUri: () => mcp.oauth.redirectUrl });
+  let health: HealthServices | null = null;
+  const google = createGoogleServices(fullCtx, { fake: o.fake, redirectUri: () => mcp.oauth.redirectUrl, onReconnectNeeded: () => health?.googleChanged() });
   google.onChange(() => catalog.refresh());
   // Apps through Composio: the user's own key, straight from the host to Composio's API (guarded fetch).
   const composio = createComposioServices(fullCtx, { fake: o.fake });
+  // 4.3b: a copy the user makes keeps the source's account grants (Google, Composio, MCP). A copy a Bot makes
+  // starts with Google off (bot-service.ts), so it gets no grants either.
+  ctx.bots.onDuplicate((src, copy, origin) => {
+    if (origin !== "user") return;
+    google.copyGrants(src, copy);
+    composio.copyGrants(src, copy);
+    mcp.registry.copyGrants(src, copy);
+  });
+  // 4.4: one health model for every connector (connector-health.ts), and the work-finished notice.
+  health = createHealthServices(fullCtx, { google, mcp, composio });
+  const healthSvc = health;
   const packager = new TemplatePackager({ cfg: ctx.cfg, bots: ctx.bots, drafter: o.fake ? new StubTemplateDrafter() : new SdkTemplateDrafter(helperEnv("template-draft")), now: ctx.now,
     plugins: () => catalog.entries().filter((e) => e.kind === "plugin" && e.state !== "available" && e.source !== "marketplace").map((e) => ({ catalogId: e.id, name: e.name })), author: () => undefined,
     onChange: () => catalog.refresh(), ladder: () => ladder });
@@ -223,6 +256,16 @@ export function wirePhase5(ctx: ModuleContext, o: {
   const modules: HostModule[] = [
     usageModule,
     createBudgetModule(fullCtx, { usage, budgets, dashboard }),
+    {
+      name: "spend-meter", observers: [spendMeter], stop: () => spendMeter.stop(),
+      handlers: {
+        getSpendMeter: () => spendMeter.view(),
+        setSpendMeter: (a) => {
+          if (a?.mode !== "today" && a?.mode !== "month" && a?.mode !== "off") throw new GatewayError("BAD_ARGS", "Pick Today, Month or Off.");
+          return spendMeter.setMode(a.mode);
+        },
+      },
+    },
     createMcpModule(fullCtx, mcp),
     createGoogleModule(fullCtx, google),
     createComposioModule(fullCtx, composio),
@@ -240,6 +283,8 @@ export function wirePhase5(ctx: ModuleContext, o: {
     { name: "dreaming", handlers: {}, observers: [dreamer, { onSettled: (t) => { if (t.source === "user") lastUserTurn.set(t.botId, t.endedAt); } }], start: () => dreamer.start(), stop: () => dreamer.stop() },
     createFollowupsModule(fullCtx, { store: followStore, heartbeat }),
     createEngineeringModule(fullCtx),
+    createHealthModule(healthSvc, { mcp }),
+    createWorkFinishedModule(fullCtx),
   ];
 
   return {
@@ -280,6 +325,34 @@ export function wirePhase5(ctx: ModuleContext, o: {
     mcpServerHost: (sid) => { const u = mcp.registry.get(sid)?.url; try { return u ? new URL(u).hostname : null; } catch { return null; } },
     mcpServerComposio: (sid) => { const r = mcp.registry.get(sid); return !!r && /composio/i.test([r.url ?? "", r.command ?? "", ...(r.args ?? [])].join(" ")); },
     composioBuiltin: (botId) => composio.grantedApps(botId).length > 0,
+    ownerEmails: () => {
+      const cx = composio.status().apps.flatMap((a) => (a.toolkit === "gmail" ? a.accounts.filter((x) => x.state === "connected" && x.label.includes("@")).map((x) => x.label) : []));
+      return [...new Set([...google.ownerEmails(), ...cx].map((e) => e.toLowerCase()))];
+    },
+    accountFor: (botId, call, target) => {
+      if (target.action === "google_write") {
+        const r = google.resolveAccount(botId, call.input.account);
+        if ("error" in r) return r;
+        return { label: r.email ?? r.id, granted: google.grantedAccounts(botId).map((a) => a.email ?? a.id), all: google.auth.accounts().map((a) => a.email ?? a.id) };
+      }
+      if (target.action === "composio_write" && call.toolName.startsWith(`mcp__${COMPOSIO_SERVER_ID}__`)) {
+        const tk = typeof target.arguments.toolkit === "string" ? target.arguments.toolkit : null;
+        if (!tk) return null;
+        const r = composio.resolveAccount(botId, tk, call.input.account);
+        if ("error" in r) return r;
+        return { label: r.label, granted: composio.grantedAccounts(botId, tk).map((a) => a.label), all: composio.allLabels(tk) };
+      }
+      if (target.action === "mcp" && typeof target.arguments.server === "string") {
+        // An MCP account is its own server: the card names it when the app has more than one, or a label.
+        const s = mcp.registry.get(target.arguments.server);
+        if (!s) return null;
+        const sib = mcp.registry.siblings(s.id);
+        if (!s.label && sib.length < 2) return null;
+        const name = (x: typeof s) => (x.label ? `${x.name} (${x.label})` : x.name);
+        return { label: name(s), granted: sib.filter((x) => mcp.registry.grantedTo(x, botId)).map(name), all: sib.map(name) };
+      }
+      return null;
+    },
     mcpToolInfo: (sid, t) => ({ known: mcp.registry.get(sid)?.source === "curated", description: mcp.pool.toolDescriptions(sid).get(t) || null }),
     mcpReadOnly: (() => { const ro = mcpReadOnly(mcp.registry, (sid, t) => mcp.pool.readOnlyHint(sid, t)); return (sid: string, t: string) => ro(sid, t); })(),
     macEnv: () => { const c = bridge.computer(); return c ? { home: c.home ?? c.localRoot, projectDirs: c.autoRunRoots ?? [] } : null; },
@@ -319,9 +392,10 @@ export function wirePhase5(ctx: ModuleContext, o: {
     google,
     googleEmail: () => google.auth.email(),
     googleBuiltin: (botId) => google.enabledFor(botId) && google.auth.isConnected(),
-    googleDraftPreview: (draftId) => google.draftPreview(draftId),
+    googleDraftPreview: (draftId, account) => google.draftPreview(draftId, account),
     googleCardFacts: (tool, input) => google.cardFacts(tool, input),
     composio,
+    health: healthSvc,
     runFakeTool: async (botId, toolName, input) => (await runGoogleToolForFake(google, botId, toolName, input)) ?? runComposioToolForFake(composio, botId, toolName, input),
     macList: async (folder, botId) => {
       const c = bridge.computer();

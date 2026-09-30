@@ -3,6 +3,33 @@
 Every version of Synapse. The website's Changelog page is built from this file.
 Newest first. A version headed `Unreleased` shows as "in progress".
 
+## 0.1.5 — 2026-09-30
+
+### Faster and smoother
+
+- **Faster setup.** On an Apple silicon Mac, a new install downloads a ready-made Bots' computer (about 660 MB), checks its fingerprint, and is usually ready in about a minute instead of about three. If the download isn't available, it builds one from scratch as before.
+- **Long chats stay fast.** In a 100-message chat, replies and approvals show in under 100 ms, close to a short chat (before, up to half a second).
+- **The chat moves smoothly.** Sending quickly, replies landing and typing turning into text no longer jump.
+- **Calls are timed.** Settings → Voice shows your last call's reply time, and replies start sooner when you pause mid-thought.
+
+### Know what your Bots did
+
+- **Activity.** Settings → Activity lists everything a Bot did on your Mac, what allowed it, and when. File contents are never recorded, and secrets are redacted.
+- **Undo.** A Bot's file edits in your home folder can be undone from Activity for 7 days. It won't overwrite a file you've changed since.
+- **Dry run.** Per Bot, for the next task or always: the Bot says what it would do on your Mac and changes nothing there. Work in the Bots' computer and connected apps still runs.
+- **A live spend meter** in the header, and a Bot that keeps failing at the same step stops and asks you, with what it spent.
+- **Work finished** notifications, and connections that say when they break, with a Fix button. The Bot is told too, so it doesn't keep trying.
+
+### Reach your Bots anywhere
+
+- **Telegram.** Chat with your Bots and approve their actions from your phone. Off until you connect your own Telegram bot; only you can use it.
+- **Email in.** Turn it on for a Bot, then forward an email to your Gmail address plus the Bot's name (like you+scout@gmail.com) to give it a task. Only mail you sent yourself counts, and the forwarded part is never treated as your words.
+- **More than one account per app.** Connect a work and a personal Gmail, choose which Bots may use each, and approval cards say which account the Bot will act on.
+
+### Safety you can check
+
+- **Security tests anyone can run.** `npm run security-suite` tries 57 attacks with no AI and no key. Every one is stopped, and the results for each release are published with it.
+
 ## 0.1.4 — 2026-09-30
 
 ### Approvals

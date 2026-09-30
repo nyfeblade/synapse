@@ -21,12 +21,16 @@ import "./components/settings/MemoryBlock";
 import "./components/cards/index";
 import "./components/settings/UsageSection";
 import "./components/settings/ComputerSection";
+import "./components/settings/ActivitySection";
 import "./components/settings/VoiceSection";
 import "./components/settings/SchedulesSection";
 import "./components/settings/UpdatesSection";
 import "./components/settings/BackupsSection";
 import "./components/settings/DiagnosticsSection";
 import "./components/settings/McpSection";
+import "./components/settings/TelegramSection";
+import "./components/settings/ConnectionsSection"; // 4.4: Settings → Connections
+import "./components/settings/WorkNotifyBlock"; // 4.4: Settings → General → Notifications
 import "./components/settings/SystemSection";
 import "./components/UpdatesSection"; // Phase 3 box updates, as a block in Settings → Updates
 import "./marketplace/ManagePlugins";

@@ -55,6 +55,11 @@ export const STR_SETUP = {
   settingsRow: "Setup",
   appleSilicon: "Synapse needs a Mac with Apple silicon.",
   freeSpace: (gb: number) => `${gb} GB free · 8 GB needed`,
+  /** The Bots' computer bar's one-word label, by stage (the image step's own, else the step). */
+  boxStage: {
+    download: "Downloading", verify: "Checking", import: "Unpacking", start: "Starting",
+    image: "Downloading", create: "Creating", provision: "Installing", deploy: "Installing", connect: "Connecting",
+  } as Record<string, string>,
   size: (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`),
 } as const;
 

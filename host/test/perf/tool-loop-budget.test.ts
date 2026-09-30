@@ -18,6 +18,7 @@ import { newSlot } from "../../runner/turn-slot";
 import { HostSettingsStore } from "../../store/host-settings";
 import { initLayout } from "../../store/layout";
 import { tmpConfig } from "../helpers";
+import { calibrate, loadScaledBudget, median, quantile, timed } from "../../../scripts/perf/robust-timing";
 
 /**
  * Speed plan §4 — the tool-loop latency budget (speed-fastpath: items #4 and #5).
@@ -607,24 +608,35 @@ describe("(1f) final: only the Bot's home is closed; the lead cd form; home dotf
 });
 
 describe("(2) gate overhead", () => {
-  it("500 fast-path preToolUse calls: p95 ≤ 5 ms", async () => {
+  // The intent: the fast path adds almost nothing to a tool call. A wall-clock p95 flaked whenever another agent
+  // had the Mac busy (bug: "p95 > 5 ms under load"), so the budget is judged the load-robust way (scripts/perf):
+  // the p95 of the CPU this thread spends per call must stay ≤ 5 ms (more work fails; someone else's CPU doesn't),
+  // and the MEDIAN wall time must stay ≤ 5 ms stretched by the measured load, so a call that blocks (sync I/O, a
+  // lock, a sleep) still fails even though it burns no CPU.
+  it("500 fast-path preToolUse calls: CPU p95 ≤ 5 ms, median wall ≤ 5 ms (load-scaled)", async () => {
     const s = setup({ engineering: false });
     const cmds = ["git status", "cat src/csv.ts", "ls -la", "grep -rn x src", "npm test 2>&1 | tail -60"];
-    // The full suite runs many files at once; the best of three 500-call batches keeps another file's burst of
-    // CPU out of the figure while a real regression (every batch slow) still fails.
-    let best = Infinity;
-    for (let batch = 0; batch < 3 && best > 5; batch++) {
-      const times: number[] = [];
+    // Best of three batches still: a GC pause or JIT tier-up can land in one batch's tail.
+    let cpuP95 = Infinity;
+    let wallMedian = Infinity;
+    for (let batch = 0; batch < 3 && (cpuP95 > 5 || wallMedian > 5); batch++) {
+      const cpu: number[] = [];
+      const wall: number[] = [];
       for (let i = 0; i < 500; i++) {
-        const t0 = performance.now();
-        const out = await s.run(cmds[i % cmds.length] as string, { tool: "Shell", cwd: s.repo });
-        times.push(performance.now() - t0);
+        let out: string | undefined;
+        const t = await timed(async () => { out = await s.run(cmds[i % cmds.length] as string, { tool: "Shell", cwd: s.repo }); });
+        cpu.push(t.cpuMs);
+        wall.push(t.wallMs);
         expect(out).toBe("fast");
       }
-      best = Math.min(best, [...times].sort((a, b) => a - b)[Math.ceil(times.length * 0.95) - 1] as number);
+      cpuP95 = Math.min(cpuP95, quantile(cpu, 0.95));
+      wallMedian = Math.min(wallMedian, median(wall));
     }
-    report(`[tool-loop-budget] gate p95 ${best.toFixed(2)} ms`);
-    expect(best).toBeLessThanOrEqual(5);
+    const cal = calibrate();
+    const wallBudget = loadScaledBudget(5, cal);
+    report(`[tool-loop-budget] gate CPU p95 ${cpuP95.toFixed(2)} ms, wall median ${wallMedian.toFixed(2)} ms (budget ${wallBudget.toFixed(1)} ms at load ×${cal.load.toFixed(2)})`);
+    expect(cpuP95, "CPU per fast-path call, p95").toBeLessThanOrEqual(5);
+    expect(wallMedian, "wall per fast-path call, median").toBeLessThanOrEqual(wallBudget);
   });
 });
 

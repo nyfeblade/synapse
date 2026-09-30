@@ -1,6 +1,7 @@
 // The feedback text checks shared by the app preview, the website preview and /api/feedback.
 import { describe, expect, it } from "vitest";
 import { cleanMessage, cleanReply, describeHidden, dropLinks, isAbusive, isSpam, looksLikeInjection, maskAbuse, redactPersonal, spamSignals, spamReason, stripHidden } from "../src/feedback-content.js";
+import { calibrate, loadScaledBudget, timedSync } from "../../scripts/perf/robust-timing";
 
 describe("stripHidden", () => {
   it("removes zero-width, bidi, TAG and control characters, keeps newlines and tabs", () => {
@@ -141,11 +142,20 @@ describe("linear time on long adversarial text", () => {
     ["spamSignals", spamSignals], ["isSpam", isSpam], ["spamReason", spamReason], ["looksLikeInjection", looksLikeInjection], ["dropLinks", dropLinks], ["cleanReply", cleanReply],
     ["describeHidden", (s) => describeHidden(redactPersonal(s).found)],
   ];
-  it("every exported function finishes each 300 KB shape in under 200 ms", () => {
+  // The intent is "linear, never the ~150 s backtracking blow-up". It used to time wall-clock, which flaked on a
+  // loaded Mac (a 60 ms call measured 200+ ms while other agents held the cores). Thread CPU time is what a
+  // regex actually burns and is unmoved by load (scripts/perf/robust-timing.ts), so it carries the 200 ms budget;
+  // the wall clock is only checked at a load-scaled 200 ms, to catch a call that blocks rather than computes.
+  it("every exported function finishes each 300 KB shape in under 200 ms of CPU", () => {
+    const cal = calibrate();
+    const wallBudget = loadScaledBudget(200, cal);
     const slow: string[] = [];
     for (const t of texts) for (const [name, f] of fns) {
-      const t0 = performance.now(); f(t); const ms = performance.now() - t0;
-      if (ms >= 200) slow.push(`${name} ${JSON.stringify(t.slice(0, 12))}: ${ms.toFixed(0)} ms`);
+      let r = timedSync(() => f(t));
+      // One re-measure absorbs a GC or tier-up landing in a single call; a superlinear pattern is slow every time.
+      if (r.cpuMs >= 200 || r.wallMs >= wallBudget) r = timedSync(() => f(t));
+      if (r.cpuMs >= 200) slow.push(`${name} ${JSON.stringify(t.slice(0, 12))}: ${r.cpuMs.toFixed(0)} ms CPU`);
+      else if (r.wallMs >= wallBudget) slow.push(`${name} ${JSON.stringify(t.slice(0, 12))}: ${r.wallMs.toFixed(0)} ms wall (budget ${wallBudget.toFixed(0)} at load ×${cal.load.toFixed(2)})`);
     }
     expect(slow).toEqual([]);
   }, 60_000);

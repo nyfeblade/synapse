@@ -4,21 +4,30 @@
 # check-gateway proves the host with /hello before sending the token) and verify scripts against it.
 # It passes when the test box takes that user's own ports, proves itself, and the real box is untouched.
 # Usage: box/two-account-sim.sh [box-dir] [uid]  (box-dir: a packaged app's Contents/Resources/box, default ./box)
+# SIM_MACHINE=<name>: the checks run against a throwaway machine something else already set up with this uid's ports
+# (0.1.5: the ready-made image, imported through the app's own code), instead of creating and provisioning one. The
+# caller deletes it (it may run the checks again); the real box and "synapse-box" are refused.
 set -uo pipefail
-B="${1:-$(cd "$(dirname "$0")" && pwd)}"; SIM_UID="${2:-502}"; M="synapse-twoacct-$$"; REAL="${REAL_BOX:-box}"
+B="${1:-$(cd "$(dirname "$0")" && pwd)}"; SIM_UID="${2:-502}"; M="${SIM_MACHINE:-synapse-twoacct-$$}"; REAL="${REAL_BOX:-box}"
+case "$M" in "$REAL"|box|synapse-box) echo "two-account-sim: refusing to use $M"; exit 2 ;; esac
 export BOX_MACHINE="$M" SYNAPSE_UID="$SIM_UID"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=box/orb.sh
 source "$HERE/orb.sh"  # OrbStack.app's CLI first, as every box script does
-LOG="$(mktemp -d)"; trap 'ORB_TIMEOUT=180 orb delete -f "$M" >/dev/null 2>&1; rm -rf "$LOG"' EXIT
+LOG="$(mktemp -d)"
+if [ -n "${SIM_MACHINE:-}" ]; then trap 'rm -rf "$LOG"' EXIT; else trap 'ORB_TIMEOUT=180 orb delete -f "$M" >/dev/null 2>&1; rm -rf "$LOG"' EXIT; fi
 fail=0; ok() { echo "PASS $1"; }; bad() { echo "FAIL $1"; fail=1; }
 # gateway.json fields other than the token (never printed).
 info() { orb -m "$1" -u root sh -c 'cat /home/*/.host/gateway.json 2>/dev/null | head -c 4096' | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("port"),d.get("hello"),d.get("startedAt"))'; }
 before="$(info "$REAL" 2>/dev/null || echo none)"
 want=$((47900 + ((SIM_UID - 502) % 125) * 10))
-ORB_TIMEOUT=1200 orb create -a arm64 --cpus 2 --memory 3072 --disk 16G -u synapse-admin debian:bookworm "$M" >"$LOG/create" 2>&1 || { cat "$LOG/create"; exit 1; }
-bash "$B/provision-from-mac.sh" >"$LOG/prov" 2>&1 && ok "provision" || { tail -20 "$LOG/prov"; bad "provision"; }
-bash "$B/deploy.sh" >"$LOG/deploy" 2>&1 && ok "deploy, host proved itself" || { tail -20 "$LOG/deploy"; bad "deploy"; }
+if [ -n "${SIM_MACHINE:-}" ]; then
+  orb list | grep -Eq "^$M +running" && ok "set up elsewhere ($M)" || bad "set up elsewhere ($M is not running)"
+else
+  ORB_TIMEOUT=1200 orb create -a arm64 --cpus 2 --memory 3072 --disk 16G -u synapse-admin debian:bookworm "$M" >"$LOG/create" 2>&1 || { cat "$LOG/create"; exit 1; }
+  bash "$B/provision-from-mac.sh" >"$LOG/prov" 2>&1 && ok "provision" || { tail -20 "$LOG/prov"; bad "provision"; }
+  bash "$B/deploy.sh" >"$LOG/deploy" 2>&1 && ok "deploy, host proved itself" || { tail -20 "$LOG/deploy"; bad "deploy"; }
+fi
 read -r port hello _ <<<"$(info "$M")"
 [ "$port" = "$want" ] && ok "test box uses port $want" || bad "test box port $port, want $want"
 [ "$hello" = "1" ] && ok "test box answers /hello" || bad "test box has no /hello"

@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { VoiceLoop } from "../../../app/src/renderer/voice/voice-loop";
-import { joins, pct, runCall, summary } from "./voice-budget-harness";
+import fixture from "./fixtures/voice-budget.json";
+import likely58 from "./fixtures/voice-budget-likely-5.8.json";
+import { joins, pct, runCall, stageSummary, summary } from "./voice-budget-harness";
 
 // The voice latency budget (speed plan §4; test-reports/voice-smooth). A whole 1:1 fast-path call on a fake clock,
 // through the real VoiceLoop, SentenceChunker and host VoiceFronts, with the user's own measured turn taking,
@@ -133,6 +135,93 @@ describe("speed plan #8a: the speculative start is made on the SETTLED text", ()
     expect(s.kept / s.turns).toBeGreaterThanOrEqual(0.75);
     expect(s.cancels).toBeLessThanOrEqual(57); // was 66; kept 49 -> 85 of 108 (56: one more in a barge over the bug-218 sound; 57: plan item 10, see above)
   });
+});
+
+describe("5.8: a fresh start at the real end, after the user went on from a mid-thought likely end", () => {
+  function bare() {
+    const log: string[] = [];
+    const timers: { at: number; fn: () => void }[] = [];
+    const h = { now: 0, log, loop: null as unknown as VoiceLoop };
+    h.loop = new VoiceLoop({
+      start: () => {}, stop: () => {}, send: (t, _d, x) => { log.push(`send:${t}${x?.speculated ? " (speculated)" : ""}`); },
+      speak: () => Promise.resolve(), cancelSpeech: () => {}, now: () => h.now, silenceMs: 700, helperEndpoints: true,
+      speculate: (t) => log.push(`speculate:${t}`), cancelSpeculation: () => log.push("cancel"),
+      after: (ms, fn) => { timers.push({ at: h.now + ms, fn }); },
+    });
+    const advance = (ms: number) => {
+      const end = h.now + ms;
+      for (;;) {
+        timers.sort((a, b) => a.at - b.at);
+        const t = timers[0];
+        if (!t || t.at > end) break;
+        timers.shift();
+        h.now = t.at;
+        t.fn();
+      }
+      h.now = end;
+    };
+    h.loop.begin();
+    return { ...h, advance };
+  }
+
+  it("the pause's start is dropped when the user goes on; the helper's likely end at the real end starts again, and the final keeps it", () => {
+    const h = bare();
+    h.loop.onLikelyEnd("remind me to call the dentist");
+    h.advance(1_300); // a mid-thought pause, then the user goes on
+    h.loop.onPartial("remind me to call the dentist on Friday");
+    h.advance(400);
+    h.loop.onPartial("remind me to call the dentist on Friday morning");
+    h.advance(300);
+    h.loop.onLikelyEnd("remind me to call the dentist on Friday morning");
+    h.advance(600);
+    h.loop.onFinal("Remind me to call the dentist on Friday morning.");
+    expect(h.log).toEqual(["speculate:remind me to call the dentist", "cancel", "speculate:remind me to call the dentist on Friday morning", "send:Remind me to call the dentist on Friday morning. (speculated)"]);
+  });
+
+  it("the helper's likely end for words a start already has is no second start", () => {
+    const h = bare();
+    h.loop.onLikelyEnd("what's on my");
+    h.advance(20);
+    h.loop.onPartial("what's on my calendar");
+    h.advance(300);
+    h.loop.onLikelyEnd("what's on my calendar"); // the helper's own, for the settled words
+    h.advance(300);
+    h.loop.onFinal("What's on my calendar?");
+    expect(h.log.filter((l) => l.startsWith("speculate:"))).toEqual(["speculate:what's on my calendar"]);
+  });
+
+  it("never more than three starts a turn, however often the user pauses", () => {
+    const h = bare();
+    const words = ["so", "so I was thinking", "so I was thinking maybe", "so I was thinking maybe we could", "so I was thinking maybe we could move it", "so I was thinking maybe we could move it to Friday"];
+    for (const w of words.slice(1)) { h.loop.onLikelyEnd(w); h.advance(1_000); h.loop.onPartial(`${w} and`); h.advance(100); }
+    h.loop.onFinal("So I was thinking maybe we could move it to Friday.");
+    expect(h.log.filter((l) => l.startsWith("speculate:")).length).toBeLessThanOrEqual(3);
+  });
+
+  it("the composed call, same recording: the real end's start saves the answer ~250 ms at the median, for ~6% more voice tokens", async () => {
+    // The 5.8 helper's likely ends on the turn-taking corpus (real helper, 2026-09-30), against the SAME recording as the
+    // old helper would have sent it (the first likely end of each helper utterance only).
+    const all = likely58.likely as Record<string, number[]>;
+    const firstOnly: Record<string, number[]> = {};
+    for (const u of fixture.utterances) {
+      const finals = u.events.filter((e) => e.type === "final").map((e) => e.t - u.speechEndMs).sort((a, b) => a - b);
+      const seen = new Set<number>();
+      firstOnly[u.id] = all[u.id]!.filter((ms) => { const k = finals.findIndex((f) => ms < f); if (seen.has(k)) return false; seen.add(k); return true; });
+    }
+    const before = await runCall({ likely: firstOnly });
+    const after = await runCall({ likely: all });
+    const b = summary(before), a = summary(after);
+    console.log(JSON.stringify({ before: stageSummary(before), after: stageSummary(after) }));
+    // Measured: answer p50 2,594 -> 2,327 (turns without a recorded cut-in), any audio 1,753 -> 1,659.
+    expect(a.answerP50Whole!).toBeLessThanOrEqual(b.answerP50Whole! - 200);
+    expect(a.anyP50Whole!).toBeLessThanOrEqual(b.anyP50Whole!);
+    expect(a.answerP90!).toBeLessThanOrEqual(b.answerP90! + 20);
+    // Guards: never over the user, no more fillers, and the cost is bounded (voice runs a turn 1.64 -> 1.74; tokens +6%).
+    expect(a.overUser).toBe(0);
+    expect(a.fillerRate).toBeLessThanOrEqual(b.fillerRate);
+    expect(a.frontRunsPerTurn).toBeLessThanOrEqual(1.75);
+    expect(a.tokens).toBeLessThanOrEqual(b.tokens * 1.07);
+  }, 240_000);
 });
 
 describe("(a) bug 218: a short sound in the Bot's own voice the moment the user stops, only when the answer isn't ready", () => {

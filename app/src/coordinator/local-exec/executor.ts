@@ -335,6 +335,9 @@ export class LocalExecutor {
     /** tests only: appended to the sandbox profile as is. */ testProfileExtra?: string;
   }) {}
 
+  /** 5.6: the home `~` expands to (the action log proves a command's file effects against it). */
+  homeDir(): string { return this.o.home?.() ?? os.homedir(); }
+
   /** P5 review I3: places no Bot file operation may touch — keys, the keychain, startup items, shell rc files, the app's own data.
    *  Bug 258: a No limits READ may open ~/.ssh (the keychain and the app's data stay closed). */
   private protectedPaths(o: FileOpts = {}): string[] {

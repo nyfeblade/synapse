@@ -35,6 +35,9 @@ export function createLocalTools(d: {
    *  Integration ruling: local execution never runs unreviewed. With Auto-review off, "Always allow" still asks.
    *  P5 review I1: a Mac-floor hit or zsh-opaque command always asks; the computer-wide "Always allow" skips the card
    *  only for statically read-only calls; an "Always" answer on a card covers only this Bot and this action. */
+  /** 5.6: the owner message this work belongs to (its epoch): approval resumes and follow-up turns keep it, the owner's
+   *  next message changes it. The Mac's dry run "Next turn" lasts exactly that long. */
+  const taskOf = (): { task?: string } => { const s = d.slot(); return s && typeof s.userMessageEpoch === "number" ? { task: `u${s.userMessageEpoch}` } : {}; };
   async function gate(action: LocalAction, target: string, st: MacStatic, req: { op: string; command?: string; path?: string; cwd?: string }): Promise<{ approvalId: string | null } | BotToolResult> {
     const c = d.bridge.computer();
     if (!c || !d.bridge.available()) return err(STR5.localNotConnected);
@@ -122,7 +125,7 @@ export function createLocalTools(d: {
    */
   async function run(action: LocalAction, target: string, req: Omit<LocalExecRequest, "execId" | "botId" | "approvalId">, approvalId: string | null, blockMs: number | null): Promise<{ execId: string; r: LocalExecResult | null } | BotToolResult> {
     const send = (id: string | null) => {
-      const x = d.bridge.request({ botId: d.botId, approvalId: id, hostMode: d.permMode?.() ?? "ask", hostNoLimits: (d.permMode?.() ?? "ask") === "full-auto" && (d.noLimits?.() ?? false), ...req });
+      const x = d.bridge.request({ botId: d.botId, approvalId: id, hostMode: d.permMode?.() ?? "ask", hostNoLimits: (d.permMode?.() ?? "ask") === "full-auto" && (d.noLimits?.() ?? false), ...taskOf(), ...req });
       return { execId: x.execId, wait: blockMs === null ? x.done : Promise.race([x.done, new Promise<null>((res) => setTimeout(() => res(null), blockMs))]) };
     };
     const s = send(approvalId);
@@ -165,7 +168,7 @@ export function createLocalTools(d: {
     const said = userTurn ? d.lastUserMessage?.() ?? "" : "";
     const explicit = userTurn && typeof args.text === "string" && args.text.length > 0 && said.includes(args.text);
     const name = d.botName?.() ?? "This Bot";
-    const x = d.bridge.request({ botId: d.botId, approvalId, hostMode: d.permMode?.() ?? "ask", op: "browser", browser: args, botName: name, explicit, turn: slot?.requestId, userTurn });
+    const x = d.bridge.request({ botId: d.botId, approvalId, hostMode: d.permMode?.() ?? "ask", op: "browser", browser: args, botName: name, explicit, turn: slot?.requestId, userTurn, ...taskOf() });
     const r = await x.done;
     if (approvalId === null && r.error?.startsWith(LOCAL_NEEDS_APPROVAL)) {
       const why = r.error.slice(LOCAL_NEEDS_APPROVAL.length);
@@ -196,7 +199,7 @@ export function createLocalTools(d: {
     // PreToolUse, so anything that changes an app cards first (the same rule as the Browser tool's).
     if (!approvalId && !macAppReadOnly(args) && (d.permMode?.() ?? "ask") === "ask" && !(d.autoReviewOn?.() ?? true)) return card("mac-app", target);
     const slot = d.slot();
-    const x = d.bridge.request({ botId: d.botId, approvalId, hostMode: d.permMode?.() ?? "ask", op: "mac-app", macapp: args, botName: name, turn: slot?.requestId, userTurn: slot?.source === "user" });
+    const x = d.bridge.request({ botId: d.botId, approvalId, hostMode: d.permMode?.() ?? "ask", op: "mac-app", macapp: args, botName: name, turn: slot?.requestId, userTurn: slot?.source === "user", ...taskOf() });
     const r = await x.done;
     if (approvalId === null && r.error?.startsWith(LOCAL_NEEDS_APPROVAL)) {
       const why = r.error.slice(LOCAL_NEEDS_APPROVAL.length);

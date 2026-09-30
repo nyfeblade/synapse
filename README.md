@@ -15,7 +15,7 @@ on your own Anthropic API key: you pay Anthropic for what the Bots use, and noth
 **Website:** [synapse-site-virid.vercel.app](https://synapse-site-virid.vercel.app) · [Docs](https://synapse-site-virid.vercel.app/docs) · [Changelog](https://synapse-site-virid.vercel.app/changelog)
 
 <p align="center">
-  <img alt="Synapse: a Bot at work, with its plan, your Mac and an approval card" src="docs/media/screenshot-chat.png" width="880">
+  <img alt="A Bot takes a task, asks before deleting files, and finishes once it's allowed" src="docs/media/demo.gif" width="880">
 </p>
 
 ## Install
@@ -53,34 +53,45 @@ recording and accessibility only when you first use a feature that needs them.
 
 ## Features
 - **A team.** Several Bots, each with its own name, memory, skills and computer. They work with each other
-  as well as with you.
+  as well as with you, and you can share one with a link.
 - **Real work.** Bots run multi-step tasks on their own computer, with files, the shell, the web and the
-  accounts you connect. They ask before risky actions.
+  accounts you connect, including more than one account per app. You see every step.
 - **Code.** Point a Bot at a repository: it works on its own branch in a separate worktree, runs the tests
   and hands back the branch or a pull request.
 - **Voice calls.** Call a Bot and talk. Speech is transcribed on your Mac and the voice is generated on your
   Mac. If your Mac can't transcribe your language itself, Synapse asks before using Apple's servers.
-- **Your Mac, with approval.** A Bot can use your Mac's apps and screen and run commands in a sandbox. Risky
-  actions show an approval card first.
+- **Your Mac, with approval.** A Bot can use your Mac's apps and screen and run commands in a sandbox.
+  Settings → Activity lists what it did, and file changes can be undone. Dry run shows what a Bot would do
+  there without doing it.
+- **Reach them from elsewhere.** Forward an email to a Bot to hand it a task, message your Bots from
+  Telegram and answer approvals there, or use them from other apps through Synapse's own MCP server.
+  Each of these is off until you turn it on.
 - **Routines.** Bots run jobs on a schedule: a morning briefing, a weekly check, a reminder.
-- **Spend you can see and cap.** Every model call is metered. See what each Bot spends by day, week and
-  month, and set budgets that pause a Bot or ask you first when it reaches the limit.
+- **Spend you can see and cap.** Every model call is metered, and the header shows what a Bot is spending
+  as it works. Set a monthly budget, and a Bot that keeps failing at the same thing stops and asks you.
 
 | | |
 |---|---|
 | <img alt="A Bot coding in a repo" src="docs/media/screenshot-code.png"> | <img alt="A voice call" src="docs/media/screenshot-call.png"> |
 
 ## Privacy and security
+- **The approval gate.** Risky actions stop and show a card: Allow once, Always allow or Deny. Choose how
+  much asks first: Ask, Auto-review or Full auto. Out of the box, even Full auto asks before payments,
+  deletions and messages to people you didn't mention, and nothing an email, a web page or another app says counts as
+  your approval.
+- **Tests you can run.** The [security suite](security/README.md) turns these claims into attacks that run
+  against the real code, with no model and no API key: `npm run security-suite`. Results are filed for
+  every release.
 - **Local.** The app and the Bots' computer run on your Mac, in an OrbStack VM. There is no Synapse server
-  and no telemetry. The Bots' requests go to Anthropic's API with your key, and to the sites and services
-  you ask them to use.
-- **Sandboxed Bots.** Each Bot runs as its own user in the VM, with a private home folder. Commands on your
-  Mac run inside a macOS sandbox profile and ask for approval.
+  in the loop and no telemetry. The Bots' requests go to Anthropic's API with your key, and to the sites and
+  services you ask them to use. Feedback goes to the Synapse website only when you send it, and you see
+  what it contains first.
+- **Sandboxed Bots.** Each Bot runs as its own user in the VM, with a private home folder. Bots can reach
+  the public internet but not services on your Mac, or your home network unless you turn that on.
+  Commands on your Mac run inside a macOS sandbox profile.
 - **Secrets sealed locally.** Your API key and every other secret are sealed on your Mac with a key file in
   the app's data folder; the macOS Keychain is not used. A Bot never holds your API key: its process gets a
   short-lived token, and a local proxy swaps in the real key.
-- **Spend budgets.** Budgets are checked before a model call is made, so a Bot pauses or asks you before it
-  goes past the limit you set.
 - **A closed gateway.** The app talks to the VM over a gateway bound to 127.0.0.1, with a bearer token.
 
 To report a security issue, see [`SECURITY.md`](SECURITY.md). The website's
@@ -95,8 +106,9 @@ builds reuse `.build-cache/`.
 
 ```sh
 npm install
-npm test            # the full suite
+npm test                # the full suite
 npm run typecheck
+npm run security-suite  # the security scenarios
 ```
 
 Packaging signs the app with a local code-signing identity called "Synapse Local Signing". Pick one:

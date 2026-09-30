@@ -1,0 +1,80 @@
+{
+  "calibration": {
+    "cpuMs": 13.08,
+    "wallMs": 13.12
+  },
+  "margin": {
+    "factor": 1.5,
+    "launchFactor": 1.25,
+    "wallFloorMs": 30,
+    "cpuFloorMs": 15
+  },
+  "journeys": {
+    "first-launch": {
+      "wallMs": 2400,
+      "cpuMs": 270
+    },
+    "cold-start": {
+      "wallMs": 1800,
+      "cpuMs": 155
+    },
+    "first-reply": {
+      "wallMs": 120,
+      "cpuMs": 70
+    },
+    "switch-bot": {
+      "wallMs": 40,
+      "cpuMs": 35
+    },
+    "open-settings": {
+      "wallMs": 50,
+      "cpuMs": 30
+    },
+    "search": {
+      "wallMs": 45,
+      "cpuMs": 25
+    },
+    "search-query": {
+      "wallMs": 195,
+      "cpuMs": 45
+    },
+    "approve-card": {
+      "wallMs": 90,
+      "cpuMs": 85
+    },
+    "activity": {
+      "wallMs": 40,
+      "cpuMs": 30
+    },
+    "usage": {
+      "wallMs": 40,
+      "cpuMs": 40
+    },
+    "call-ui": {
+      "wallMs": 40,
+      "cpuMs": 50
+    },
+    "model-picker": {
+      "wallMs": 40,
+      "cpuMs": 25
+    },
+    "long-reply": {
+      "wallMs": 120,
+      "cpuMs": 90
+    },
+    "long-approve": {
+      "wallMs": 110,
+      "cpuMs": 110
+    }
+  },
+  "relative": {
+    "long-reply": {
+      "of": "first-reply",
+      "max": 1.5
+    },
+    "long-approve": {
+      "of": "approve-card",
+      "max": 1.5
+    }
+  }
+}

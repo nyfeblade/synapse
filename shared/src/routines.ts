@@ -17,9 +17,12 @@ export type Trigger =
   | { microsoftTeams: Record<string, unknown> }
   | { webhook: Record<string, never> }
   | { file: { paths: string[]; events: FileEventKind[]; ignore?: string[] } }
-  | { email: { account: string; query: string; folder?: string } }
-  /** A calendar event starts in `minutesBefore` minutes (the built-in Google connector). `match`: words in the title, all required. */
-  | { calendar: { minutesBefore: number; calendarId?: string; match?: string } }
+  /** 4.3b: with account "google", `googleAccount` (an address) watches one Google account; without it, every Google
+   *  account the Bot is granted. */
+  | { email: { account: string; query: string; folder?: string; googleAccount?: string } }
+  /** A calendar event starts in `minutesBefore` minutes (the built-in Google connector). `match`: words in the title, all required.
+   *  4.3b: `account` (an address) watches one Google account; without it, every Google account the Bot is granted. */
+  | { calendar: { minutesBefore: number; calendarId?: string; match?: string; account?: string } }
   | { group: { listeners: Trigger[] } };
 
 export interface WebhookFields { routineUuid: string; keyHash: string; keyPreview: string }

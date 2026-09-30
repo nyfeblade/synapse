@@ -5,12 +5,14 @@ import type { MailMessage } from "./query";
 /** A GET against a Google API base (the built-in connector's GoogleApi, host-side token). Throws with `.status` on HTTP errors. */
 export type GoogleGet = <T>(path: string, query?: Record<string, string | number | undefined>) => Promise<T>;
 
-interface HistoryPage { historyId?: string; nextPageToken?: string; history?: { messagesAdded?: { message: { id: string; labelIds?: string[] } }[] }[] }
+interface HistoryPage { historyId?: string; nextPageToken?: string; history?: { messagesAdded?: { message: { id: string; labelIds?: string[] } }[]; labelsAdded?: { message: { id: string; labelIds?: string[] }; labelIds?: string[] }[] }[] }
 interface GmailHeader { name: string; value: string }
 interface GmailPart { filename?: string; parts?: GmailPart[] }
-interface GmailMessage { id: string; threadId?: string; labelIds?: string[]; snippet?: string; internalDate?: string; payload?: { headers?: GmailHeader[]; parts?: GmailPart[] } }
+export interface GmailMessage { id: string; threadId?: string; labelIds?: string[]; snippet?: string; internalDate?: string; payload?: { headers?: GmailHeader[]; parts?: GmailPart[] } }
 
 const SKIP = new Set(["DRAFT", "SENT", "SPAM", "TRASH"]);
+/** 4.3 Email in also looks at mail the owner sent (their own forward is in Sent), never at drafts, spam or trash. */
+const SKIP_RAW = new Set(["DRAFT", "SPAM", "TRASH"]);
 const MAX_PAGES = 5;
 
 function filenames(parts: GmailPart[] | undefined): string[] {
@@ -48,6 +50,10 @@ export class GmailHistoryWatch {
     clearTimer(t: unknown): void;
     everyMs?: number;
     onFailures?(n: number): void;
+    /** 4.3 Email in: every new message (Sent included) and every message that gained a user label, as Gmail returns it.
+     *  Only while it returns true; the mail triggers' own path is unchanged. */
+    emailIn?(): boolean;
+    onRaw?(m: GmailMessage): Promise<void>;
   }) {}
 
   consecutiveFailures(): number { return this.fails; }
@@ -82,13 +88,23 @@ export class GmailHistoryWatch {
       return 0;
     }
     const ids: string[] = [];
+    // 4.3: messages only Email in wants (Sent, or a label added later), fetched once and handed only to it.
+    const rawOnly = new Set<string>();
+    const inOn = !!this.d.onRaw && (this.d.emailIn?.() ?? false);
     let latest = this.historyId;
     let pageToken: string | undefined;
     try {
       for (let i = 0; i < MAX_PAGES; i++) {
-        const page = await get<HistoryPage>("/users/me/history", { startHistoryId: this.historyId, historyTypes: "messageAdded", pageToken });
-        for (const h of page.history ?? []) for (const a of h.messagesAdded ?? []) {
-          if (!(a.message.labelIds ?? []).some((l) => SKIP.has(l)) && !ids.includes(a.message.id)) ids.push(a.message.id);
+        // With Email in on, every history type (label changes too); otherwise just new mail, as before.
+        const page = await get<HistoryPage>("/users/me/history", { startHistoryId: this.historyId, historyTypes: inOn ? undefined : "messageAdded", pageToken });
+        for (const h of page.history ?? []) {
+          for (const a of h.messagesAdded ?? []) {
+            const labels = a.message.labelIds ?? [];
+            if (ids.includes(a.message.id)) continue;
+            if (!labels.some((l) => SKIP.has(l))) { ids.push(a.message.id); rawOnly.delete(a.message.id); }
+            else if (inOn && !labels.some((l) => SKIP_RAW.has(l))) rawOnly.add(a.message.id);
+          }
+          if (inOn) for (const a of h.labelsAdded ?? []) if ((a.labelIds ?? []).some((l) => l.startsWith("Label_")) && !ids.includes(a.message.id)) rawOnly.add(a.message.id);
         }
         if (page.historyId) latest = page.historyId;
         pageToken = page.nextPageToken;
@@ -105,11 +121,11 @@ export class GmailHistoryWatch {
     this.historyId = latest;
     const format = this.d.needsAttachments() ? "full" : "metadata";
     let n = 0;
-    for (const id of ids.slice(0, LIMITS_SCHED.gmailFetchMax)) {
+    for (const id of [...ids.slice(0, LIMITS_SCHED.gmailFetchMax), ...[...rawOnly].slice(0, LIMITS_SCHED.gmailFetchMax)]) {
       try {
         const m = await get<GmailMessage>(`/users/me/messages/${encodeURIComponent(id)}`, { format });
-        this.d.onMessage(toMailMessage(m, this.d.now()));
-        n++;
+        if (!rawOnly.has(id)) { this.d.onMessage(toMailMessage(m, this.d.now())); n++; }
+        if (inOn) await this.d.onRaw!(m);
       } catch (e) {
         if ((e as { status?: number }).status !== 404) throw e; // deleted since: skip
       }

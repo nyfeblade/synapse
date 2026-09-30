@@ -12,6 +12,8 @@ export async function launchLocalHost(o: {
   bundle: string; dataDir: string; disposable: boolean; nodePath?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number;
   /** Reuse this disposable store (a restart) instead of creating a new one. */
   root?: string;
+  /** Never remove `root` on stop (a store the caller owns: SYNAPSE_FUZZ_HOST_ROOT). */
+  keepRoot?: boolean;
 }): Promise<LocalHost> {
   const root = o.disposable ? (o.root ?? fs.mkdtempSync(path.join(os.tmpdir(), "synapse-fuzz-"))) : o.dataDir;
   fs.mkdirSync(path.join(root, "workspace"), { recursive: true });
@@ -43,7 +45,7 @@ export async function launchLocalHost(o: {
     stop: async (so) => {
       if (child.exitCode === null) child.kill("SIGTERM");
       await exited;
-      if (o.disposable && !so?.keepData) fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); // ENOTEMPTY races retry
+      if (o.disposable && !so?.keepData && !o.keepRoot) fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); // ENOTEMPTY races retry
     },
   };
 }

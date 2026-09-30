@@ -53,8 +53,14 @@ const ZERO: Velocity = { x: 0, y: 0 };
 export function velocityOf(anim: Animation | null | undefined, now = clock()): Velocity {
   const s = anim ? states.get(anim) : undefined;
   if (!s) return ZERO;
-  const t = (now - s.t0 - s.delay) / 1000;
-  if (t <= 0 || t * 1000 >= s.duration) return ZERO;
+  // Bug 444: the animation's OWN clock when it has one. A transcript re-FLIPs its rows on every commit; while commits
+  // land faster than the compositor starts animations, each new one was still at its first frame when it was
+  // replaced, yet the wall clock said it had been running, so the next move started with velocity the element never
+  // had and the sent bubble lurched 22-35px in one frame. Not started yet = still at its initial velocity.
+  const ct = anim!.currentTime;
+  const t = ((typeof ct === "number" ? ct : now - s.t0) - s.delay) / 1000;
+  if (t < 0 || t * 1000 >= s.duration) return ZERO;
+  if (t === 0) return { x: s.vx, y: s.vy };
   const h = 0.001;
   const at = (u: number) => [springAt(s.spring, u, s.x0, s.vx), springAt(s.spring, u, s.y0, s.vy)] as const;
   const [ax, ay] = at(t - h);

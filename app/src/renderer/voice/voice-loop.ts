@@ -77,6 +77,13 @@ export const RESUME_SILENT_MS = 2_500;
 export const SPEC_SETTLE_MS = 60;
 const RESPEC_WINDOW_MS = 600;
 const MAX_SPECS = 2;
+/**
+ * 5.8: a user who goes on after a likely end (a mid-thought pause: "Remind me to call the dentist … on Friday
+ * morning") used to get no early start at the REAL end — the one start had gone on the pause — so the reply began only
+ * at the final (~1 s after the voice stopped) and the voice's whole time to first text came after it. The helper now
+ * sends a likely end again when new words close a clause, and the loop takes it: at most this many starts a turn.
+ */
+export const MAX_SPECS_TURN = 3;
 
 /**
  * Plan item 3 (call-behaviour): no line takes the floor while the user has an utterance open — a reply that is ready
@@ -311,6 +318,8 @@ export class VoiceLoop {
   private specPending: { text: string; seq: number } | null = null;
   private specSeq = 0;
   private specAt = 0;
+  /** 5.8: the last start was dropped because the user went on (not Apple's trailing words): the real end may start again. */
+  private specWentOn = false;
 
   setMuted(muted: boolean): void {
     this.muted = muted;
@@ -492,6 +501,7 @@ export class VoiceLoop {
     this.spec = null;
     this.specUsed = 0;
     this.specPending = null;
+    this.specWentOn = false;
     this.lastAck = null;
     this.lastTurnAcked = false;
     this.ackAt = null;
@@ -530,6 +540,7 @@ export class VoiceLoop {
       // Speed plan #8a: words that trail in soon after the start are Apple catching up, not a new thought — the
       // settled text gets one more start (the final still has to match it word for word).
       if (this.d.now() - this.specAt <= RESPEC_WINDOW_MS) this.likelyEnd(text, true);
+      else this.specWentOn = true;
     }
     if (!this.startedAt) this.startedAt = this.d.now();
     // Plan item 4: "stop" / "shh" / "enough" over the Bot settles the reply as cut on the partial (it can't come back
@@ -726,7 +737,12 @@ export class VoiceLoop {
    */
   private likelyEnd(text: string, again: boolean): void {
     const t = text.trim();
-    if (!this.mayListenAhead(again) || !this.d.speculate || this.specPending || this.specUsed >= (again ? MAX_SPECS : 1) || !t || HOLD.test(t) || STOP_WORDS.test(t)) return;
+    // 5.8: a fresh start at the real end, after the user went on from an earlier one.
+    const fresh = !again && this.specWentOn && this.specUsed < MAX_SPECS_TURN;
+    if (!this.mayListenAhead(again) || !this.d.speculate || this.specPending || (this.specUsed >= (again ? MAX_SPECS : 1) && !fresh) || !t || HOLD.test(t) || STOP_WORDS.test(t)) return;
+    // Already started on exactly these words (the helper's own likely end for the words the trailing partial brought).
+    if (this.spec !== null && wordsOf(t) === wordsOf(this.spec)) return;
+    if (fresh) this.specWentOn = false;
     if (!this.d.after) return this.speculateNow(t);
     const seq = ++this.specSeq;
     this.specPending = { text: t, seq };
@@ -777,6 +793,7 @@ export class VoiceLoop {
     this.spec = null;
     this.specUsed = 0;
     this.specPending = null;
+    this.specWentOn = false;
     const duration = this.lastPartialAt - this.startedAt;
     this.heard = "";
     this.startedAt = 0;

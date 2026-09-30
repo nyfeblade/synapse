@@ -18,7 +18,7 @@ const clampInt = (v: unknown, dflt: number, max: number) => Math.max(1, Math.min
 const str = (v: unknown) => (typeof v === "string" ? v : v === undefined || v === null ? "" : String(v));
 
 interface GmailHeader { name: string; value: string }
-interface GmailPart { mimeType?: string; filename?: string; headers?: GmailHeader[]; body?: { data?: string; size?: number; attachmentId?: string }; parts?: GmailPart[] }
+export interface GmailPart { mimeType?: string; filename?: string; headers?: GmailHeader[]; body?: { data?: string; size?: number; attachmentId?: string }; parts?: GmailPart[] }
 interface GmailMessage { id: string; threadId: string; snippet?: string; payload?: GmailPart }
 interface CalEvent { id: string; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; location?: string; description?: string; attendees?: { email: string }[]; htmlLink?: string }
 interface DriveFile { id: string; name: string; mimeType: string; modifiedTime?: string; size?: string; webViewLink?: string }
@@ -29,7 +29,7 @@ const toB64url = (s: string) => Buffer.from(s, "utf8").toString("base64").replac
 const stripHtml = (h: string) => h.replace(/<(script|style)[\s\S]*?<\/\1>/gi, "").replace(/<br\s*\/?>|<\/p>|<\/div>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, "\"").replace(/\n{3,}/g, "\n\n").trim();
 const cap = (s: string, max: number) => (s.length > max ? `${s.slice(0, max)}\n[truncated at ${max} chars; the rest is longer]` : s);
 
-function bodyOf(p: GmailPart | undefined): { text: string; attachments: string[]; attachmentIds: string[] } {
+export function bodyOf(p: GmailPart | undefined): { text: string; attachments: string[]; attachmentIds: string[] } {
   const plain: string[] = [];
   const html: string[] = [];
   const attachments: string[] = [];
@@ -138,7 +138,8 @@ export function createGoogleTools(d: GoogleToolDeps): BotToolDef[] {
     return fn(a);
   };
   const tool = (name: string, description: string, schema: BotToolDef["schema"], readOnly: boolean, fn: (a: Record<string, unknown>) => Promise<BotToolResult>): BotToolDef =>
-    ({ name, description: `${description} ${UNTRUSTED}`, schema, readOnly, handler: guard(checkIds(fn)) });
+    // 4.3b: every tool takes the account it acts on; the host resolves it against this Bot's grants (module.ts).
+    ({ name, description: `${description} ${UNTRUSTED}`, schema: { ...schema, account: z.string().optional().describe(STRG.accountDescribe) }, readOnly, handler: guard(checkIds(fn)) });
 
   const draftBody = async (a: Record<string, unknown>): Promise<{ raw: string; threadId?: string } | string> => {
     let to = a.to === undefined || a.to === "" ? [] : parseRecipients(a.to);

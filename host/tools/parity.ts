@@ -31,17 +31,17 @@ export const SPEC_GATEWAY_COMMANDS: readonly string[] = [
   // Templates
   "exportTemplate", "importTemplate", "deleteTemplate", "sharePayload",
   // Phase 5 additions (usage, MCP, marketplaces, templates, local execution, avatars, voice, onboarding, memory, keys, follow-ups)
-  "setBudget", "approveBudget", "clearTaskAlert", "dismissBudgetPrompt", "setMonthlyBudget", "recordMacUsage", "addMcpServer", "removeMcpServer", "renameMcpAccount", "setMcpInstructions", "restartMcpServers", "setMcpServerEnabled", "setMcpServerTrusted", "setMcpServerHeader", "setOAuthLoopbackPort",
-  "addPluginMarketplace", "removePluginMarketplace", "draftTemplate", "setLocalComputer", "setLocalBrowserAllowed", "setLocalMacAppAllowed", "resetLocalPolicy", "restoreLocalBotModes", "dismissLocalPolicyReset", "registerLocalComputer",
-  "localExecHeartbeat", "localExecOutput", "localExecDone", "localExecUpload", "clearAgentAvatar", "setAgentVoice", "noteVoiceCall", "startCall", "addToCall", "removeFromCall", "endCall", "getCallGreetings", "wrapUpCall", "voiceSpeculate", "voiceSpeculateCancel",
+  "setBudget", "approveBudget", "clearTaskAlert", "dismissBudgetPrompt", "setMonthlyBudget", "setSpendMeter", "recordMacUsage", "addMcpServer", "removeMcpServer", "renameMcpAccount", "setMcpInstructions", "restartMcpServers", "setMcpServerEnabled", "setMcpServerTrusted", "setMcpServerHeader", "setOAuthLoopbackPort",
+  "addPluginMarketplace", "removePluginMarketplace", "draftTemplate", "setLocalComputer", "setLocalBrowserAllowed", "setLocalMacAppAllowed", "undoMacAction", "setLocalDryRun", "resetLocalPolicy", "restoreLocalBotModes", "dismissLocalPolicyReset", "registerLocalComputer",
+  "localExecHeartbeat", "localExecOutput", "localExecDone", "localExecUpload", "clearAgentAvatar", "setAgentVoice", "noteVoiceCall", "startCall", "addToCall", "removeFromCall", "endCall", "getCallGreetings", "wrapUpCall", "voiceSpeculate", "voiceSpeculateCancel", "voiceLatencyNotice",
   "completeOnboarding", "setMemoryMode", "setAgentFollowups", "setAgentEngineeringMode", "setAgentPermMode", "setAgentNoLimits", "setAgentSaveUsage", "setAgentComputerPerception",
   // Settings → Account (the API key)
   "setApiKey", "clearApiKey", "testAuthConnection", "checkApiKey",
   "answerBotCall", "setBotCallPermission",
   // Built-in Google connector (ORIG-GOOGLE)
-  "setGoogleClient", "startGoogleAuth", "disconnectGoogle", "setAgentGoogle",
+  "setGoogleClient", "startGoogleAuth", "disconnectGoogle", "setAgentGoogle", "setAgentGoogleAccount", "setAgentEmailIn",
   // Apps through Composio
-  "setComposioKey", "clearComposioKey", "acceptComposioDisclosure", "connectComposioApp", "disconnectComposioApp", "setComposioGrant",
+  "setComposioKey", "clearComposioKey", "acceptComposioDisclosure", "connectComposioApp", "disconnectComposioApp", "setComposioGrant", "renameComposioAccount", "setMcpServerBots",
   // google-setup: the guided task and the weekly sign-in check
   "startGoogleSetupTask", "cancelGoogleSetupTask", "setGoogleReconnectCheck",
   // Per-Bot GitHub sign-in (bug-log 195)
@@ -50,6 +50,8 @@ export const SPEC_GATEWAY_COMMANDS: readonly string[] = [
   "cancelCodingAgent",
   // 0.1.4: Synapse's MCP server (host/mcp-server)
   "mcpStartTask",
+  // 4.4: the app's own connector (Telegram) reporting its health
+  "reportConnectorHealth",
 ];
 
 /** §4.5 commands (plus Phase 4 additions) that only read. */
@@ -62,9 +64,12 @@ export const READ_ONLY_COMMANDS: readonly string[] = [
   "listPlugins", "searchCatalog", "listMcpServers", "previewTemplateImport", "previewShareImport", "getUsage", "getUsageDashboard", "getBudgets", "getRuntimeStats",
   "getDisplays", "getDiskPressure", "listSnapshots", "listBotCalls",
   "getMarketplace", "getCatalogEntry", "listPluginMarketplaces", "getTemplate", "listStarterTemplates", "getLocalComputer", "getLocalPolicyStatus", "getLocalPolicyReset", "getLocalBotMode", "getLocalBrowserAllowed", "getLocalMacAppAllowed", "getBrowserUsage",
+  "listMacActions", "exportMacActions", "getLocalDryRun",
   "readLocalFile", "getNetworkStats", "getOnboarding", "listCodingAgents", "getPhase5Settings", "getGoogleStatus", "getGoogleReconnectCheck", "getComposioStatus", "getGitHubStatus",
-  "getAuth", "getModelAccess", "getBudgetPrompt", "macClaudeAuth",
+  "getAuth", "getModelAccess", "getBudgetPrompt", "getSpendMeter", "macClaudeAuth",
   "mcpListBots", "mcpTaskStatus", "mcpTaskResult",
+  // 4.4: connector health
+  "getConnectorHealth",
 ];
 
 export const PARITY: Record<string, ParityEntry> = {
@@ -163,6 +168,7 @@ export const PARITY: Record<string, ParityEntry> = {
   clearTaskAlert: { userOnly: "billing" },
   dismissBudgetPrompt: { userOnly: "billing" },
   setMonthlyBudget: { userOnly: "billing" },
+  setSpendMeter: { userOnly: "billing" },
   recordMacUsage: { userOnly: "billing" },
   addMcpServer: { laterPhase: 5, tool: "AddMcpServer" },
   removeMcpServer: { laterPhase: 5, tool: "UninstallMcpServer" },
@@ -175,6 +181,8 @@ export const PARITY: Record<string, ParityEntry> = {
   setLocalComputer: { userOnly: "local execution policy" },
   setLocalBrowserAllowed: { userOnly: "the browser permission on the Mac" },
   setLocalMacAppAllowed: { userOnly: "the app permission on the Mac" },
+  undoMacAction: { userOnly: "undoing a Bot's change on the Mac" },
+  setLocalDryRun: { userOnly: "dry run on the Mac" },
   resetLocalPolicy: { userOnly: "resetting the permission records on the Mac" },
   restoreLocalBotModes: { userOnly: "turning a Bot's mode back on on the Mac" },
   dismissLocalPolicyReset: { userOnly: "the permission-reset prompt on the Mac" },
@@ -194,6 +202,7 @@ export const PARITY: Record<string, ParityEntry> = {
   wrapUpCall: { userOnly: "voice calls" },
   voiceSpeculate: { userOnly: "voice calls" },
   voiceSpeculateCancel: { userOnly: "voice calls" },
+  voiceLatencyNotice: { userOnly: "voice calls" },
   completeOnboarding: { userOnly: "onboarding" },
   setApiKey: { userOnly: "secret values" },
   clearApiKey: { userOnly: "secret values" },
@@ -212,16 +221,21 @@ export const PARITY: Record<string, ParityEntry> = {
   startGoogleAuth: { userOnly: "OAuth sign-in in the browser" },
   disconnectGoogle: { userOnly: "connected accounts" },
   setAgentGoogle: { userOnly: "connected accounts" },
+  setAgentGoogleAccount: { userOnly: "connected accounts" },
+  setAgentEmailIn: { userOnly: "connected accounts" },
   setComposioKey: { userOnly: "secret values" },
   clearComposioKey: { userOnly: "secret values" },
   acceptComposioDisclosure: { userOnly: "connected accounts" },
   connectComposioApp: { userOnly: "OAuth sign-in in the browser" },
   disconnectComposioApp: { userOnly: "connected accounts" },
   setComposioGrant: { userOnly: "connected accounts" },
+  renameComposioAccount: { userOnly: "connected accounts" },
+  setMcpServerBots: { userOnly: "connected accounts" },
   startGoogleSetupTask: { userOnly: "connected accounts" },
   cancelGoogleSetupTask: { userOnly: "connected accounts" },
   setGoogleReconnectCheck: { userOnly: "connected accounts" },
   startGitHubSignIn: { userOnly: "GitHub sign-in in the browser" },
   signOutGitHub: { userOnly: "connected accounts" },
   mcpStartTask: { userOnly: "an outside app's request over Synapse's MCP server" },
+  reportConnectorHealth: { userOnly: "the app's own Telegram connection reporting its state" },
 };

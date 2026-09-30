@@ -118,6 +118,13 @@ export const STRV = {
   presenceWaiting: "Needs you",
   callBot: (name: string) => `Call ${name}`,
   callSounds: "Call sounds",
+  // ---- 5.8: voice latency ----
+  lastCallFirstAudio: "Last call’s reply time",
+  voiceSelfTest: "Nightly voice check",
+  latencyNoticeTitle: "Voice replies got slower",
+  latencyNoticeDetail: (label: string, usual: string, calls: number) => `First audio ${label} on the last ${calls} calls, usually ${usual} (goal 1.2 s)`,
+  selfTestNoticeTitle: "Nightly voice check got slower",
+  selfTestNoticeDetail: (label: string, usual: string) => `First audio ${label}, usually ${usual}`,
   speechServer: "Apple's servers for speech",
   callShortcut: "Call shortcut",
   callShortcutHelp: "Calls the Bot whose chat is open, from anywhere on the Mac.",

@@ -7,6 +7,7 @@ import { useCallPresence, useCallSlot } from "../voice/call-presence";
 import { AttentionBanner } from "./AttentionBanner";
 import { ChatHeaderActions } from "./ChatHeaderActions";
 import { ComputerGlyph } from "./ComputerGlyph";
+import { SpendMeter } from "./SpendMeter";
 import { Composer } from "./Composer";
 import { DetailsPanel } from "./DetailsPanel";
 import { DiskBanner } from "./DiskBanner";
@@ -102,6 +103,7 @@ export function ChatView({ botId }: { botId: string }) {
             </button>
           </h1>
           {bot.settings.engineeringMode && <span className="chip mode-chip" title={STR5.engineeringModeHint}>{STR5.engineeringChip}</span>}
+          <SpendMeter botId={botId} />
           <ComputerGlyph botId={botId} />
           <ChatHeaderActions botId={botId} />
         </header>

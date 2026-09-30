@@ -80,9 +80,10 @@ describe("the Full-auto app check runs codesign off the thread", () => {
     const policy = new LocalPolicyStore(dir, () => 1_000, undefined, { home: () => path.dirname(fs.realpathSync.native(root)) });
     const order: string[] = [];
     const warm = policy.warm.bind(policy);
-    const check = policy.check.bind(policy);
+    // 5.6: the daemon's sync check is decide() (check() plus what let the call run, for the action log).
+    const check = policy.decide.bind(policy);
     policy.warm = async (r) => { order.push("warm"); await warm(r); };
-    policy.check = (r) => { order.push("check"); return check(r); };
+    policy.decide = (r) => { order.push("check"); return check(r); };
     const calls: string[] = [];
     const d = new LocalExecDaemon({ call: async (c) => { calls.push(c); return c === "localExecHeartbeat" ? { pending: [] } : {}; }, policy, executor: new LocalExecutor({ root: () => root, userData: () => dir }), heartbeatMs: 60_000 });
     await d.start();

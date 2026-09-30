@@ -27,6 +27,12 @@ interface GoogleState {
   /** With a client ID + secret they are saved first (host-private); then Google's consent opens in the browser. */
   connect(client?: { clientId: string; clientSecret: string }): Promise<void>;
   disconnect(): Promise<void>;
+  /** 4.3b: another Google sign-in; a new address becomes another account. */
+  addAccount(): Promise<void>;
+  /** 4.3b: one account out (its tokens revoked, its grants gone). */
+  removeAccount(accountId: string): Promise<void>;
+  /** 4.3b: tick or untick one account for one Bot. */
+  setAccountGrant(botId: string, accountId: string, enabled: boolean): Promise<void>;
   startTask(botId: string, mode: GoogleSetupMode): Promise<void>;
   stopTask(): Promise<void>;
 }
@@ -81,6 +87,14 @@ export const useGoogle = create<GoogleState>((set, get) => ({
   disconnect: async () => {
     set({ busy: true, error: null });
     try { set({ status: await call("disconnectGoogle", {}) }); } catch (e) { set({ error: message(e) }); } finally { set({ busy: false }); }
+  },
+  addAccount: () => get().connect(),
+  removeAccount: async (accountId) => {
+    set({ busy: true, error: null });
+    try { set({ status: await call("disconnectGoogle", { accountId }) }); } catch (e) { set({ error: message(e) }); } finally { set({ busy: false }); }
+  },
+  setAccountGrant: async (botId, accountId, enabled) => {
+    try { set({ status: await call("setAgentGoogleAccount", { id: botId, accountId, enabled }), error: null }); } catch (e) { set({ error: message(e) }); }
   },
   startTask: async (botId, mode) => {
     set({ busy: true, error: null });

@@ -123,6 +123,28 @@ describe("motion detectors", () => {
     expect(sendJump(rec([fr(0, []), at(306, 100, 1), at(303, 100, 2), at(300, 100, 3)])), "the bloop's own 6px rise").toHaveLength(0);
     const list = (y: number, i: number) => fr(i, [bub(5, "u1", { y, h: 40 }), s({ id: 1, y: y - 100 }), s({ id: 2, y: y - 200 }), s({ id: 3, y: y - 300 })], { scroll: 0 });
     expect(sendJump(rec([fr(0, []), list(400, 1), list(360, 2)])), "the whole list reflowing together").toHaveLength(0);
+    // Bug 444: a long glide speeds up and slows down (0, 7, 14, 19, 23, 25 … px a frame) — not a jump; the same
+    // distance starting at full speed from rest is.
+    const path = (steps: number[]) => { let y = 300; return [fr(0, []), at(y, 100, 1), ...steps.map((d, k) => at((y += d), 100, k + 2))]; };
+    expect(sendJump(rec(path([7, 14, 19, 23, 25, 25, 23, 19, 14, 7]))), "a long glide").toHaveLength(0);
+    expect(sendJump(rec(path([0, 35, 0]))), "a lurch from rest").toHaveLength(1);
+    expect(sendJump(rec(path([0, -1, 0, 20, 20, 23]))), "a glide that starts at full speed").toHaveLength(1);
+  });
+
+  it("scroll-back: rows dropped above the view while it glides is not a jiggle (bug 449)", () => {
+    const row = (id: number, y: number) => s({ id, y, cls: "msg bot" });
+    // Following up to the bottom (a rise), then the render window drops 1200px of rows above: scroll falls 1200,
+    // the rows in view move on by the glide's 4px.
+    const drop = rec([fr(0, [row(1, 80), row(2, 160)], { scroll: 10950 }), fr(1, [row(1, 76), row(2, 156)], { scroll: 10960 }), fr(2, [row(1, 72), row(2, 152)], { scroll: 9760 })]);
+    expect(scrollBack(drop)).toHaveLength(0);
+    // The jiggle: the scroll falls 12 and the rows drop 12 with it.
+    const jiggle = rec([fr(0, [row(1, 80)], { scroll: 1680 }), fr(1, [row(1, 68)], { scroll: 1692 }), fr(2, [row(1, 80)], { scroll: 1680 })]);
+    expect(scrollBack(jiggle)).toHaveLength(1);
+  });
+
+  it("flicker: a breakpoint crossed by a resize is a relayout, not a blink (bug 447)", () => {
+    const frames = seq(10, (i) => fr(i, [s({ id: 1, op: i === 4 || i === 5 ? 0 : 1 })], { ch: i >= 4 && i <= 5 ? 300 : 400 }));
+    expect(flicker(rec(frames))).toHaveLength(0);
   });
 
   it("blank (pixels): a region that holds content before and after goes empty mid-transition", () => {

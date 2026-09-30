@@ -34,13 +34,25 @@ export const composioAppName = (toolkit: string): string => COMPOSIO_APPS.find((
 
 /** "available": not connected; "waiting": the Composio sign-in page is open; "failed": it didn't finish. */
 export type ComposioAppState = "available" | "waiting" | "connected" | "failed";
+/** 4.3b: one account of an app. */
+export interface ComposioAccountView {
+  id: string;
+  label: string;
+  state: Exclude<ComposioAppState, "available">;
+  /** The Bots allowed to use this account (per-Bot grants; a new account starts with none). */
+  bots: string[];
+  error: string | null;
+}
 export interface ComposioAppView {
   toolkit: string;
   name: string;
+  /** The app as a whole: connected while any account is. */
   state: ComposioAppState;
-  /** The Bots allowed to use this app (per-Bot grants; default none). */
+  /** The Bots allowed to use this app through any of its accounts. */
   bots: string[];
   error: string | null;
+  /** 4.3b: every account of this app, oldest first. */
+  accounts: ComposioAccountView[];
 }
 export interface ComposioStatusView {
   /** A key is saved (the key itself never leaves the host). */
@@ -154,6 +166,15 @@ export const STRX = {
   throughComposio: "Data goes through Composio",
   connectedComposio: "Connected with Composio",
   cardLocation: (app: string) => `Acts on your ${app} account through Composio`,
+  /** 4.3b: the card names the account ("From work@acme.com through Composio", "From Slack 2 through Composio"). */
+  cardFromAccount: (app: string, account: string) => (account === app ? `Acts on your ${app} account through Composio` : `From ${account.includes("@") || account.startsWith(app) ? account : `${app} (${account})`} through Composio`),
+  addAccount: "Add account",
+  remove: "Remove",
+  rename: "Rename",
+  accountLabel: (app: string, n: number) => (n <= 1 ? app : `${app} ${n}`),
+  accountDescribe: (app: string) => `Which ${app} account to use (its name). Needed when this Bot can use more than one.`,
+  toolChooseAccount: (app: string, accounts: string[]) => `You can use more than one ${app} account (${accounts.join(", ")}). Say which with account, e.g. account: "${accounts[0]}". Don't guess: if the user didn't say which, ask them.`,
+  toolAccountNotGranted: (app: string, asked: string, accounts: string[]) => `You can't use the ${app} account “${asked.slice(0, 120)}”.${accounts.length ? ` The accounts you can use: ${accounts.join(", ")}.` : ""}`,
   gateReason: (app: string) => `This sends or changes something in your ${app} account, so it needs your OK.`,
   // Bot-facing
   toolNotGranted: (app: string) => `${app} isn't turned on for this Bot. The user can allow it in Settings → Connected accounts → Composio.`,
@@ -169,8 +190,12 @@ declare module "./gateway" {
     setComposioKey: { args: { key: string }; result: ComposioStatusView };
     clearComposioKey: { args: None; result: ComposioStatusView };
     acceptComposioDisclosure: { args: None; result: ComposioStatusView };
-    connectComposioApp: { args: { toolkit: string }; result: { redirectUrl: string; status: ComposioStatusView } };
-    disconnectComposioApp: { args: { toolkit: string }; result: ComposioStatusView };
-    setComposioGrant: { args: { toolkit: string; botId: string; enabled: boolean }; result: ComposioStatusView };
+    /** 4.3b: adds an account; `replace` (Fix) makes it take over that account once it connects. */
+    connectComposioApp: { args: { toolkit: string; replace?: string }; result: { redirectUrl: string; status: ComposioStatusView } };
+    /** 4.3b: with accountId, only that account; without, every account of the app. */
+    disconnectComposioApp: { args: { toolkit: string; accountId?: string }; result: ComposioStatusView };
+    /** 4.3b: with accountId, that account; without, every connected account of the app. */
+    setComposioGrant: { args: { toolkit: string; botId: string; enabled: boolean; accountId?: string }; result: ComposioStatusView };
+    renameComposioAccount: { args: { toolkit: string; accountId: string; label: string }; result: ComposioStatusView };
   }
 }

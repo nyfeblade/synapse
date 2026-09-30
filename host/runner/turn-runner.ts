@@ -5,8 +5,8 @@ import { originOf } from "../approvals/origin";
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import {
-  DEFAULT_BOT_MODEL, LIMITS, STR, activityEntryId, isAgentMessage, userEntryId, voiceLowEffort,
-  type ModelId, type TranscriptEntry, type ToolCallEntry, type UserAttachmentEntry, type UserMessageEntry,
+  DEFAULT_BOT_MODEL, LIMITS, STR, STR_COST, activityEntryId, isAgentMessage, userEntryId, voiceLowEffort,
+  type EmailInMeta, type ModelId, type TranscriptEntry, type ToolCallEntry, type UserAttachmentEntry, type UserMessageEntry,
 } from "@synapse/shared";
 import type { BotService } from "../bots/bot-service";
 import type { ConformanceFlags } from "../brain/conformance/flags";
@@ -39,8 +39,9 @@ import type { BotToolDeps } from "../tools/bot-tools";
 import type { TurnHooks } from "./hooks";
 import { notifyEvent, notifySettled, type TurnObserver as ModuleObserver } from "./observers";
 import {
-  ackRedriveText, clockReminder, collectHiddenTurn, collectUserTurn, HIDDEN_MARKER, kickstartText, nudgeText, renderBotPrompt, restartResumeText,
+  ackRedriveText, clockReminder, collectHiddenTurn, collectUserTurn, HIDDEN_MARKER, kickstartText, loopContinueText, nudgeText, renderBotPrompt, restartResumeText,
 } from "./prompt-collector";
+import { LOOP_HELD, LoopGuard, type LoopTrip } from "./loop-guard";
 import type { ResumeLedger } from "./resume-ledger";
 import type { SendAcceptanceLedger } from "./send-acceptance";
 import { countsAsSideEffect, type TurnContext } from "./turn-context";
@@ -124,6 +125,8 @@ export interface SendOpts {
   /** Bug 101: spoken in voice mode (a call): the turn asks for a brief, spoken-style reply. */
   voiceCall?: boolean;
   hints?: string[];
+  /** 4.3 Email in: the owner emailed this task. `text` is only their own added words; `email.quoted` is outside content. */
+  email?: EmailInMeta;
 }
 
 export interface HiddenSpec {
@@ -251,7 +254,12 @@ interface BotRuntime {
   /** Bug 198: SendMessage calls in flight → the steering messages already delivered when each was made.
    *  Cleared when the turn ends, is stopped or is interrupted. */
   steerSends: Map<string, SteerItem[]>;
+  /** 5.7: stopped on repeated failure. While set, no new turn of this Bot starts (queued ones wait, never dropped)
+   *  and every tool call is refused; Continue, Stop, or a new message from the user clears it. */
+  loopHold: LoopHold | null;
 }
+
+interface LoopHold { trayId: string; trip: LoopTrip; lane: Lane; owed: boolean; origin: FollowUpOrigin | null }
 
 const MAX_PROMPT_CHARS = 100_000;
 
@@ -271,6 +279,8 @@ export class TurnRunner {
   private postHooks: PostToolHook[] = [];
   private decorators: PromptDecorator[] = [];
   private taskClock = new TaskClock();
+  /** 5.7: stop on repeated failure, for every brain (it reads the turn's events, never a prompt). */
+  private loops: LoopGuard;
   private dropCbs = new Map<string, () => void>();
   private sections: ((botId: string) => string | null)[] = [];
   /** Bug 142: while true for a Bot (on a fast-path call), its full session's streamed text isn't published. */
@@ -278,6 +288,7 @@ export class TurnRunner {
 
   constructor(private d: RunnerDeps) {
     this.now = d.now ?? Date.now;
+    this.loops = new LoopGuard(this.now);
     this.creations = new CreationLedger(path.join(d.cfg.hostPrivate, "bot-creations.json"), this.now);
     // A Bot mid-turn keeps the teammates list from its spawn: Bot-list changes ride the next tool result.
     this.postHooks.push((botId) => {
@@ -472,7 +483,7 @@ export class TurnRunner {
       onWatchdogInterrupt: () => void this.interruptActive(botId, "watchdog"),
       onEscape: (t) => log.warn("run escaped the watchdog", { botId, task: t.id }),
       onIdle: () => this.onIdle(botId),
-      hold: () => this.held,
+      hold: () => this.held || Boolean(this.rt.get(botId)?.loopHold),
     });
     const baseWiring = createBotWiring({
       botId, slot: () => this.slot(botId), gate: () => this.g(), tools: () => this.mergedTools(botId, tools()), flags: this.d.flags,
@@ -480,7 +491,7 @@ export class TurnRunner {
       steerGate: (call) => this.steerGate(botId, call),
     });
     r = {
-      scheduler, slot: null, redrive: null, deleted: false, maintenance: null, steer: [], steerSends: new Map(),
+      scheduler, slot: null, redrive: null, deleted: false, maintenance: null, steer: [], steerSends: new Map(), loopHold: null,
       wiring: this.d.wrapWiring ? this.d.wrapWiring(botId, baseWiring) : baseWiring,
     };
     this.rt.set(botId, r);
@@ -552,7 +563,7 @@ export class TurnRunner {
   sendPrompt(botId: string, text: string, clientNonce: string, opts: SendOpts = {}): { entryId: string } {
     this.d.bots.require(botId);
     const attachments = opts.attachmentEntries ?? [];
-    if (!text.trim() && !attachments.length && !opts.skillIds?.length) throw new GatewayError("EMPTY_MESSAGE", "The message is empty.");
+    if (!text.trim() && !attachments.length && !opts.skillIds?.length && !opts.email) throw new GatewayError("EMPTY_MESSAGE", "The message is empty.");
     if (text.length > MAX_PROMPT_CHARS) throw new GatewayError("MESSAGE_TOO_LONG", "The message is too long.");
     const acc = this.d.sendAcceptance.check(botId, clientNonce, text);
     if (acc.kind === "duplicate") return { entryId: acc.entryId };
@@ -573,15 +584,19 @@ export class TurnRunner {
       ...(opts.voiceDurationMs || opts.voiceCall ? { voice: { durationMs: Math.round(opts.voiceDurationMs ?? 0), ...(opts.voiceCall ? { call: true } : {}) } } : {}),
       ...(opts.hints?.length ? { hints: opts.hints.slice(0, 5) } : {}),
       ...(steering ? { steer: "queued" as const } : {}),
+      ...(opts.email ? { email: opts.email } : {}),
     };
+    // 4.3: the forwarded part of an emailed task is outside content from this moment, for Full auto's checks (bug 415).
+    if (opts.email) outsideLog.record(botId, [opts.email.subject, opts.email.quoted, opts.email.attachments.join("\n")].filter(Boolean).join("\n"), createdAt);
     this.d.bots.appendEntry(botId, entry);
     attachments.forEach((a, k) => this.d.bots.appendEntry(botId, { kind: "user-attachment", ...a, id: `${id}a${k + 1}`, batchId: id, createdAt }));
     this.d.sendAcceptance.record(botId, clientNonce, text, entry.id);
-    if (text.trim()) this.d.bots.seedNameIfDefault(botId, text);
+    if (text.trim() && !opts.email) this.d.bots.seedNameIfDefault(botId, text);
     this.d.bots.bumpUserMessageEpoch(botId);
     this.lastUserMessage = createdAt;
     this.d.acks.record(botId);
     this.d.trays.clearForBot(botId);
+    this.releaseLoopHold(botId, r); // 5.7: the user is here and has spoken: that answers the stop
     r.maintenance?.abort(); // EVT-09: a user message interrupts maintenance, too
     if (steering) {
       // No scheduler task while the turn runs: a queued user task arms the run watchdog, which would cut
@@ -617,6 +632,8 @@ export class TurnRunner {
    *  note rides beside the denial; so is every other side-effect call from the same model message. */
   private steerGate(botId: string, call: ToolCall): PreToolDecision | null {
     const r = this.rt.get(botId);
+    // 5.7: stopped on repeated failure: nothing more runs until the user answers (the interrupt may land after a call).
+    if (r?.loopHold) return { decision: "deny", reason: LOOP_HELD };
     const slot = r?.slot;
     // Fail closed (fix round 2): only the read-only allowlist runs while a message is unread or its note is
     // still on its way to the model; everything else, unknown tools included, is held.
@@ -742,6 +759,8 @@ export class TurnRunner {
     this.d.sendAcceptance.record(botId, clientNonce, text, entry.id);
     this.d.bots.confirmUserSeq(botId, seq);
     this.d.trays.clearForBot(botId);
+    const rt = this.rt.get(botId);
+    if (rt) this.releaseLoopHold(botId, rt); // 5.7: the user is on the call and speaking: that answers the stop
     return { entryId: entry.id };
   }
 
@@ -850,6 +869,7 @@ export class TurnRunner {
     // 0.1.4: a follow-up of a non-owner turn reviews as that turn: its source, and its wake text (not the nudge's).
     if (spec.origin) { slot.reviewSource = spec.origin.source; slot.wakeText = spec.origin.wakeText; if (spec.origin.roomReview) slot.roomReview = spec.origin.roomReview; }
     r.slot = slot;
+    this.loops.turnStart(botId, spec.source);
     for (const o of this.observers) o.onTurnStart?.(botId, slot);
     spec.onStart?.(slot);
     this.d.presence.turnStarted(botId);
@@ -908,6 +928,11 @@ export class TurnRunner {
       lease.release();
     }
     const steerFlushed = this.flushSteer(botId, r);
+    const turnTrip = this.loops.turnEnd(botId, {
+      error: !!result?.error, aborted: !!result?.aborted || slot.stopRequested === true, toolCalls: result?.toolCallCount ?? 0,
+      sentTexts: slot.sentTexts, ...(result?.usage.costUsd !== undefined ? { costUsd: result.usage.costUsd } : {}),
+    });
+    if (turnTrip && !r.deleted && this.d.bots.has(botId)) this.stopForLoop(botId, slot, spec.source, turnTrip);
     this.d.router?.settled(botId, {
       escalated: !!result?.escalated, failed: routedFailed,
       workTools: [...slot.toolUses.values()].filter((u) => u.name !== SEND_TOOL).length,
@@ -927,12 +952,15 @@ export class TurnRunner {
       botId, requestId: slot.requestId, lane: spec.lane, source: spec.source, hidden: spec.hidden, startedAt: slot.startedAt, endedAt: this.now(),
       model: result.model ?? model, userText: spec.userTexts?.length ? spec.userTexts.join("\n") : null,
       sentTexts: slot.sentTexts, result, voice: spec.voiceCall === true, callLive: slot.callLive ?? false,
+      ownerTask: followUpOrigin(slot, spec.source) === null, notifyRequested: slot.notifyRequested === true, stopped: slot.stopRequested === true,
     });
   }
 
   private onEvent(botId: string, slot: TurnSlot, e: TurnEvent): void {
     if (!this.d.bots.has(botId)) return;
     notifyEvent(this.d.observers, botId, e);
+    const trip = this.loops.event(botId, e);
+    if (trip && !slot.stopRequested && !slot.quiescing) this.stopForLoop(botId, slot, slot.source, trip);
     if (slot.firstEventAt === null && e.kind !== "session") slot.firstEventAt = this.now();
     switch (e.kind) {
       case "session":
@@ -1041,6 +1069,62 @@ export class TurnRunner {
     }
   }
 
+  // ---------- stop on repeated failure (5.7) ----------
+  /**
+   * The Bot kept failing the same way: its turn is cut now (no further model call is paid for), nothing else of it
+   * runs, and one tray says so with Continue and Stop. Queued work waits; nothing is dropped until the user says Stop.
+   */
+  private stopForLoop(botId: string, slot: TurnSlot, source: WakeSource, trip: LoopTrip): void {
+    const r = this.rt.get(botId);
+    if (!r || r.loopHold || r.deleted) return;
+    const name = this.d.bots.summary(botId).profile.name;
+    const tray = this.d.trays.add({
+      botId, title: STR_COST.loopStopped(name, trip.step), detail: STR_COST.loopDetail(trip.tries, trip.spentUsd), requestId: slot.requestId,
+      dedupeKey: `${botId}:loop`, buttons: [{ label: STR_COST.loopContinue, action: "loop-continue" }, { label: STR_COST.loopStop, action: "loop-stop" }],
+    });
+    r.loopHold = { trayId: tray.id, trip, lane: slot.lane, owed: this.d.acks.get(botId) !== null, origin: followUpOrigin(slot, source) };
+    log.warn("bot stopped on repeated failure", { botId, kind: trip.kind, tries: trip.tries, spentUsd: trip.spentUsd });
+    if (r.slot === slot) void this.interruptActive(botId, "stopped: the same step kept failing");
+  }
+
+  /** A tray's Continue or Stop. Returns false for a tray this doesn't own. */
+  async loopAction(trayId: string, action: "loop-continue" | "loop-stop"): Promise<boolean> {
+    const found = [...this.rt.entries()].find(([, x]) => x.loopHold?.trayId === trayId);
+    if (!found) { if (this.d.trays.get(trayId)) this.d.trays.dismiss(trayId); return false; }
+    const [botId, r] = found;
+    const hold = r.loopHold!;
+    // Stop: the queue and the reply obligation go first (interruptAgent), so nothing held starts in between.
+    if (action === "loop-stop" && this.d.bots.has(botId)) { await this.interruptAgent(botId); return true; }
+    if (action === "loop-stop" || !this.d.bots.has(botId) || r.deleted) { this.releaseLoopHold(botId, r); return true; }
+    // The hold stays until the Continue turn is at the head of the queue, so it runs first.
+    // Continue: one hidden turn that says what happened, ahead of whatever was queued, then the queue runs again.
+    this.enqueueHidden(botId, {
+      source: "loop-continue", lane: hold.lane, head: true, silenceAllowed: !hold.owed, text: loopContinueText(hold.trip.step, hold.trip.tries),
+      ackToken: this.d.acks.token(botId), userSeqMax: this.d.bots.latestUserSeq(botId), ...(hold.origin ? { origin: hold.origin } : {}),
+    });
+    this.releaseLoopHold(botId, r);
+    return true;
+  }
+
+  /** Whether this Bot is stopped on repeated failure (the tray is up, nothing of it runs). */
+  loopStopped(botId: string): boolean {
+    return Boolean(this.rt.get(botId)?.loopHold);
+  }
+
+  private releaseLoopHold(botId: string, r: BotRuntime): void {
+    const hold = r.loopHold;
+    this.loops.reset(botId);
+    if (!hold) return;
+    r.loopHold = null;
+    if (this.d.trays.get(hold.trayId)) this.d.trays.dismiss(hold.trayId);
+    if (!r.deleted) r.scheduler.resume(); // what was held runs (or, with nothing queued, the Bot goes idle)
+  }
+
+  /** Whether this tray is a stop-on-repeated-failure tray (a plain dismiss of it is a Stop: it said "Stopped"). */
+  ownsLoopTray(trayId: string): boolean {
+    return [...this.rt.values()].some((x) => x.loopHold?.trayId === trayId);
+  }
+
   // ---------- ack redrive (OUT-08) ----------
   private onIdle(botId: string): void {
     this.h.onIdle?.(botId);
@@ -1136,6 +1220,7 @@ export class TurnRunner {
     this.notifyDropped(r, () => true);
     r.scheduler.drop(() => true);
     this.releaseSteer(botId, r, null);
+    this.releaseLoopHold(botId, r);
     if (r.slot) r.slot.stopRequested = true;
     if (r.redrive) clearTimeout(r.redrive);
     this.d.acks.drop(botId);
@@ -1173,6 +1258,7 @@ export class TurnRunner {
 
   /** I6 last step: clear trays, forget the brain, remove the Bot's data and session files. */
   async finishDelete(botId: string): Promise<void> {
+    this.loops.forget(botId);
     this.d.trays.clear(botId);
     this.g().forgetBot(botId);
     await this.sup().forget(botId);

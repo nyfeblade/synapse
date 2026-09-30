@@ -100,6 +100,28 @@ export class AttachmentStore {
     throw new GatewayError("STAGE_FAILED", "Too many files with that name. Rename the file and try again.");
   }
 
+  /**
+   * 4.3 Email in: a file from an emailed task, through the same checks and staging as an upload from the chat
+   * (name, type, size). Null when it isn't accepted (the Bot is told its name only).
+   */
+  ingest(botId: string, name: string, bytes: Buffer): AttachmentInput | null {
+    const uploadId = `email-${createHash("sha256").update(bytes).update(name).digest("hex").slice(0, 24)}`;
+    try {
+      fs.rmSync(this.partFile(botId, uploadId), { force: true });
+      let ref: AttachmentRef | null = null;
+      for (let off = 0; off < bytes.length || off === 0; off += LIMITS.uploadChunkBytes) {
+        const chunk = bytes.subarray(off, off + LIMITS.uploadChunkBytes);
+        const final = off + LIMITS.uploadChunkBytes >= bytes.length;
+        ref = this.receive(botId, { id: botId, uploadId, name, mime: mimeOf(name), size: bytes.length, offset: off, chunkBase64: chunk.toString("base64"), final }).attachment;
+        if (final) break;
+      }
+      return ref ? { attachmentId: ref.attachmentId, name: ref.name, size: ref.size, mime: ref.mime, storePath: ref.storePath, boxPath: ref.boxPath } : null;
+    } catch {
+      fs.rmSync(this.partFile(botId, uploadId), { force: true });
+      return null;
+    }
+  }
+
   lookup(botId: string, attachmentId: string): AttachmentRef | null {
     return readJson<Record<string, AttachmentRef>>(this.indexFile(botId), {})[attachmentId] ?? null;
   }

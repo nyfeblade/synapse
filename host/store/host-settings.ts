@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
-  COMPUTER_PERCEPTION_MODES, DEFAULT_SAVINGS, LIMITS, isCallReplies, isLongContextMode, isPromptCacheTtl,
-  type CallReplies, type ComputerPerception, type GatewayCommands, type HostSettingsView, type LongContextMode, type PromptCacheTtl, type ThemePreference,
+  COMPUTER_PERCEPTION_MODES, DEFAULT_SAVINGS, DEFAULT_WORK_NOTIFY, LIMITS, isCallReplies, isWorkNotify, isLongContextMode, isPromptCacheTtl,
+  type CallReplies, type ComputerPerception, type GatewayCommands, type HostSettingsView, type LongContextMode, type PromptCacheTtl, type ThemePreference, type WorkNotify,
 } from "@synapse/shared";
 import { LIVE_PERCEPTION_ENABLED, LIVE_SHELVED_MESSAGE } from "../computer/perception/mode";
 import { GatewayError } from "../gateway/errors";
@@ -37,6 +37,10 @@ export interface HostSettings {
   /** Smarter approvals: people the owner trusts; a send to only them (and the owner) skips the card. Set only in
    *  Settings (setHostSettings from the app); a Bot's update_state can't change it. */
   trustedRecipients: string[];
+  /** 4.4 "Work finished": on (default), long (tasks over a minute) or off. Read through workNotify(). */
+  workNotify: WorkNotify;
+  /** 4.4: also send it through Telegram when paired. Default off. */
+  workNotifyTelegram: boolean;
   /** settings-persist: bumped on every save and kept on disk, so a view carries its age (HostSettingsView.rev). */
   rev: number;
 }
@@ -58,6 +62,8 @@ export const DEFAULT_HOST_SETTINGS: HostSettings = {
   saveUsage: false,
   computerPerception: "screenshots",
   trustedRecipients: [],
+  workNotify: DEFAULT_WORK_NOTIFY,
+  workNotifyTelegram: false,
   ...DEFAULT_SAVINGS,
   rev: 0,
 };
@@ -103,6 +109,11 @@ export class HostSettingsStore {
     };
   }
 
+  /** 4.4: the Work finished choice, its default when the stored value is not one this build knows. */
+  workNotify(): { mode: WorkNotify; telegram: boolean } {
+    return { mode: isWorkNotify(this.s.workNotify) ? this.s.workNotify : DEFAULT_WORK_NOTIFY, telegram: this.s.workNotifyTelegram === true };
+  }
+
   timeZone(): string {
     return this.s.userTimeZoneOverride ?? this.s.userTimeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   }
@@ -140,6 +151,8 @@ export class HostSettingsStore {
       computerPerception: this.s.computerPerception ?? "screenshots",
       ...this.savings(),
       trustedRecipients: this.trusted(),
+      workNotify: this.workNotify().mode,
+      workNotifyTelegram: this.workNotify().telegram,
       rev: this.revNow(),
       epoch: this.epoch,
     };
@@ -187,6 +200,11 @@ export class HostSettingsStore {
       if (typeof list === "string") throw new GatewayError("BAD_SETTING", list);
       next.trustedRecipients = list;
     }
+    if (patch.workNotify !== undefined) {
+      if (!isWorkNotify(patch.workNotify)) throw new GatewayError("BAD_SETTING", "Work finished must be On, Only long tasks or Off.");
+      next.workNotify = patch.workNotify;
+    }
+    if (patch.workNotifyTelegram !== undefined) next.workNotifyTelegram = Boolean(patch.workNotifyTelegram);
     this.save(next);
     return this.view();
   }

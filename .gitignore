@@ -42,3 +42,6 @@ Synapse-release/
 # Vercel CLI link files (local only)
 .vercel
 .env*.local
+
+# Ready-made box image builds (box/build-image.sh)
+.box-image/

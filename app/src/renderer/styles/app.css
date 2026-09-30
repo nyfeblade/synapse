@@ -351,6 +351,11 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 .activity-mark.done { background: color-mix(in srgb, var(--dot-ok) 18%, transparent); color: var(--dot-ok); }
 /* New-user walk, finding 3: a run the user stopped — a small neutral square, no colour. */
 .activity-mark.stopped { background: var(--fill-inset); }
+/* Bug 437: every step failed (the one colour is the danger ink), or some did (neutral, a dash). */
+.activity-mark.failed { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.activity-mark.partial { background: var(--fill-inset); }
+.activity-mark.partial::before { content: ""; width: 6px; height: 1.5px; border-radius: 1px; background: var(--ink-muted); }
+.activity-times { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 .activity-mark.stopped::before { content: ""; width: 6px; height: 6px; border-radius: 1px; background: var(--ink-muted); }
 /* New-user walk, finding 6: held on an approval card — a still pause mark (two bars), not a spinner. */
 .activity-mark.waiting { background: var(--fill-inset); gap: 2px; grid-auto-flow: column; }
@@ -373,7 +378,10 @@ kbd { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; bor
 /* The typing bubble's surface lives on ::before, so its dots-to-text morph (Transcript.tsx
    TypingBubble) scales the surface alone and never the reply's glyphs. */
 .bubble.bot.typing { position: relative; isolation: isolate; background: transparent; margin-left: var(--bot-indent); }
-.bubble.bot.typing:has(.dots) { padding: 6px 12px; border-radius: var(--radius-card); }
+/* Bug 446: the dots pill (33px) is taller than the first line of text that replaces it (21px), so the morph shrank the
+   conversation by 12px and a transcript pinned to the bottom scrolled back by that much. The pill keeps its look but
+   takes one line's height in the flow: the 12px it hangs past its box come out of the space below it. */
+.bubble.bot.typing:has(.dots) { padding: 6px 12px; border-radius: var(--radius-card); margin-bottom: -12px; }
 .bubble.bot.typing::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: transparent; }
 .bubble.bot.typing:has(.dots)::before { background: var(--bubble-bot); }
 /* The typing dots: a 3-dot bounce — 1.1s cycle, staggered 0 / 0.15 / 0.30s. The dots use the muted
@@ -942,6 +950,7 @@ select.field-input {
 .mcp-exe { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 360px; }
 .mcp-snippet-row { align-items: flex-start; }
 .mcp-snippet { flex: 1 1 auto; min-width: 0; margin: 0; padding: 8px 10px; border-radius: var(--radius-card); background: var(--fill-inset); color: var(--ink); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--type-ui); white-space: pre-wrap; word-break: break-all; user-select: text; }
+.telegram-code { padding: 4px 8px; border-radius: var(--radius-card); background: var(--fill-inset); color: var(--ink); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--type-ui); letter-spacing: 0.08em; user-select: all; }
 .mcp-activity { max-height: 280px; overflow-y: auto; }
 .key-prompts .disk-banner { margin: 0; background: var(--surface-raised); border: var(--hairline) solid var(--line-modal); box-shadow: var(--shadow-pop); }
 .surface-announce .key-prompts { position: static; margin: 0; }
@@ -967,6 +976,12 @@ select.field-input {
 .msg-line{display:flex;align-items:flex-start;gap:6px;max-width:100%;min-width:0}
 .msg.user .msg-line{flex-direction:row-reverse}
 /* Bug 198: a message sent while the Bot worked — "Queued" until its next step shows it to the Bot, then "Delivered". */
+/* 4.3 Email in: a task the owner emailed. The label and the subject, above the owner's own words. */
+.msg-email{display:flex;align-items:baseline;gap:6px;max-width:100%;min-width:0;margin-bottom:3px;padding:0 4px;font-size:var(--type-small);color:var(--ink-faint)}
+.msg-email-chip{flex-shrink:0;color:var(--ink-muted)}
+.msg-email-subject{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.email-in{border-top:var(--hairline) solid var(--line-row);margin-top:4px}
+.email-in-addresses{display:flex;flex-direction:column;gap:6px;padding:0 0 8px}
 .msg-steer{margin-top:3px;padding:0 4px;font-size:var(--type-small);color:var(--ink-faint);font-variant-numeric:tabular-nums}
 .msg-line > .bubble{min-width:0}.msg.highlight .bubble{outline:2px solid var(--line-button)}.modal{animation:surface-in var(--motion-sheet) backwards;background:var(--surface-raised);border:var(--hairline) solid var(--line-modal);border-radius:var(--radius-surface);box-shadow:var(--shadow-modal);display:flex;flex-direction:column;overflow:hidden}.modal-head{display:flex;align-items:center;gap:10px;padding:18px 16px 10px 28px}.modal-head h2{margin:0;flex-grow:1;font-size: var(--type-title);font-weight:600}.btn-outline.danger{color: var(--danger-ink)}.card-primitive{max-width:640px;border:var(--hairline) solid var(--line-card);border-radius:var(--radius-card);padding:12px 14px;background:var(--bg);display:flex;flex-direction:column;gap:8px}.card-error{color: var(--danger-ink);font-size: var(--type-ui)}.chips-row{display:flex;gap:6px;flex-wrap:wrap;padding:0 8px 6px}.chip-x{border:none;background:transparent;margin-left:4px;color:inherit}.grow{flex-grow:1;min-width:0}.clamp1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .search-placeholder{flex-grow:1;text-align:left}
@@ -2005,6 +2020,7 @@ a.row, a.tile, a.nav-item, a.side-link, a.mkt-row-main, a.mkt-card, a.mkt-instal
 .setup-meter { display: flex; align-items: center; gap: 8px; flex-grow: 1; min-width: 120px; }
 .setup-meter .meter { flex-grow: 1; }
 .setup-meter .meter > span { width: 100%; background: var(--ink); transform-origin: 0 50%; transition: transform var(--motion-glide); }
+.setup-meter-stage { font-size: var(--type-small); color: var(--ink-muted); min-width: 84px; }
 .setup-meter-pct { font-size: var(--type-small); color: var(--ink-muted); font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
 .setup-log { max-height: 220px; overflow: auto; margin: 0; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
 .setup-updates .text-input { width: 100%; }
@@ -2022,3 +2038,36 @@ a.row, a.tile, a.nav-item, a.side-link, a.mkt-row-main, a.mkt-card, a.mkt-instal
 
 /* New-user walk, finding 16: New chat's starter templates, under a small label (the blurb is the tooltip). */
 .picker .pick-head { padding: 10px 12px 4px; font-size: var(--type-label); color: var(--ink-muted); list-style: none; }
+
+/* 5.7: the header's spend meter. A quiet number; the warning colour only near the monthly budget. */
+.chat-header > .spend-meter { flex-shrink: 0; display: inline-flex; align-items: baseline; gap: 5px; height: 28px; margin-right: 4px; padding: 0 8px; border: none; border-radius: var(--radius-control); background: none; color: var(--ink-faint); font: inherit; font-size: var(--type-small); font-variant-numeric: tabular-nums; white-space: nowrap; align-self: center; line-height: 28px; }
+.chat-header > .spend-meter:hover { background: var(--fill-hover); color: var(--ink-muted); }
+.spend-meter-label { color: var(--ink-faint); }
+.spend-meter-value { color: var(--ink-muted); font-weight: 500; }
+.spend-meter-sep { width: 1px; height: 12px; align-self: center; margin: 0 3px; background: var(--line-button); }
+.chat-header > .spend-meter.warn .spend-meter-value { color: var(--warn-ink); }
+/* 5.6: Settings → Activity. A quiet list: tokens only, one line per action. */
+.macact-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; flex-wrap: wrap; }
+.macact-bar > .grow { flex-grow: 1; }
+.macact-list { min-width: 0; overflow: hidden; }
+.macact-row { display: grid; grid-template-columns: 72px 84px 92px minmax(0, 1fr) auto 64px; align-items: center; gap: 10px; min-height: 36px; min-width: 0; }
+.macact-time { color: var(--ink-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.macact-bot, .macact-kind { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.macact-kind { color: var(--ink-2); }
+.macact-target { min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+.macact-target-text { font-family: var(--mono); font-size: var(--type-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.macact-state { color: var(--ink-muted); font-size: var(--type-small); white-space: nowrap; }
+.macact-state.off { color: var(--ink-3); }
+.macact-undo { display: flex; justify-content: flex-end; }
+.macact-tally { color: var(--ink-2); }
+
+/* 4.4: Settings → Connections. A small dot and a label per connector; hue only for a state that needs the owner. */
+.connection-row { gap: 10px; }
+.health-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--dot-muted); }
+.health-dot.ok { background: var(--dot-ok); }
+.health-dot.needs-sign-in { background: var(--dot-blocked); }
+.health-dot.broken { background: var(--danger); }
+.health-dot.checking { background: var(--dot-muted); }
+.connection-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connection-state { color: var(--ink-muted); font-size: var(--type-ui); white-space: nowrap; }
+.connection-state.bad { color: var(--ink); }

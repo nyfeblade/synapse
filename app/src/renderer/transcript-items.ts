@@ -1,6 +1,9 @@
 import { STR, daySeparator, isAgentMessage, isPageFormCard, type ActivityIcon, type AgentMessageEntry, type AgentRef, type ApprovalCardView, type BoxHelpView, type CardPayload, type EventEntry, type FormCardView, type SecretRequestView, type SendMessageEntry, type TimelineEvent, type ToolCallEntry, type TranscriptEntry, type UserAttachmentEntry, type UserMessageEntry } from "@synapse/shared";
 
-export interface ActivityRow { verb: string; noun: string; count: number; icon: ActivityIcon; live?: boolean }
+/** `times`: this many identical steps in a row, shown once with a quiet "×N" (a retried step, a loop). */
+export interface ActivityRow { verb: string; noun: string; count: number; icon: ActivityIcon; live?: boolean; times?: number }
+/** How a finished group went: every step failed, some did, or none (absent). */
+export type ActivityOutcome = "failed" | "partial";
 export type TranscriptItem =
   | { kind: "separator"; key: string; label: string }
   | { kind: "user"; key: string; text: string; entry: UserMessageEntry; attachments: UserAttachmentEntry[]; replyCount: number; voiceMs?: number }
@@ -17,7 +20,7 @@ export type TranscriptItem =
   | { kind: "event"; key: string; entry: EventEntry }
   | { kind: "event-row"; key: string; entry: EventEntry }
   | { kind: "exchange"; key: string; peers: AgentRef[]; entries: AgentMessageEntry[]; count: number }
-  | { kind: "activity"; key: string; rows: ActivityRow[]; more: number; steps: ToolCallEntry[]; running: boolean; stopped?: boolean; waiting?: boolean }
+  | { kind: "activity"; key: string; rows: ActivityRow[]; more: number; steps: ToolCallEntry[]; running: boolean; stopped?: boolean; waiting?: boolean; outcome?: ActivityOutcome }
   | { kind: "approval"; key: string; approval: ApprovalCardView }
   | { kind: "box-help"; key: string; request: BoxHelpView }
   | { kind: "secret"; key: string; entryId: string; secret: SecretRequestView }
@@ -77,6 +80,10 @@ function rowsFor(steps: ToolCallEntry[], waiting: ReadonlySet<string> = new Set(
       else if (s.status === "running") live.push({ verb: s.step, noun: "", count: 0, icon: s.icon, live: true });
       else if (s.status === "error") live.push({ verb: `Failed: ${s.step}`, noun: "", count: 0, icon: s.icon });
       else if (s.status === "stopped") live.push({ verb: STR.stoppedStep(s.step), noun: "", count: 0, icon: s.icon });
+      // The same row again, straight after itself (a retried step, a loop), is one row with a count.
+      const last = live.at(-1);
+      const prev = live.at(-2);
+      if (last && prev && !last.live && !prev.live && last.verb === prev.verb) { live.pop(); prev.times = (prev.times ?? 1) + 1; }
       continue;
     }
     const k = `${s.metric.verb}|${s.metric.noun}`;
@@ -122,7 +129,10 @@ export function buildTranscriptItems(entries: TranscriptEntry[], nowMs: number):
       const live = steps.filter((s) => s.status === "running");
       const waiting = live.length > 0 && live.every((s) => waitingOn.has(s.requestId));
       const running = live.length > 0 && !waiting;
-      if (rows.length) out.push({ kind: "activity", key: `act-${seg.id}`, rows, more, steps, running, ...(waiting ? { waiting: true } : {}), ...(!live.length && steps.some((s) => s.status === "stopped") ? { stopped: true } : {}) });
+      // Bug 437: a finished group whose steps all failed said "done" with a green check.
+      const failed = steps.filter((s) => s.status === "error").length;
+      const outcome = live.length || !failed ? null : failed === steps.length ? "failed" as const : "partial" as const;
+      if (rows.length) out.push({ kind: "activity", key: `act-${seg.id}`, rows, more, steps, running, ...(waiting ? { waiting: true } : {}), ...(!live.length && steps.some((s) => s.status === "stopped") ? { stopped: true } : {}), ...(outcome ? { outcome } : {}) });
     }
     seg = null;
   };

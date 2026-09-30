@@ -1,6 +1,6 @@
 import type { FullAutoResult } from "@synapse/shared";
 import type { WakeSource } from "../brain/types";
-import { FULL_AUTO_BULK_MAX, OWNER_SOURCES, hasBulkValue, hasDestructiveFlag, recipientsOf, unresolvedWho } from "../review/full-auto-intent";
+import { FULL_AUTO_BULK_MAX, OWNER_SOURCES, hasBulkValue, hasDestructiveFlag, recipientsOf, selfSet, unresolvedWho, type SelfAddrs } from "../review/full-auto-intent";
 import type { OriginKind, RiskTarget } from "../review/types";
 
 /**
@@ -69,7 +69,7 @@ export function planLines(p: Plan): string[] {
 const TARGET_KEY = /^(id|ids|path|file_path|file|url|link|repo|repository|owner|page|page_id|parent_id|database_id|document_id|doc_id|spreadsheet_id|sheet_id|file_id|folder_id|calendar|calendar_id|event_id|thread_id|message_id|draft_id|reply_to_id|issue|issue_id|issue_number|project|project_id|board|board_id|list_id|card_id|task_id|team_id|workspace|workspace_id|channel|channel_id|channel_name|chat_id|conversation_id|post_id|record_id|table|table_id|base_id)$/i;
 const CHANNEL_KEY = /^(channel|channels|channel_id|channel_name|chat_id|conversation_id)$/i;
 /** Keys the host adds for its own card (never part of what the Bot asked for). */
-const HOST_KEYS = new Set(["card_facts", "content_hash", "draft_hash", "resolved_to", "existing_attendees", "tool", "toolkit", "server"]);
+const HOST_KEYS = new Set(["card_facts", "content_hash", "draft_hash", "resolved_to", "existing_attendees", "tool", "toolkit", "server", "account"]);
 
 export interface CallScope { recipients: string[]; channels: string[]; targets: string[] }
 
@@ -131,14 +131,16 @@ const TRUSTED_SEND = { google_write: new Set(["gmail_send", "calendar_create"]),
 /** Whether this send is one the trusted-recipient rule could ever cover (a cheap check before any lookup). */
 export const trustedTool = (target: RiskTarget): boolean => TRUSTED_SEND[target.action]?.has(String(target.arguments.tool ?? "")) ?? false;
 
-export function trustedSendOk(i: { target: RiskTarget; builtin: boolean; scope: CallScope | null; self: string | null; trusted: readonly string[]; origin: OriginKind; source: WakeSource | null }): boolean {
+/** 4.3b: `self` is every address the owner has connected; `accountOk` whether the account the send uses is one the
+ *  owner named (or the only one this Bot can use). A send to only the owner themself doesn't need it. */
+export function trustedSendOk(i: { target: RiskTarget; builtin: boolean; scope: CallScope | null; self: SelfAddrs; trusted: readonly string[]; origin: OriginKind; source: WakeSource | null; accountOk?: boolean }): boolean {
   if (!i.builtin || !trustedTool(i.target)) return false;
   if (!i.scope || i.scope.channels.length || !i.scope.recipients.length || i.scope.recipients.length > FULL_AUTO_BULK_MAX) return false;
-  const self = i.self?.toLowerCase() ?? null;
+  const self = selfSet(i.self);
   const trusted = new Set(i.trusted.map((t) => t.toLowerCase()));
-  const others = i.scope.recipients.filter((r) => r !== self);
+  const others = i.scope.recipients.filter((r) => !self.has(r));
   if (!others.length) return true;
-  return others.every((r) => trusted.has(r)) && ownerWake(i.origin, i.source);
+  return others.every((r) => trusted.has(r)) && ownerWake(i.origin, i.source) && i.accountOk !== false;
 }
 
 /** The Settings list, checked: lower-cased addresses, no duplicates, at most 50. */

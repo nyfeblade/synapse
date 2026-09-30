@@ -14,10 +14,12 @@ import { Dialog } from "./Dialog";
  * A surface rendered on its own (a unit test, a window without the app shell) has no host mounted;
  * there, and only there, the question falls back to the platform's confirm so it is never skipped.
  */
-interface Ask { title: string; line?: string; verb: string; resolve(ok: boolean): void }
+/** `tone: "neutral"`: a confirm that restores or allows rather than destroys (Undo) commits with the app's neutral
+ *  primary button, like Allow once or Save; the default stays the danger button. */
+interface Ask { title: string; line?: string; verb: string; tone?: "danger" | "neutral"; resolve(ok: boolean): void }
 const useConfirm = create<{ ask: Ask | null; hosts: number }>(() => ({ ask: null, hosts: 0 }));
 
-export function askConfirm(opts: { title: string; line?: string; verb: string }): Promise<boolean> {
+export function askConfirm(opts: { title: string; line?: string; verb: string; tone?: "danger" | "neutral" }): Promise<boolean> {
   if (useConfirm.getState().hosts === 0) return Promise.resolve(window.confirm(opts.line ? `${opts.title}\n\n${opts.line}` : opts.title));
   return new Promise((resolve) => {
     useConfirm.getState().ask?.resolve(false); // a second ask never strands the first
@@ -40,7 +42,7 @@ export function ConfirmHost() {
         {ask.line ? <p className="confirm-line">{ask.line}</p> : null}
         <div className="confirm-actions">
           <button type="button" className="btn-secondary" onClick={() => settle(false)}>{STR.cancel}</button>
-          <button type="button" className="btn-danger" onClick={() => settle(true)}>{ask.verb}</button>
+          <button type="button" className={ask.tone === "neutral" ? "btn-primary" : "btn-danger"} onClick={() => settle(true)}>{ask.verb}</button>
         </div>
       </div>
     </Dialog>

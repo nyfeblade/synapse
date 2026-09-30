@@ -74,4 +74,15 @@ describe("attachments in (CHAT-09)", () => {
     expect(note.text).not.toContain(h.cfg.dataRoot);
     expect(prompt.some((p) => "image" in p && p.image.mediaType === "image/png")).toBe(true);
   });
+
+  it("4.3 Email in: a file from an emailed task takes the upload path; a type the chat refuses is left out", async () => {
+    const h = await makeRunnerHarness({ script: () => [] });
+    const id = h.bots.create({ name: "Piper", origin: "user", kickstart: false });
+    const store = new AttachmentStore({ cfg: h.cfg });
+    const big = Buffer.alloc(600 * 1024, 7); // more than one 512 KiB chunk
+    const a = store.ingest(id, "ticket.txt", big)!;
+    expect(a).toMatchObject({ name: "ticket.txt", size: big.length, boxPath: path.join(h.cfg.workspace, ".host-out", "uploads", id, "ticket.txt") });
+    expect(fs.readFileSync(a.storePath).equals(big)).toBe(true);
+    expect(store.ingest(id, "payload.exe", Buffer.from("MZ"))).toBeNull();
+  });
 });

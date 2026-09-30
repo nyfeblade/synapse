@@ -13,7 +13,7 @@ import { useSetupGate } from "./store";
  * the Bots' computer shows a real progress bar and a log, and everything resumes after a failure or a relaunch.
  * Titles and labels only.
  */
-interface BoxState extends BoxReport { step: string | null; logTail: string[] }
+interface BoxState extends BoxReport { step: string | null; stage?: string | null; logTail: string[] }
 interface Status { done: boolean; machine: string; orb: OrbReport & { version: string | null }; box: BoxState; connected: boolean; mac: { arm64: boolean; freeBytes: number | null } }
 interface Pack { id: string; label: string; bytes: number; state: "available" | "installing" | "installed" | "failed"; progress: number; error?: string | null }
 
@@ -35,10 +35,11 @@ function Step({ title, state, children, actions }: { title: string; state: Setup
   );
 }
 
-function Meter({ value, label }: { value: number; label: string }) {
+function Meter({ value, label, stage }: { value: number; label: string; stage?: string | null }) {
   const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
   return (
-    <div className="setup-meter" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+    <div className="setup-meter" role="progressbar" aria-label={label} aria-valuetext={stage ? `${stage} ${pct}%` : undefined} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+      {stage && <span className="setup-meter-stage">{stage}</span>}
       <div className="meter"><span style={{ transform: `scaleX(${pct / 100})` }} /></div>
       <span className="setup-meter-pct">{pct}%</span>
     </div>
@@ -59,7 +60,7 @@ function ComputerBody({ box, state, busy, onStart }: { box: BoxState; state: Set
   if (state === "waiting") return null;
   return (
     <>
-      {state !== "done" && <Meter value={box.progress} label={STR_SETUP.computer} />}
+      {state !== "done" && <Meter value={box.progress} label={STR_SETUP.computer} stage={box.phase === "running" ? STR_SETUP.boxStage[box.stage ?? box.step ?? ""] ?? null : null} />}
       {box.error && <Announce><p role="alert" className="error">{box.error}</p></Announce>}
       {busy && box.phase !== "running" && <Announce><p role="status" className="muted">{busy}</p></Announce>}
       <div className="setup-row-actions">

@@ -36,6 +36,15 @@ export type GoogleToolName = (typeof GOOGLE_TOOL_NAMES)[number];
 
 export type GoogleService = "Gmail" | "Calendar" | "Drive";
 export type GoogleConnState = "not-configured" | "disconnected" | "waiting" | "connected" | "needs-reconnect";
+/** 4.3b: one connected Google account. The label a Bot and a card use is the email address. */
+export interface GoogleAccountView {
+  id: string;
+  email: string | null;
+  state: "connected" | "needs-reconnect";
+  services: GoogleService[];
+  /** The Bots this account is granted to (per-Bot grants; a new account starts with none). */
+  bots: string[];
+}
 export interface GoogleStatusView {
   state: GoogleConnState;
   /** The client ID is not a secret; the client secret and the tokens never leave the host. */
@@ -48,6 +57,8 @@ export interface GoogleStatusView {
   testing?: boolean | null;
   /** google-setup: the "Let a Bot do it" task, while one runs. */
   setupTask?: GoogleSetupTaskView | null;
+  /** 4.3b: every connected account, oldest first (`email` above is the first one's). */
+  accounts?: GoogleAccountView[];
 }
 
 /** The reserved MCP server id the built-in Google connector mounts under. */
@@ -70,6 +81,8 @@ export interface GoogleBotStatusView {
   /** The app-level account state, which is what the Marketplace shows. */
   account: GoogleConnState;
   email: string | null;
+  /** 4.3b: the accounts this Bot may use (their addresses). */
+  accounts?: string[];
 }
 
 /**
@@ -81,7 +94,7 @@ export const googleToolsMounted = (v: GoogleBotStatusView): boolean => v.state =
 
 export type GoogleSseEvent = { channel: "google"; payload: GoogleStatusView };
 
-const TOOL_NEEDS_RECONNECT = "The user's Google sign-in expired. They were shown a \"Reconnect Google\" notification; tell them to reconnect, then try again. Don't work around it.";
+const TOOL_NEEDS_RECONNECT = "The user's Google sign-in expired. They were shown a \"Google needs you to sign in again\" notification with a Fix button; tell them to sign in again, then try again. Don't work around it.";
 
 export const STRG = {
   connectGoogle: "Connect Google",
@@ -139,9 +152,11 @@ export const STRG = {
       case "needs-reconnect":
         return TOOL_NEEDS_RECONNECT;
       case "off-for-bot":
+        if (v.enabled) return "Google is on for this Bot, but none of the user's Google accounts is ticked for it, so you have no mcp__google__ tools. Ask the user to tick an account in this Bot's settings.";
         return `Google is connected${who}, but turned off for this Bot, so you have no mcp__google__ tools. Ask the user to open this Bot's settings and turn Google on. The tools load on their own as soon as they do \u2014 they don't need to message you again, and restarting connectors won't help.`;
       case "ready":
-        return `Google is connected${who} and on for this Bot: your mcp__google__ tools are loaded and callable now.`;
+        if ((v.accounts?.length ?? 0) > 1) return `Google is on for this Bot with ${v.accounts!.length} accounts (${v.accounts!.join(", ")}): your mcp__google__ tools are loaded and callable now. Pass account with the address on every call.`;
+        return `Google is connected${v.accounts?.length ? ` as ${v.accounts[0]}` : who} and on for this Bot: your mcp__google__ tools are loaded and callable now.`;
     }
   },
   /** The hidden wake that carries the respawn: the Bot picks up its new tools without waiting for a user message. */
@@ -149,11 +164,33 @@ export const STRG = {
     `The user turned Google on for you${email ? ` (${email})` : ""}. Your mcp__google__ tools (Gmail, Calendar, Drive) are loaded and callable from this turn on. If they were waiting on Google work, pick it up now; if nothing is outstanding, don't send a message.`,
   perBotNote: "Connecting your account is only half of it: each Bot has its own Google switch in its settings, and a Bot with the switch off has no Gmail, Calendar or Drive tools.",
   cardLocation: "Acts on your Google account",
+  // 4.3b: more than one account per app
+  cardFrom: (account: string) => `From ${account}`,
+  addAccount: "Add account",
+  remove: "Remove",
+  accounts: "Accounts",
+  accountCount: (n: number) => `${n} accounts`,
+  accountNeedsSignIn: "Needs sign-in",
+  accountFallback: "Google account",
+  accountDescribe: "Which Google account (its email address). Needed when this Bot can use more than one.",
+  toolNoAccount: "None of the user's Google accounts is ticked for this Bot. The user can tick one in this Bot's settings.",
+  toolChooseAccount: (accounts: string[]) => `You can use more than one Google account (${accounts.join(", ")}). Say which with account, e.g. account: "${accounts[0]}". Don't guess: if the user didn't say which, ask them.`,
+  toolAccountNotGranted: (asked: string, accounts: string[]) => `You can't use the Google account “${asked.slice(0, 120)}”.${accounts.length ? ` The accounts you can use: ${accounts.join(", ")}.` : ""}`,
   // Draft-send card (ORIG-GOOGLE follow-up): the card must show what a gmail_send(draft_id) call actually sends.
   cardFactsFailed: (reason: string) => `Couldn't look this up in your Google account before showing it to you, so nothing was changed: ${reason}`,
   draftFetchFailed: (reason: string) => `Couldn't check the Gmail draft before showing it to you, so it wasn't sent: ${reason}`,
   draftChanged: "This Gmail draft changed since it was approved, so it wasn't sent. Ask again to review the current draft.",
   draftUnapproved: "This Gmail draft send wasn't bound to an approved card, so it wasn't sent. Ask again so the user can review it.",
+  // 4.3 Email in
+  emailIn: "Email in",
+  emailInLabel: "Label",
+  emailInAddress: "Address",
+  emailInLabelName: (name: string) => `Synapse/${name}`,
+  emailInChip: "Email",
+  emailInRefused: (bot: string) => `Email to ${bot} not from you`,
+  emailInFailed: (bot: string) => `Email to ${bot} couldn't be read`,
+  /** The card for a Bot's own send that would route mail to a Bot (only the owner can give a Bot a task by email). */
+  emailInCard: "This would send mail to a Bot's email-in address or label, which only you can do, so it needs your OK.",
 };
 
 declare module "./gateway" {
@@ -162,8 +199,13 @@ declare module "./gateway" {
     /** inProduction: the guided sheet's "Publishing status: In production" tick, when the user made one. */
     setGoogleClient: { args: { clientId: string; clientSecret: string; inProduction?: boolean }; result: GoogleStatusView };
     startGoogleAuth: { args: None; result: { authorizationUrl: string } };
-    disconnectGoogle: { args: None; result: GoogleStatusView };
+    /** 4.3b: with accountId, only that account (its tokens revoked, its grants gone); without, every account. */
+    disconnectGoogle: { args: { accountId?: string }; result: GoogleStatusView };
+    /** 4.3b: grant or revoke one Google account for one Bot. */
+    setAgentGoogleAccount: { args: { id: string; accountId: string; enabled: boolean }; result: GoogleStatusView };
     setAgentGoogle: { args: { id: string; enabled: boolean }; result: { agent: BotSummary } };
+    /** 4.3: Email in for one Bot (off by default). Turning it on the first time gives the Bot its plus-address tag. */
+    setAgentEmailIn: { args: { id: string; enabled: boolean }; result: { agent: BotSummary } };
     startGoogleSetupTask: { args: { botId: string; mode: GoogleSetupMode; projectId?: string | null }; result: GoogleStatusView };
     cancelGoogleSetupTask: { args: None; result: GoogleStatusView };
     getGoogleReconnectCheck: { args: None; result: GoogleReconnectCheckView };

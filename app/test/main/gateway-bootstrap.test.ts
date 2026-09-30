@@ -80,6 +80,20 @@ describe("resolveGateway", () => {
     expect(stops).toEqual([{ keepData: true }, undefined]);
   });
 
+  it("journeys (5.9): SYNAPSE_FUZZ_HOST_ROOT pins a FUZZ host store that outlives the app; ignored outside FUZZ", async () => {
+    const seen: Record<string, unknown>[] = [];
+    const launchLocal = async (o: Record<string, unknown>) => { seen.push(o); return { baseUrl: "http://127.0.0.1:1", token: "t", root: String(o.root), stop: async () => {} }; };
+    await resolveGateway({ env: { FUZZ: "1", SYNAPSE_FUZZ_HOST_ROOT: "/tmp/j/fuzz-host" }, userData: "/tmp/ud", appDir: "/repo/app", launchLocal: launchLocal as never });
+    expect(seen[0]).toMatchObject({ disposable: true, root: "/tmp/j/fuzz-host", keepRoot: true });
+    // A reconnect's store wins over the pinned one (it is the same folder in practice).
+    await resolveGateway({ env: { FUZZ: "1", SYNAPSE_FUZZ_HOST_ROOT: "/tmp/j/fuzz-host" }, userData: "/tmp/ud", appDir: "/repo/app", reuseRoot: "/tmp/prev", launchLocal: launchLocal as never });
+    expect(seen[1]).toMatchObject({ root: "/tmp/prev" });
+    expect(seen[1]!.keepRoot).toBeUndefined();
+    await resolveGateway({ env: { SYNAPSE_LOCAL_HOST: "1", SYNAPSE_FUZZ_HOST_ROOT: "/tmp/j/fuzz-host" }, userData: "/tmp/ud", appDir: "/repo/app", launchLocal: launchLocal as never });
+    expect(seen[2]).toMatchObject({ disposable: false });
+    expect(seen[2]!.root).toBeUndefined();
+  });
+
   it("starts the box, reads the token, stores it and connects otherwise", async () => {
     const order: string[] = [];
     const stored: string[] = [];
